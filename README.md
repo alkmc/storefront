@@ -45,6 +45,6 @@ In order to use PostgreSQL as database, make sure the following environment vari
 
 "PG_USER",
 
-"PG_PASS",
+"PG_PASSWORD",
 
 "PG_NAME",

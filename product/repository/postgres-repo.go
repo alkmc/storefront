@@ -137,7 +137,7 @@ func getEnvVars() (map[string]string, error) {
 		"PG_HOST",
 		"PG_PORT",
 		"PG_USER",
-		"PG_PASS",
+		"PG_PASSWORD",
 		"PG_NAME",
 	}
 	t := map[string]string{}
@@ -163,6 +163,6 @@ func getDbConn() string {
 		e["PG_HOST"],
 		e["PG_PORT"],
 		e["PG_USER"],
-		e["PG_PASS"],
+		e["PG_PASSWORD"],
 		e["PG_NAME"])
 }
