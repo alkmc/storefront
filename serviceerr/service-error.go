@@ -2,6 +2,9 @@ package serviceerr
 
 import (
 	"fmt"
+	"net/http"
+
+	"github.com/alkmc/restClean/renderer"
 )
 
 const (
@@ -19,6 +22,19 @@ type ServiceError struct {
 
 func (s *ServiceError) Error() string {
 	return fmt.Sprintf("%s -  %s", s.Code, s.Message)
+}
+
+//JSON is similar to http.Error, but response is encoded in JSON format
+func (s *ServiceError) JSON(w http.ResponseWriter) {
+	codes := map[string]int{
+		valErr:  http.StatusBadRequest,
+		userErr: http.StatusBadRequest,
+	}
+	code, ok := codes[s.Code]
+	if !ok {
+		code = http.StatusInternalServerError
+	}
+	renderer.JSON(w, code, s)
 }
 
 //Internal constructs internal service error
