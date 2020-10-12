@@ -3,6 +3,7 @@ module github.com/alkmc/restClean
 go 1.15
 
 require (
+	github.com/go-redis/redis/v7 v7.4.0
 	github.com/google/uuid v1.1.2
 	github.com/jmoiron/sqlx v1.2.0
 	github.com/kr/pretty v0.1.0 // indirect
