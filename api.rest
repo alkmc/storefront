@@ -1,0 +1,26 @@
+### CREATE PRODUCT
+POST http://localhost:7000/product
+Content-Type: application/json
+
+{
+    "name": "todelete",
+    "price": 0.09
+}
+
+### LIST PRODUCT
+GET http://localhost:7000/product/<provideUUID>
+
+### LIST PRODUCTS
+GET http://localhost:7000/product
+
+### UPDATE PRODUCT
+PUT http://localhost:7000/product/<provideUUID>
+Content-Type: application/json
+
+{   
+    "name": "t-shirt2",
+    "price": 20.06
+}
+
+### DELETE PRODUCT
+DELETE http://localhost:7000/product/<provideUUID>
