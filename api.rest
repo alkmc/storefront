@@ -19,11 +19,9 @@ Content-Type: {{json}}
 
 ### LIST PRODUCT
 GET {{baseUrl}}/product/{{prodID}}
-Accept: {{json}}
 
 ### LIST PRODUCTS
 GET {{baseUrl}}/product
-Accept: {{json}}
 
 ### UPDATE PRODUCT
 PUT {{baseUrl}}/product/{{prodID}}
