@@ -1,21 +1,33 @@
-### CREATE PRODUCT
-POST http://localhost:7000/product
-Content-Type: application/json
+@scheme = http
+@hostname = localhost
+@port = 7000
+@host = {{hostname}}:{{port}}
+@baseUrl = {{scheme}}://{{host}}
+@json = application/json
+
+### CREATE PRODUCT 
+# @name newproduct
+POST {{baseUrl}}/product
+Content-Type: {{json}}
 
 {
-    "name": "todelete",
+    "name": "product",
     "price": 0.09
 }
 
+@prodID = {{newproduct.response.body.$.id}}
+
 ### LIST PRODUCT
-GET http://localhost:7000/product/<provideUUID>
+GET {{baseUrl}}/product/{{prodID}}
+Accept: {{json}}
 
 ### LIST PRODUCTS
-GET http://localhost:7000/product
+GET {{baseUrl}}/product
+Accept: {{json}}
 
 ### UPDATE PRODUCT
-PUT http://localhost:7000/product/<provideUUID>
-Content-Type: application/json
+PUT {{baseUrl}}/product/{{prodID}}
+Content-Type: {{json}}
 
 {   
     "name": "t-shirt2",
@@ -23,4 +35,4 @@ Content-Type: application/json
 }
 
 ### DELETE PRODUCT
-DELETE http://localhost:7000/product/<provideUUID>
+DELETE {{baseUrl}}/product/{{prodID}}
