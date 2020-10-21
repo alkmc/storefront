@@ -86,8 +86,7 @@ func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
 	}
 	c.productCache.Set(product.ID.String(), &product)
 
-	w.WriteHeader(http.StatusCreated)
-	result.JSON(w)
+	renderer.JSON(w, http.StatusCreated, result)
 }
 
 func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request) {
