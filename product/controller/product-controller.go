@@ -61,6 +61,13 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 		errs.JSON(w)
 		return
 	}
+	if len(products) == 0 {
+		confirmation := &serviceerr.ServiceError{
+			Code: "OK", Message: "No products found",
+		}
+		renderer.JSON(w, http.StatusOK, confirmation)
+		return
+	}
 	renderer.JSON(w, http.StatusOK, products)
 }
 
