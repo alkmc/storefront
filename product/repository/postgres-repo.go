@@ -37,6 +37,13 @@ func NewPG() Repository {
 	return &pgRepository{db: pdb}
 }
 
+func (pg *pgRepository) CloseDB() {
+	if err := pg.db.Close(); err != nil {
+		log.Println("Failed to close database connection")
+	}
+	log.Println("Connection to PG db closed")
+}
+
 func (pg *pgRepository) Save(p *entity.Product) (*entity.Product, error) {
 	tx, err := pg.db.Begin()
 	if err != nil {
@@ -138,7 +145,7 @@ func getEnvVars() (map[string]string, error) {
 		"PG_PORT",
 		"PG_USER",
 		"PG_PASSWORD",
-		"PG_NAME",
+		"PG_DB",
 	}
 	t := map[string]string{}
 	for _, key := range keys {
@@ -164,5 +171,5 @@ func getDbConn() string {
 		e["PG_PORT"],
 		e["PG_USER"],
 		e["PG_PASSWORD"],
-		e["PG_NAME"])
+		e["PG_DB"])
 }
