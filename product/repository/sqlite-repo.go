@@ -27,7 +27,9 @@ func NewSQLite() Repository {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sdb.Close()
+	if err := sdb.Ping(); err != nil {
+		log.Fatal(err)
+	}
 
 	if _, err = sdb.Exec(sqlSchema); err != nil {
 		log.Printf("%q: %s\n", err, sqlSchema)
@@ -35,13 +37,15 @@ func NewSQLite() Repository {
 	return &sqliteRepo{db: sdb}
 }
 
-func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
-	if err != nil {
-		return nil, err
+func (s *sqliteRepo) CloseDB() {
+	if err := s.db.Close(); err != nil {
+		log.Println("Failed to close database", err)
 	}
+	log.Println("Connection to SQLite db closed")
+}
 
-	tx, err := sdb.Begin()
+func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
+	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +54,8 @@ func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	defer stmt.Close()
+
 	if _, err = stmt.Exec(p.ID, p.Name, p.Price); err != nil {
 		return nil, err
 	}
@@ -62,12 +66,7 @@ func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
 }
 
 func (s *sqliteRepo) FindByID(id uuid.UUID) (*entity.Product, error) {
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
-	if err != nil {
-		return nil, err
-	}
-
-	row := sdb.QueryRow(queryGetByID, id)
+	row := s.db.QueryRow(queryGetByID, id)
 
 	var p entity.Product
 	if err := row.Scan(&p.ID, &p.Name, &p.Price); err != nil {
@@ -78,11 +77,7 @@ func (s *sqliteRepo) FindByID(id uuid.UUID) (*entity.Product, error) {
 }
 
 func (s *sqliteRepo) FindAll() ([]entity.Product, error) {
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
-	if err != nil {
-		return nil, err
-	}
-	rows, err := sdb.Query(queryGetAll)
+	rows, err := s.db.Query(queryGetAll)
 	if err != nil {
 		return nil, err
 	}
@@ -104,12 +99,7 @@ func (s *sqliteRepo) FindAll() ([]entity.Product, error) {
 }
 
 func (s *sqliteRepo) Update(p *entity.Product) error {
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
-	if err != nil {
-		return err
-	}
-
-	tx, err := sdb.Begin()
+	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -129,11 +119,7 @@ func (s *sqliteRepo) Update(p *entity.Product) error {
 }
 
 func (s *sqliteRepo) Delete(id uuid.UUID) error {
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
-	if err != nil {
-		return err
-	}
-	tx, err := sdb.Begin()
+	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
