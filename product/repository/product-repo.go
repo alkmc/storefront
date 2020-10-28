@@ -13,4 +13,5 @@ type Repository interface {
 	FindAll() ([]entity.Product, error)
 	Update(p *entity.Product) error
 	Delete(id uuid.UUID) error
+	CloseDB()
 }
