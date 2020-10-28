@@ -38,6 +38,9 @@ func (m *MockRepository) Delete(id uuid.UUID) error {
 	return args.Error(0)
 }
 
+func (m *MockRepository) CloseDB() {
+}
+
 func TestCreate(t *testing.T) {
 	mockRepo := new(MockRepository)
 	p := entity.Product{Name: "Created", Price: 1.1}
