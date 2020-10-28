@@ -26,6 +26,7 @@ var (
 
 func main() {
 	mapUrls()
+	defer productRepository.CloseDB()
 	productRouter.SERVE(":7000")
 }
 
