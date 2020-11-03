@@ -8,7 +8,6 @@ import (
 
 //Service is responsible for interaction with Repository interface
 type Service interface {
-	Validate(p *entity.Product) error
 	Create(p *entity.Product) (*entity.Product, error)
 	FindByID(id uuid.UUID) (*entity.Product, error)
 	FindAll() ([]entity.Product, error)

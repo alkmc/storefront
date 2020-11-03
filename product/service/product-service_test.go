@@ -19,20 +19,24 @@ func (m *MockRepository) Save(p *entity.Product) (*entity.Product, error) {
 	result := args.Get(0)
 	return result.(*entity.Product), args.Error(1)
 }
+
 func (m *MockRepository) FindByID(id uuid.UUID) (*entity.Product, error) {
 	args := m.Called()
 	result := args.Get(0)
 	return result.(*entity.Product), args.Error(1)
 }
+
 func (m *MockRepository) FindAll() ([]entity.Product, error) {
 	args := m.Called()
 	result := args.Get(0)
 	return result.([]entity.Product), args.Error(1)
 }
+
 func (m *MockRepository) Update(p *entity.Product) error {
 	args := m.Called()
 	return args.Error(0)
 }
+
 func (m *MockRepository) Delete(id uuid.UUID) error {
 	args := m.Called()
 	return args.Error(0)
@@ -117,30 +121,4 @@ func TestDelete(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 
 	assert.Nil(t, err)
-}
-
-func TestValidateEmptyProduct(t *testing.T) {
-	testService := NewService(nil)
-	err := testService.Validate(nil)
-
-	assert.NotNil(t, err)
-	assert.Equal(t, "the product is empty", err.Error())
-}
-
-func TestValidateEmptyName(t *testing.T) {
-	p := entity.Product{Name: "", Price: 1.1}
-	testService := NewService(nil)
-
-	err := testService.Validate(&p)
-	assert.NotNil(t, err)
-	assert.Equal(t, "the product name is empty", err.Error())
-}
-
-func TestValidateInvalidPrice(t *testing.T) {
-	p := entity.Product{Name: "Car", Price: -1}
-	testService := NewService(nil)
-
-	err := testService.Validate(&p)
-	assert.NotNil(t, err)
-	assert.Equal(t, "the product price must be positive", err.Error())
 }
