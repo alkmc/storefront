@@ -34,3 +34,35 @@ Content-Type: {{json}}
 
 ### DELETE PRODUCT
 DELETE {{baseUrl}}/product/{{prodID}}
+
+### UPDATE PRODUCT WITH INCORRECT BODY
+PUT {{baseUrl}}/product/{{prodID}}
+Content-Type: {{json}}
+
+{   
+    "price": "book",
+    "email": 234,
+    "name": 123
+}
+
+### CREATE PRODUCT WITH INCORRECT BODY
+POST {{baseUrl}}/product
+Content-Type: {{json}}
+
+{   
+    "email": 234,
+    "name": '123',
+    "price": "book",
+    "name": 123
+}
+
+
+### CREATE PRODUCT WITH EXTRA FIELD BODY
+POST {{baseUrl}}/product
+Content-Type: {{json}}
+
+{   
+    "email": 234,
+    "price": 123,
+    "name": "abc"
+}
