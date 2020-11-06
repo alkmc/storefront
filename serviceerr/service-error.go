@@ -25,8 +25,8 @@ func (s *ServiceError) Error() string {
 	return fmt.Sprintf("%s -  %s", s.Code, s.Message)
 }
 
-//JSON is similar to http.Error, but response is encoded in JSON format
-func (s *ServiceError) JSON(w http.ResponseWriter) {
+//Encode is similar to http.Error, but response is encoded in JSON format
+func (s *ServiceError) Encode(w http.ResponseWriter) {
 	codes := map[string]int{
 		valErr:     http.StatusBadRequest,
 		userErr:    http.StatusBadRequest,

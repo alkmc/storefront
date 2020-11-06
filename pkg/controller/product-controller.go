@@ -35,7 +35,7 @@ func (c *productController) GetProductByID(w http.ResponseWriter, r *http.Reques
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 
@@ -44,7 +44,7 @@ func (c *productController) GetProductByID(w http.ResponseWriter, r *http.Reques
 		p, err := c.findProduct(id)
 		if err != nil {
 			errs := serviceerr.Input("No product found!")
-			errs.JSON(w)
+			errs.Encode(w)
 			return
 		}
 		c.productCache.Set(idStr, p)
@@ -59,7 +59,7 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		log.Println(err.Error())
 		errs := serviceerr.Codec("decoding error")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 	if len(products) == 0 {
@@ -75,20 +75,20 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
 	var p entity.Product
 	if err := c.decode(r, &p); err != nil {
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 
 	if err := c.productValidator.Product(&p); err != nil {
 		errs := serviceerr.Valid(err.Error())
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 
 	result, err := c.productService.Create(&p)
 	if err != nil {
 		errs := serviceerr.Internal("Error saving the product")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 	c.productCache.Set(p.ID.String(), &p)
@@ -100,20 +100,20 @@ func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 
 	if _, err := c.findProduct(id); err != nil {
 		errs := serviceerr.Input("Unable to delete product, which already does not exist")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 
 	if err := c.productService.Delete(id); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error deleting product")
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 	c.productCache.Expire(idStr)
@@ -127,20 +127,20 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 
 	if _, err := c.findProduct(id); err != nil {
 		errs := serviceerr.Input("Unable to update product, which does not exist")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 
 	var p entity.Product
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		errs := serviceerr.Input("Invalid request payload")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 
@@ -150,14 +150,14 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 
 	if p.ID != id {
 		errs := serviceerr.Input("UUID is guaranteed to be unique and shall be not changed")
-		errs.JSON(w)
+		errs.Encode(w)
 		return
 	}
 
 	if err := c.productService.Update(&p); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error updating product")
-		err.JSON(w)
+		err.Encode(w)
 		return
 	}
 	p.JSON(w)
