@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/alkmc/restClean/product/cache"
-	"github.com/alkmc/restClean/product/entity"
-	"github.com/alkmc/restClean/product/service"
-	"github.com/alkmc/restClean/product/validator"
+	"github.com/alkmc/restClean/pkg/cache"
+	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/pkg/service"
+	"github.com/alkmc/restClean/pkg/validator"
 	"github.com/alkmc/restClean/renderer"
 	"github.com/alkmc/restClean/serviceerr"
 

@@ -10,11 +10,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/alkmc/restClean/product/cache"
-	"github.com/alkmc/restClean/product/entity"
-	"github.com/alkmc/restClean/product/repository"
-	"github.com/alkmc/restClean/product/service"
-	"github.com/alkmc/restClean/product/validator"
+	"github.com/alkmc/restClean/pkg/cache"
+	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/pkg/repository"
+	"github.com/alkmc/restClean/pkg/service"
+	"github.com/alkmc/restClean/pkg/validator"
 	"github.com/alkmc/restClean/serviceerr"
 
 	"github.com/go-chi/chi"

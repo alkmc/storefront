@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/alkmc/restClean/product/entity"
+	"github.com/alkmc/restClean/pkg/entity"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"

@@ -3,12 +3,12 @@ package main
 import (
 	"time"
 
-	"github.com/alkmc/restClean/product/cache"
-	"github.com/alkmc/restClean/product/controller"
-	"github.com/alkmc/restClean/product/repository"
-	"github.com/alkmc/restClean/product/router"
-	"github.com/alkmc/restClean/product/service"
-	"github.com/alkmc/restClean/product/validator"
+	"github.com/alkmc/restClean/pkg/cache"
+	"github.com/alkmc/restClean/pkg/controller"
+	"github.com/alkmc/restClean/pkg/repository"
+	"github.com/alkmc/restClean/pkg/router"
+	"github.com/alkmc/restClean/pkg/service"
+	"github.com/alkmc/restClean/pkg/validator"
 )
 
 const (

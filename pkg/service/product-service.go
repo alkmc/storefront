@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/alkmc/restClean/product/entity"
-	"github.com/alkmc/restClean/product/repository"
+	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/pkg/repository"
 
 	"github.com/google/uuid"
 )

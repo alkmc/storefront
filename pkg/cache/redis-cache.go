@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/alkmc/restClean/product/entity"
+	"github.com/alkmc/restClean/pkg/entity"
 
 	"github.com/go-redis/redis/v7"
 )

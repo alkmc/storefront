@@ -1,6 +1,6 @@
 package cache
 
-import "github.com/alkmc/restClean/product/entity"
+import "github.com/alkmc/restClean/pkg/entity"
 
 //Cache is responsible for caching mechanism
 type Cache interface {
