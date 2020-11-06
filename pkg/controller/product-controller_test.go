@@ -10,12 +10,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alkmc/restClean/internal/serviceerr"
 	"github.com/alkmc/restClean/pkg/cache"
 	"github.com/alkmc/restClean/pkg/entity"
 	"github.com/alkmc/restClean/pkg/repository"
 	"github.com/alkmc/restClean/pkg/service"
 	"github.com/alkmc/restClean/pkg/validator"
-	"github.com/alkmc/restClean/serviceerr"
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
