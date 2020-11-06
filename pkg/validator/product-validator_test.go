@@ -3,8 +3,9 @@ package validator
 import (
 	"testing"
 
-	"github.com/alkmc/restClean/pkg/entity"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/alkmc/restClean/pkg/entity"
 )
 
 const (
