@@ -14,6 +14,7 @@ import (
 	"github.com/alkmc/restClean/product/entity"
 	"github.com/alkmc/restClean/product/repository"
 	"github.com/alkmc/restClean/product/service"
+	"github.com/alkmc/restClean/product/validator"
 	"github.com/alkmc/restClean/serviceerr"
 
 	"github.com/go-chi/chi"
@@ -30,7 +31,8 @@ var (
 	pRepo       = repository.NewSQLite()
 	pSrv        = service.NewService(pRepo)
 	pCacheSrv   = cache.NewRedis("localhost:6379", 0, 10)
-	pController = NewController(pSrv, pCacheSrv)
+	pValid      = validator.NewValidator()
+	pController = NewController(pSrv, pCacheSrv, pValid)
 )
 
 func TestGetProductByID(t *testing.T) {

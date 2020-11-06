@@ -8,6 +8,7 @@ import (
 	"github.com/alkmc/restClean/product/repository"
 	"github.com/alkmc/restClean/product/router"
 	"github.com/alkmc/restClean/product/service"
+	"github.com/alkmc/restClean/product/validator"
 )
 
 const (
@@ -20,7 +21,8 @@ var (
 	productRepository = repository.NewPG() //can be set to repository.NewSQLite()
 	productService    = service.NewService(productRepository)
 	productCache      = cache.NewRedis(redisHost, redisDB, cacheExpiration)
-	productController = controller.NewController(productService, productCache)
+	productValidator  = validator.NewValidator()
+	productController = controller.NewController(productService, productCache, productValidator)
 	productRouter     = router.NewChiRouter()
 )
 

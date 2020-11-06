@@ -8,6 +8,7 @@ import (
 	"github.com/alkmc/restClean/product/cache"
 	"github.com/alkmc/restClean/product/entity"
 	"github.com/alkmc/restClean/product/service"
+	"github.com/alkmc/restClean/product/validator"
 	"github.com/alkmc/restClean/renderer"
 	"github.com/alkmc/restClean/serviceerr"
 
@@ -16,15 +17,17 @@ import (
 )
 
 type productController struct {
-	productService service.Service
-	productCache   cache.Cache
+	productService   service.Service
+	productCache     cache.Cache
+	productValidator validator.Validator
 }
 
 //NewController returns Product Controller
-func NewController(s service.Service, c cache.Cache) Controller {
+func NewController(s service.Service, c cache.Cache, v validator.Validator) Controller {
 	return &productController{
-		productService: s,
-		productCache:   c,
+		productService:   s,
+		productCache:     c,
+		productValidator: v,
 	}
 }
 
@@ -72,33 +75,33 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 }
 
 func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
-	var product entity.Product
-	if err := json.NewDecoder(r.Body).Decode(&product); err != nil {
+	var p entity.Product
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 		err := serviceerr.Codec("decoding error")
 		err.JSON(w)
 		return
 	}
 
-	if err := c.productService.Validate(&product); err != nil {
+	if err := c.productValidator.Product(&p); err != nil {
 		errs := serviceerr.Valid(err.Error())
 		errs.JSON(w)
 		return
 	}
 
-	result, err := c.productService.Create(&product)
+	result, err := c.productService.Create(&p)
 	if err != nil {
 		errs := serviceerr.Internal("Error saving the product")
 		errs.JSON(w)
 		return
 	}
-	c.productCache.Set(product.ID.String(), &product)
+	c.productCache.Set(p.ID.String(), &p)
 
 	renderer.JSON(w, http.StatusCreated, result)
 }
 
 func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	id, err := validateUUID(idStr)
+	id, err := c.validID(idStr)
 	if err != nil {
 		err.JSON(w)
 		return
@@ -118,7 +121,7 @@ func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request
 
 func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	id, err := validateUUID(idStr)
+	id, err := c.validID(idStr)
 	if err != nil {
 		err.JSON(w)
 		return
@@ -150,11 +153,10 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 	p.JSON(w)
 }
 
-func validateUUID(uidStr string) (uuid.UUID, *serviceerr.ServiceError) {
-	id, err := uuid.Parse(uidStr)
+func (c *productController) validID(id string) (uuid.UUID, *serviceerr.ServiceError) {
+	uid, err := c.productValidator.UUID(id)
 	if err != nil {
-		errs := serviceerr.Input("Invalid UUID")
-		return uuid.Nil, errs
+		return uuid.Nil, serviceerr.Input(err.Error())
 	}
-	return id, nil
+	return uid, nil
 }
