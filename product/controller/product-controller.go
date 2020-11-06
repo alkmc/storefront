@@ -104,6 +104,12 @@ func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if _, err := c.findProduct(id); err != nil {
+		errs := serviceerr.Input("Unable to delete product, which already does not exist")
+		errs.JSON(w)
+		return
+	}
+
 	if err := c.productService.Delete(id); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error deleting product")
@@ -122,6 +128,12 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 	id, err := c.validID(idStr)
 	if err != nil {
 		err.JSON(w)
+		return
+	}
+
+	if _, err := c.findProduct(id); err != nil {
+		errs := serviceerr.Input("Unable to update product, which does not exist")
+		errs.JSON(w)
 		return
 	}
 
