@@ -33,17 +33,15 @@ func NewController(s service.Service, c cache.Cache, v validator.Validator) Cont
 
 func (c *productController) GetProductByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	id, err := uuid.Parse(idStr)
+	id, err := c.validID(idStr)
 	if err != nil {
-		log.Println(err.Error())
-		errs := serviceerr.Input("Invalid uuid")
-		errs.JSON(w)
+		err.JSON(w)
 		return
 	}
 
 	p := c.productCache.Get(idStr)
 	if p == nil {
-		p, err := c.productService.FindByID(id)
+		p, err := c.findProduct(id)
 		if err != nil {
 			errs := serviceerr.Input("No product found!")
 			errs.JSON(w)
@@ -76,8 +74,7 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 
 func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
 	var p entity.Product
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		err := serviceerr.Codec("decoding error")
+	if err := c.decode(r, &p); err != nil {
 		err.JSON(w)
 		return
 	}
@@ -106,6 +103,7 @@ func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request
 		err.JSON(w)
 		return
 	}
+
 	if err := c.productService.Delete(id); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error deleting product")
@@ -153,10 +151,22 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 	p.JSON(w)
 }
 
+func (c *productController) findProduct(id uuid.UUID) (*entity.Product, error) {
+	return c.productService.FindByID(id)
+}
+
 func (c *productController) validID(id string) (uuid.UUID, *serviceerr.ServiceError) {
 	uid, err := c.productValidator.UUID(id)
 	if err != nil {
 		return uuid.Nil, serviceerr.Input(err.Error())
 	}
 	return uid, nil
+}
+
+func (c *productController) decode(r *http.Request, p *entity.Product) *serviceerr.ServiceError {
+	if err := renderer.Decode(r.Body, &p); err != nil {
+		valErr := c.productValidator.Body(err)
+		return serviceerr.Body(valErr.Error())
+	}
+	return nil
 }
