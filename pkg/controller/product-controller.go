@@ -5,12 +5,12 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/alkmc/restClean/internal/renderer"
 	"github.com/alkmc/restClean/internal/serviceerr"
 	"github.com/alkmc/restClean/pkg/cache"
 	"github.com/alkmc/restClean/pkg/entity"
 	"github.com/alkmc/restClean/pkg/service"
 	"github.com/alkmc/restClean/pkg/validator"
-	"github.com/alkmc/restClean/renderer"
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"

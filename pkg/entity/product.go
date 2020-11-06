@@ -3,7 +3,7 @@ package entity
 import (
 	"net/http"
 
-	"github.com/alkmc/restClean/renderer"
+	"github.com/alkmc/restClean/internal/renderer"
 
 	"github.com/google/uuid"
 )

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/alkmc/restClean/renderer"
+	"github.com/alkmc/restClean/internal/renderer"
 )
 
 const (
