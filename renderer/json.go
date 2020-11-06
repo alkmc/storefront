@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -16,4 +17,14 @@ func JSON(w http.ResponseWriter, httpCode int, payload interface{}) {
 	if err := enc.Encode(payload); err != nil {
 		http.Error(w, "Error encoding data", http.StatusInternalServerError)
 	}
+}
+
+//Decode decodes request body to given struct
+func Decode(r io.ReadCloser, v interface{}) error {
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&v); err != nil {
+		return err
+	}
+	return nil
 }
