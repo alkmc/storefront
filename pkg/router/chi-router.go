@@ -59,7 +59,7 @@ func (c *chiRouter) SERVE(port string) {
 	log.Printf("Starting Chi http server on port %s\n", port)
 	go func() {
 		if err := s.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("Error starting server %s", err.Error())
+			log.Fatalf("Error starting server: %s", err.Error())
 		}
 	}()
 	log.Print("Server Started")
@@ -73,9 +73,9 @@ func (c *chiRouter) SERVE(port string) {
 	defer cancel()
 
 	if err := s.Shutdown(ctx); err != nil {
-		log.Println("server shutdown failed", "error", err)
+		log.Printf("Server shutdown failed: %s", err.Error())
 	}
-	log.Println("server shutdown gracefully")
+	log.Println("Server shutdown completed gracefully")
 }
 
 func setUpChi() *chi.Mux {

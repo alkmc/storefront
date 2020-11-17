@@ -15,6 +15,7 @@ const (
 	redisDB         = 1
 	cacheExpiration = 10 * time.Second
 	redisHost       = "localhost:6379"
+	port            = ":7000"
 )
 
 var (
@@ -29,7 +30,7 @@ var (
 func main() {
 	mapUrls()
 	defer productRepository.CloseDB()
-	productRouter.SERVE(":7000")
+	productRouter.SERVE(port)
 }
 
 func mapUrls() {
