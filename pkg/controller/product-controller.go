@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -138,9 +137,8 @@ func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request
 	}
 
 	var p entity.Product
-	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		errs := serviceerr.Input("Invalid request payload")
-		errs.Encode(w)
+	if err := c.decode(r, &p); err != nil {
+		err.Encode(w)
 		return
 	}
 
