@@ -58,18 +58,18 @@ func TestGetProductByID(t *testing.T) {
 	checkResponseCode(t, http.StatusOK, resp.Code)
 
 	//Decode the HTTP response
-	var product entity.Product
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&product); err != nil {
+	var p entity.Product
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
 		log.Fatal(err)
 	}
 
 	//Assert HTTP response
-	assert.Equal(t, uid, product.ID)
-	assert.Equal(t, NAME, product.Name)
-	assert.Equal(t, PRICE, product.Price)
+	assert.Equal(t, uid, p.ID)
+	assert.Equal(t, NAME, p.Name)
+	assert.Equal(t, PRICE, p.Price)
 
 	//Clean up database
-	tearDown(product.ID)
+	tearDown(p.ID)
 }
 func TestGetProducts(t *testing.T) {
 	//Insert new post
