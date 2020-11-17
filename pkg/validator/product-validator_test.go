@@ -23,7 +23,7 @@ func TestValidateEmptyProduct(t *testing.T) {
 	err := testValidator.Product(nil)
 
 	assert.NotNil(t, err)
-	assert.Equal(t, emptyProduct, err.Error())
+	assert.EqualError(t, err, emptyProduct)
 }
 
 func TestValidateEmptyName(t *testing.T) {
@@ -32,7 +32,7 @@ func TestValidateEmptyName(t *testing.T) {
 
 	err := testValidator.Product(&p)
 	assert.NotNil(t, err)
-	assert.Equal(t, emptyName, err.Error())
+	assert.EqualError(t, err, emptyName)
 }
 
 func TestValidateInvalidPrice(t *testing.T) {
@@ -41,7 +41,23 @@ func TestValidateInvalidPrice(t *testing.T) {
 
 	err := testValidator.Product(&p)
 	assert.NotNil(t, err)
-	assert.Equal(t, negativePrice, err.Error())
+	assert.EqualError(t, err, negativePrice)
+}
+
+func TestValidateCorrectProduct(t *testing.T) {
+	const (
+		name  = "Car"
+		price = 1.1
+	)
+
+	p := entity.Product{Name: name, Price: price}
+	testValidator := NewValidator()
+
+	err := testValidator.Product(&p)
+	assert.Nil(t, err)
+	assert.NotNil(t, p.ID)
+	assert.Equal(t, name, p.Name)
+	assert.Equal(t, price, p.Price)
 }
 
 func TestValidateIncorrectUUID(t *testing.T) {
