@@ -8,11 +8,11 @@ import (
 )
 
 const (
-	valErr     = "validation error"
+	valErr     = "product validation error"
 	codecErr   = "JSON error"
 	internErr  = "service error"
 	userErr    = "invalid input error"
-	payloadErr = "Request body error"
+	payloadErr = "request body error"
 )
 
 // ServiceError shall be used to return business error messages
@@ -28,7 +28,7 @@ func (s *ServiceError) Error() string {
 //Encode is similar to http.Error, but response is encoded in JSON format
 func (s *ServiceError) Encode(w http.ResponseWriter) {
 	codes := map[string]int{
-		valErr:     http.StatusBadRequest,
+		valErr:     http.StatusUnprocessableEntity,
 		userErr:    http.StatusBadRequest,
 		payloadErr: http.StatusUnprocessableEntity,
 	}
