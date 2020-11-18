@@ -36,10 +36,10 @@ var (
 )
 
 func TestGetProductByID(t *testing.T) {
+	const path = "/product/%v"
+	// insert new product
 	uid := uuid.New()
 	setupUUID(uid)
-
-	const path = "/product/%v"
 
 	// create a http GET request
 	req := httptest.NewRequest("GET", fmt.Sprintf(path, uid), nil)
@@ -113,6 +113,7 @@ func TestGetNotExistingProduct(t *testing.T) {
 		errMsg  = "No product found!"
 		path    = "/product/%v"
 	)
+	// insert new product
 	uid := uuid.New()
 
 	// create a http GET request
@@ -143,7 +144,7 @@ func TestGetNotExistingProduct(t *testing.T) {
 }
 
 func TestGetProducts(t *testing.T) {
-	// insert new post
+	// insert new product
 	setup()
 
 	// create a http GET request
@@ -211,16 +212,19 @@ func TestGetNotExistingProducts(t *testing.T) {
 }
 
 func TestAddProduct(t *testing.T) {
+	// insert new product
 	uid := uuid.New()
 	data := entity.Product{
 		ID:    uid,
 		Name:  NAME,
 		Price: PRICE,
 	}
+
 	jsonReq, err := json.Marshal(data)
 	if err != nil {
 		log.Println(err)
 	}
+
 	// create a new http POST request
 	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
 
@@ -252,15 +256,102 @@ func TestAddProduct(t *testing.T) {
 	tearDown(p.ID)
 }
 
-func TestDeleteProduct(t *testing.T) {
-	uid := uuid.New()
-	setupUUID(uid)
+func TestAddProductWithExtraField(t *testing.T) {
+	const (
+		errCode = "request body error"
+		errMsg  = "unknown field \"Email\""
+	)
+	// insert new product
+	data := map[string]interface{}{
+		"Name":  NAME,
+		"Price": PRICE,
+		"Email": "a@example.com",
+	}
 
+	jsonReq, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+	}
+	// create a new http POST request
+	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
+
+	// record http response
+	resp := httptest.NewRecorder()
+
+	// assign http handler function
+	r := chi.NewRouter()
+	r.Post("/product", pController.AddProduct)
+
+	// dispatch the http request
+	r.ServeHTTP(resp, req)
+
+	// assert http status code
+	checkResponseCode(t, http.StatusUnprocessableEntity, resp.Code)
+
+	// decode the http response
+	var e serviceerr.ServiceError
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
+		log.Fatal(err)
+	}
+
+	// assert http response
+	assert.Equal(t, errCode, e.Code)
+	assert.Equal(t, errMsg, e.Message)
+}
+
+func TestAddProductWithNegativePrice(t *testing.T) {
+	const (
+		errCode = "product validation error"
+		errMsg  = "the product price must be positive"
+	)
+	// insert new product
+	uid := uuid.New()
+	data := entity.Product{
+		ID:    uid,
+		Name:  NAME,
+		Price: -PRICE,
+	}
+
+	jsonReq, err := json.Marshal(data)
+	if err != nil {
+		log.Println(err)
+	}
+	// create a new http POST request
+	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
+
+	// record http response
+	resp := httptest.NewRecorder()
+
+	// assign http handler function
+	r := chi.NewRouter()
+	r.Post("/product", pController.AddProduct)
+
+	// dispatch the http request
+	r.ServeHTTP(resp, req)
+
+	// assert http status code
+	checkResponseCode(t, http.StatusUnprocessableEntity, resp.Code)
+
+	// decode the http response
+	var e serviceerr.ServiceError
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
+		log.Fatal(err)
+	}
+
+	// assert http response
+	assert.Equal(t, errCode, e.Code)
+	assert.Equal(t, errMsg, e.Message)
+}
+
+func TestDeleteProduct(t *testing.T) {
 	const (
 		path     = "/product/%v"
 		statusOK = "OK"
 		pDeleted = "Product deleted"
 	)
+	// insert new product
+	uid := uuid.New()
+	setupUUID(uid)
 
 	// create a new http DELETE request
 	req := httptest.NewRequest("DELETE", fmt.Sprintf(path, uid), nil)
@@ -292,14 +383,14 @@ func TestDeleteProduct(t *testing.T) {
 }
 
 func TestUpdateProduct(t *testing.T) {
-	uid := uuid.New()
-	setupUUID(uid)
-
 	const (
 		path     = "/product/%v"
 		newName  = "auto"
 		newPrice = 999.9
 	)
+	// insert new product
+	uid := uuid.New()
+	setupUUID(uid)
 
 	data := entity.Product{
 		ID:    uid,
