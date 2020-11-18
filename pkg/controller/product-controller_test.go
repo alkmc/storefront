@@ -175,8 +175,41 @@ func TestGetProducts(t *testing.T) {
 
 	// clean up db
 	tearDown(products[0].ID)
-
 }
+
+func TestGetNotExistingProducts(t *testing.T) {
+	const (
+		statusOK = "OK"
+		infoMsg  = "No products found"
+	)
+
+	// create a http GET request
+	req := httptest.NewRequest("GET", "/product", nil)
+
+	// record http response
+	resp := httptest.NewRecorder()
+
+	// assign http handler function
+	r := chi.NewRouter()
+	r.Get("/product", pController.GetProducts)
+
+	// dispatch the http request
+	r.ServeHTTP(resp, req)
+
+	// assert http status code
+	checkResponseCode(t, http.StatusOK, resp.Code)
+
+	// decode the http response
+	var e serviceerr.ServiceError
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
+		log.Fatal(err)
+	}
+
+	// assert http response
+	assert.Equal(t, statusOK, e.Code)
+	assert.Equal(t, infoMsg, e.Message)
+}
+
 func TestAddProduct(t *testing.T) {
 	uid := uuid.New()
 	data := entity.Product{
@@ -246,13 +279,13 @@ func TestDeleteProduct(t *testing.T) {
 	checkResponseCode(t, http.StatusOK, resp.Code)
 
 	// decode the http response
-	var err serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&err); err != nil {
+	var e serviceerr.ServiceError
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
 		log.Fatal(err)
 	}
 
-	assert.Equal(t, statusOK, err.Code)
-	assert.Equal(t, pDeleted, err.Message)
+	assert.Equal(t, statusOK, e.Code)
+	assert.Equal(t, pDeleted, e.Message)
 
 	// clean up db
 	tearDown(uid)
