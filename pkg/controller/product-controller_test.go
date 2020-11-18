@@ -382,6 +382,42 @@ func TestDeleteProduct(t *testing.T) {
 	tearDown(uid)
 }
 
+func TestDeleteNonExistingProduct(t *testing.T) {
+	const (
+		path    = "/product/%v"
+		errCode = "invalid input error"
+		errMsg  = "Unable to delete product, which already does not exist"
+	)
+	// insert new product
+	uid := uuid.New()
+
+	// create a new http DELETE request
+	req := httptest.NewRequest("DELETE", fmt.Sprintf(path, uid), nil)
+
+	// record http response
+	resp := httptest.NewRecorder()
+
+	// assign http handler function
+	r := chi.NewRouter()
+	r.Delete("/product/{id}", pController.DeleteProduct)
+
+	// dispatch the http request
+	r.ServeHTTP(resp, req)
+
+	// assert http status code
+	checkResponseCode(t, http.StatusBadRequest, resp.Code)
+
+	// decode the http response
+	var e serviceerr.ServiceError
+	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
+		log.Fatal(err)
+	}
+
+	// assert http response
+	assert.Equal(t, errCode, e.Code)
+	assert.Equal(t, errMsg, e.Message)
+}
+
 func TestUpdateProduct(t *testing.T) {
 	const (
 		path     = "/product/%v"
