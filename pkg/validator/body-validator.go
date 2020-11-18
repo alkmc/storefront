@@ -32,8 +32,8 @@ func (v *productValidator) Body(err error) error {
 
 	// Catch the error caused by extra unexpected fields
 	case strings.HasPrefix(err.Error(), "json: unknown field "):
-		fieldName := strings.TrimPrefix(err.Error(), "json: unknown field ")
-		return fmt.Errorf("unknown field %s", fieldName)
+		fieldErr := strings.TrimPrefix(err.Error(), "json: ")
+		return errors.New(fieldErr)
 
 	// An io.EOF error is returned by Decode() if the request body is empty
 	case errors.Is(err, io.EOF):
