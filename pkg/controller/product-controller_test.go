@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +38,7 @@ func TestGetProductByID(t *testing.T) {
 	const path = "/product/%v"
 	// insert new product
 	uid := uuid.New()
-	setupUUID(uid)
+	setupUUID(t, uid)
 
 	// create a http GET request
 	req := httptest.NewRequest("GET", fmt.Sprintf(path, uid), nil)
@@ -60,7 +59,7 @@ func TestGetProductByID(t *testing.T) {
 	// decode the http response
 	var p entity.Product
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -69,7 +68,7 @@ func TestGetProductByID(t *testing.T) {
 	assert.Equal(t, PRICE, p.Price)
 
 	// clean up database
-	tearDown(p.ID)
+	tearDown(t, p.ID)
 }
 
 func TestGetProductByIncorrectID(t *testing.T) {
@@ -99,7 +98,7 @@ func TestGetProductByIncorrectID(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -135,7 +134,7 @@ func TestGetNotExistingProduct(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -145,7 +144,7 @@ func TestGetNotExistingProduct(t *testing.T) {
 
 func TestGetProducts(t *testing.T) {
 	// insert new product
-	setup()
+	setup(t)
 
 	// create a http GET request
 	req := httptest.NewRequest("GET", "/product", nil)
@@ -166,7 +165,7 @@ func TestGetProducts(t *testing.T) {
 	// decode the http response
 	var products []entity.Product
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&products); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -175,7 +174,7 @@ func TestGetProducts(t *testing.T) {
 	assert.Equal(t, PRICE, products[0].Price)
 
 	// clean up db
-	tearDown(products[0].ID)
+	tearDown(t, products[0].ID)
 }
 
 func TestGetNotExistingProducts(t *testing.T) {
@@ -203,7 +202,7 @@ func TestGetNotExistingProducts(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -222,7 +221,7 @@ func TestAddProduct(t *testing.T) {
 
 	jsonReq, err := json.Marshal(data)
 	if err != nil {
-		log.Println(err)
+		t.Fatal(err)
 	}
 
 	// create a new http POST request
@@ -244,7 +243,7 @@ func TestAddProduct(t *testing.T) {
 	// decode the http response
 	var p entity.Product
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -253,7 +252,7 @@ func TestAddProduct(t *testing.T) {
 	assert.Equal(t, PRICE, p.Price)
 
 	// clean up db
-	tearDown(p.ID)
+	tearDown(t, p.ID)
 }
 
 func TestAddProductWithExtraField(t *testing.T) {
@@ -270,7 +269,7 @@ func TestAddProductWithExtraField(t *testing.T) {
 
 	jsonReq, err := json.Marshal(data)
 	if err != nil {
-		log.Println(err)
+		t.Fatal(err)
 	}
 	// create a new http POST request
 	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
@@ -291,7 +290,7 @@ func TestAddProductWithExtraField(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -314,7 +313,7 @@ func TestAddProductWithNegativePrice(t *testing.T) {
 
 	jsonReq, err := json.Marshal(data)
 	if err != nil {
-		log.Println(err)
+		t.Fatal(err)
 	}
 	// create a new http POST request
 	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
@@ -335,7 +334,7 @@ func TestAddProductWithNegativePrice(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -351,7 +350,7 @@ func TestDeleteProduct(t *testing.T) {
 	)
 	// insert new product
 	uid := uuid.New()
-	setupUUID(uid)
+	setupUUID(t, uid)
 
 	// create a new http DELETE request
 	req := httptest.NewRequest("DELETE", fmt.Sprintf(path, uid), nil)
@@ -372,14 +371,14 @@ func TestDeleteProduct(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	assert.Equal(t, statusOK, e.Code)
 	assert.Equal(t, pDeleted, e.Message)
 
 	// clean up db
-	tearDown(uid)
+	tearDown(t, uid)
 }
 
 func TestDeleteNonExistingProduct(t *testing.T) {
@@ -410,7 +409,7 @@ func TestDeleteNonExistingProduct(t *testing.T) {
 	// decode the http response
 	var e serviceerr.ServiceError
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -426,7 +425,7 @@ func TestUpdateProduct(t *testing.T) {
 	)
 	// insert new product
 	uid := uuid.New()
-	setupUUID(uid)
+	setupUUID(t, uid)
 
 	data := entity.Product{
 		ID:    uid,
@@ -436,7 +435,7 @@ func TestUpdateProduct(t *testing.T) {
 
 	jsonReq, err := json.Marshal(data)
 	if err != nil {
-		log.Println(err)
+		t.Fatal(err)
 	}
 
 	// create a new http PUT request
@@ -454,7 +453,7 @@ func TestUpdateProduct(t *testing.T) {
 
 	var p entity.Product
 	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// assert http response
@@ -463,7 +462,7 @@ func TestUpdateProduct(t *testing.T) {
 	assert.Equal(t, newPrice, p.Price)
 
 	// clean up db
-	tearDown(uid)
+	tearDown(t, uid)
 }
 
 func checkResponseCode(t *testing.T, expected, actual int) {
@@ -472,31 +471,31 @@ func checkResponseCode(t *testing.T, expected, actual int) {
 	}
 }
 
-func setupUUID(id uuid.UUID) {
+func setupUUID(t *testing.T, id uuid.UUID) {
 	var p = entity.Product{
 		ID:    id,
 		Name:  NAME,
 		Price: PRICE,
 	}
-	addProd(p)
+	addProd(t, p)
 }
 
-func setup() {
+func setup(t *testing.T) {
 	var p = entity.Product{
 		Name:  NAME,
 		Price: PRICE,
 	}
-	addProd(p)
+	addProd(t, p)
 }
 
-func addProd(p entity.Product) {
+func addProd(t *testing.T, p entity.Product) {
 	if _, err := pRepo.Save(&p); err != nil {
-		log.Println(err)
+		t.Fatal(err)
 	}
 }
 
-func tearDown(ID uuid.UUID) {
+func tearDown(t *testing.T, ID uuid.UUID) {
 	if err := pRepo.Delete(ID); err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 }
