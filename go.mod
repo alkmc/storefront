@@ -3,7 +3,7 @@ module github.com/alkmc/restClean
 go 1.15
 
 require (
-	github.com/go-chi/chi v4.1.2+incompatible
+	github.com/go-chi/chi/v5 v5.0.3
 	github.com/go-redis/redis/v7 v7.4.0
 	github.com/google/uuid v1.1.2
 	github.com/jmoiron/sqlx v1.2.0
