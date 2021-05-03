@@ -23,7 +23,7 @@ Independent of:
 
 ## Technologies
 
-This project is build with Go 1.15.
+This project is build with Go 1.16.
 
 Other dependencies:
 
