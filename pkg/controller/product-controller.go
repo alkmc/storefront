@@ -30,7 +30,7 @@ func NewController(s service.Service, c cache.Cache, v validator.Validator) Cont
 	}
 }
 
-func (c *productController) GetProductByID(w http.ResponseWriter, r *http.Request) {
+func (c *productController) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {
@@ -53,7 +53,7 @@ func (c *productController) GetProductByID(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) {
+func (c *productController) Get(w http.ResponseWriter, r *http.Request) {
 	products, err := c.productService.FindAll()
 	if err != nil {
 		log.Println(err.Error())
@@ -71,7 +71,7 @@ func (c *productController) GetProducts(w http.ResponseWriter, r *http.Request) 
 	renderer.JSON(w, http.StatusOK, products)
 }
 
-func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
+func (c *productController) Add(w http.ResponseWriter, r *http.Request) {
 	var p entity.Product
 	if err := c.decode(r, &p); err != nil {
 		err.Encode(w)
@@ -95,7 +95,7 @@ func (c *productController) AddProduct(w http.ResponseWriter, r *http.Request) {
 	renderer.JSON(w, http.StatusCreated, result)
 }
 
-func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request) {
+func (c *productController) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {
@@ -122,7 +122,7 @@ func (c *productController) DeleteProduct(w http.ResponseWriter, r *http.Request
 	renderer.JSON(w, http.StatusOK, confirmation)
 }
 
-func (c *productController) UpdateProduct(w http.ResponseWriter, r *http.Request) {
+func (c *productController) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
 	id, err := c.validID(idStr)
 	if err != nil {

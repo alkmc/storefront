@@ -86,7 +86,7 @@ func (pg *pgRepository) FindAll() ([]entity.Product, error) {
 	var products []entity.Product
 	for rows.Next() {
 		var p entity.Product
-		if err = rows.Scan(&p.ID, &p.Name, &p.Price); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Price); err != nil {
 			return nil, err
 		}
 		products = append(products, p)
@@ -95,6 +95,7 @@ func (pg *pgRepository) FindAll() ([]entity.Product, error) {
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+
 	return products, nil
 }
 

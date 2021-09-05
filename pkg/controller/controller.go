@@ -4,9 +4,9 @@ import "net/http"
 
 //Controller is responsible for controlling the application logic
 type Controller interface {
-	GetProductByID(w http.ResponseWriter, r *http.Request)
-	GetProducts(w http.ResponseWriter, r *http.Request)
-	AddProduct(w http.ResponseWriter, r *http.Request)
-	DeleteProduct(w http.ResponseWriter, r *http.Request)
-	UpdateProduct(w http.ResponseWriter, r *http.Request)
+	GetByID(w http.ResponseWriter, r *http.Request)
+	Get(w http.ResponseWriter, r *http.Request)
+	Add(w http.ResponseWriter, r *http.Request)
+	Delete(w http.ResponseWriter, r *http.Request)
+	Update(w http.ResponseWriter, r *http.Request)
 }

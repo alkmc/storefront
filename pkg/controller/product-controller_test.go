@@ -48,7 +48,7 @@ func TestGetProductByID(t *testing.T) {
 
 	// assign http Handler function
 	r := chi.NewRouter()
-	r.Get("/product/{id}", pController.GetProductByID)
+	r.Get("/product/{id}", pController.GetByID)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -87,7 +87,7 @@ func TestGetProductByIncorrectID(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Get("/product/{id}", pController.GetProductByID)
+	r.Get("/product/{id}", pController.GetByID)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -123,7 +123,7 @@ func TestGetNotExistingProduct(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Get("/product/{id}", pController.GetProductByID)
+	r.Get("/product/{id}", pController.GetByID)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -154,7 +154,7 @@ func TestGetProducts(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Get("/product", pController.GetProducts)
+	r.Get("/product", pController.Get)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -191,7 +191,7 @@ func TestGetNotExistingProducts(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Get("/product", pController.GetProducts)
+	r.Get("/product", pController.Get)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -232,7 +232,7 @@ func TestAddProduct(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Post("/product", pController.AddProduct)
+	r.Post("/product", pController.Add)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -279,7 +279,7 @@ func TestAddProductWithExtraField(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Post("/product", pController.AddProduct)
+	r.Post("/product", pController.Add)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -323,7 +323,7 @@ func TestAddProductWithNegativePrice(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Post("/product", pController.AddProduct)
+	r.Post("/product", pController.Add)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -360,7 +360,7 @@ func TestDeleteProduct(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Delete("/product/{id}", pController.DeleteProduct)
+	r.Delete("/product/{id}", pController.Delete)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -398,7 +398,7 @@ func TestDeleteNonExistingProduct(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Delete("/product/{id}", pController.DeleteProduct)
+	r.Delete("/product/{id}", pController.Delete)
 
 	// dispatch the http request
 	r.ServeHTTP(resp, req)
@@ -446,7 +446,7 @@ func TestUpdateProduct(t *testing.T) {
 
 	// assign http handler function
 	r := chi.NewRouter()
-	r.Put("/product/{id}", pController.UpdateProduct)
+	r.Put("/product/{id}", pController.Update)
 
 	r.ServeHTTP(resp, req)
 	checkResponseCode(t, http.StatusOK, resp.Code)
