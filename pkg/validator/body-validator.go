@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//Body checks for various possible request body decoding errors
+// Body checks for various possible request body decoding errors
 func (v *productValidator) Body(err error) error {
 
 	var syntaxError *json.SyntaxError

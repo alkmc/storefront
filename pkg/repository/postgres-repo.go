@@ -18,7 +18,7 @@ type pgRepository struct {
 	db *sqlx.DB
 }
 
-//NewPG creates a new PostgreSQL repository
+// NewPG creates a new PostgreSQL repository
 func NewPG() Repository {
 	dbConn := getDbConn()
 	pdb, err := sqlx.Open("postgres", dbConn)

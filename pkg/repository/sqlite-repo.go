@@ -17,7 +17,7 @@ type sqliteRepo struct {
 	db *sqlx.DB
 }
 
-//NewSQLite creates a new SQL lite repository
+// NewSQLite creates a new SQL lite repository
 func NewSQLite() Repository {
 	if err := os.Remove("./prods.db"); err != nil {
 		log.Println(err)

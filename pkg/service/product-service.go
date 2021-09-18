@@ -11,7 +11,7 @@ type productService struct {
 	repo repository.Repository
 }
 
-//NewService returns new Product Service
+// NewService returns new Product Service
 func NewService(r repository.Repository) Service {
 	return &productService{repo: r}
 }

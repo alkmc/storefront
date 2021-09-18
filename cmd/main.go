@@ -19,7 +19,7 @@ const (
 )
 
 var (
-	productRepository = repository.NewPG() //can be set to repository.NewSQLite()
+	productRepository = repository.NewPG() // can be set to repository.NewSQLite()
 	productService    = service.NewService(productRepository)
 	productCache      = cache.NewRedis(redisHost, redisDB, cacheExpiration)
 	productValidator  = validator.NewValidator()

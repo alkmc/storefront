@@ -21,7 +21,7 @@ type productController struct {
 	productValidator validator.Validator
 }
 
-//NewController returns Product Controller
+// NewController returns Product Controller
 func NewController(s service.Service, c cache.Cache, v validator.Validator) Controller {
 	return &productController{
 		productService:   s,

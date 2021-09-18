@@ -23,7 +23,7 @@ type chiRouter struct {
 	mux *chi.Mux
 }
 
-//NewChiRouter construct new Router
+// NewChiRouter construct new Router
 func NewChiRouter() Router {
 	return &chiRouter{
 		mux: setUpChi(),
