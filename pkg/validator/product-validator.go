@@ -11,7 +11,7 @@ import (
 type productValidator struct {
 }
 
-//NewValidator returns new Product Validator
+// NewValidator returns new Product Validator
 func NewValidator() Validator {
 	return &productValidator{}
 }

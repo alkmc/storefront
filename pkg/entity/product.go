@@ -15,7 +15,7 @@ type Product struct {
 	Price float64   `json:"price" db:"price"`
 }
 
-//JSON serializes the Product entity into the response body
+// JSON serializes the Product entity into the response body
 func (p *Product) JSON(w http.ResponseWriter) {
 	renderer.JSON(w, http.StatusOK, p)
 }

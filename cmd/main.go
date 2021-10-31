@@ -19,24 +19,24 @@ const (
 )
 
 var (
-	productRepository = repository.NewPG() //can be set to repository.NewSQLite()
+	productRepository = repository.NewPG() // can be set to repository.NewSQLite()
 	productService    = service.NewService(productRepository)
 	productCache      = cache.NewRedis(redisHost, redisDB, cacheExpiration)
 	productValidator  = validator.NewValidator()
 	productController = controller.NewController(productService, productCache, productValidator)
-	productRouter     = router.NewChiRouter()
+	httpRouter        = router.NewChiRouter()
 )
 
 func main() {
 	mapUrls()
 	defer productRepository.CloseDB()
-	productRouter.SERVE(port)
+	httpRouter.SERVE(port)
 }
 
 func mapUrls() {
-	productRouter.POST("/product", productController.AddProduct)
-	productRouter.GET("/product", productController.GetProducts)
-	productRouter.GET("/product/{id}", productController.GetProductByID)
-	productRouter.PUT("/product/{id}", productController.UpdateProduct)
-	productRouter.DELETE("/product/{id}", productController.DeleteProduct)
+	httpRouter.POST("/product", productController.Add)
+	httpRouter.GET("/product", productController.Get)
+	httpRouter.GET("/product/{id}", productController.GetByID)
+	httpRouter.PUT("/product/{id}", productController.Update)
+	httpRouter.DELETE("/product/{id}", productController.Delete)
 }

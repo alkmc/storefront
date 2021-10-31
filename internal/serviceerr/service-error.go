@@ -25,7 +25,7 @@ func (s *ServiceError) Error() string {
 	return fmt.Sprintf("%s -  %s", s.Code, s.Message)
 }
 
-//Encode is similar to http.Error, but response is encoded in JSON format
+// Encode is similar to http.Error, but response is encoded in JSON format
 func (s *ServiceError) Encode(w http.ResponseWriter) {
 	codes := map[string]int{
 		valErr:     http.StatusUnprocessableEntity,
@@ -39,7 +39,7 @@ func (s *ServiceError) Encode(w http.ResponseWriter) {
 	renderer.JSON(w, code, s)
 }
 
-//Internal constructs internal service error
+// Internal constructs internal service error
 func Internal(msg string) *ServiceError {
 	return &ServiceError{
 		Code:    internErr,
@@ -47,7 +47,7 @@ func Internal(msg string) *ServiceError {
 	}
 }
 
-//Codec constructs JSON error
+// Codec constructs JSON error
 func Codec(msg string) *ServiceError {
 	return &ServiceError{
 		Code:    codecErr,
@@ -55,7 +55,7 @@ func Codec(msg string) *ServiceError {
 	}
 }
 
-//Valid constructs validation error
+// Valid constructs validation error
 func Valid(msg string) *ServiceError {
 	return &ServiceError{
 		Code:    valErr,
@@ -63,7 +63,7 @@ func Valid(msg string) *ServiceError {
 	}
 }
 
-//Input constructs invalid user input error
+// Input constructs invalid user input error
 func Input(msg string) *ServiceError {
 	return &ServiceError{
 		Code:    userErr,
@@ -71,7 +71,7 @@ func Input(msg string) *ServiceError {
 	}
 }
 
-//Body constructs request payload error
+// Body constructs request payload error
 func Body(msg string) *ServiceError {
 	return &ServiceError{
 		Code:    payloadErr,

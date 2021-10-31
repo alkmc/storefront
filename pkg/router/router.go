@@ -2,11 +2,11 @@ package router
 
 import "net/http"
 
-//Router is responsible for matching uri with application controller
+// Router is responsible for matching uri with application controller
 type Router interface {
-	POST(uri string, f func(w http.ResponseWriter, r *http.Request))
-	GET(uri string, f func(w http.ResponseWriter, r *http.Request))
-	PUT(uri string, f func(w http.ResponseWriter, r *http.Request))
-	DELETE(uri string, f func(w http.ResponseWriter, r *http.Request))
-	SERVE(port string)
+	POST(string, func(w http.ResponseWriter, r *http.Request))
+	GET(string, func(w http.ResponseWriter, r *http.Request))
+	PUT(string, func(w http.ResponseWriter, r *http.Request))
+	DELETE(string, func(w http.ResponseWriter, r *http.Request))
+	SERVE(string)
 }

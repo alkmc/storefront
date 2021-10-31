@@ -6,12 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
-//Repository is responsible for DB operation on Product entity
+// Repository is responsible for DB operation on Product entity
 type Repository interface {
-	Save(p *entity.Product) (*entity.Product, error)
-	FindByID(id uuid.UUID) (*entity.Product, error)
+	Save(*entity.Product) (*entity.Product, error)
+	FindByID(uuid.UUID) (*entity.Product, error)
 	FindAll() ([]entity.Product, error)
-	Update(p *entity.Product) error
-	Delete(id uuid.UUID) error
+	Update(*entity.Product) error
+	Delete(uuid.UUID) error
 	CloseDB()
 }
