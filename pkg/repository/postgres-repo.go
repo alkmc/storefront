@@ -29,19 +29,19 @@ func NewPG() Repository {
 	if err := pdb.Ping(); err != nil {
 		log.Fatal(err)
 	}
-	log.Println("Successfully connected to DB")
+	log.Println("successfully connected to db")
 
 	if _, err := pdb.Exec(sqlSchema); err != nil {
-		log.Printf("%q: %s\n", err, sqlSchema)
+		log.Printf("%q: %s", err, sqlSchema)
 	}
 	return &pgRepository{db: pdb}
 }
 
 func (pg *pgRepository) CloseDB() {
 	if err := pg.db.Close(); err != nil {
-		log.Println("Failed to close database connection")
+		log.Println("failed to close db connection")
 	}
-	log.Println("Connection to PG db closed")
+	log.Println("connection to db closed")
 }
 
 func (pg *pgRepository) Save(p *entity.Product) (*entity.Product, error) {

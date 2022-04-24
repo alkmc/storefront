@@ -32,16 +32,16 @@ func NewSQLite() Repository {
 	}
 
 	if _, err = sdb.Exec(sqlSchema); err != nil {
-		log.Printf("%q: %s\n", err, sqlSchema)
+		log.Printf("%q: %s", err, sqlSchema)
 	}
 	return &sqliteRepo{db: sdb}
 }
 
 func (s *sqliteRepo) CloseDB() {
 	if err := s.db.Close(); err != nil {
-		log.Println("Failed to close database", err)
+		log.Println("failed to close database", err)
 	}
-	log.Println("Connection to SQLite db closed")
+	log.Println("connection to db closed")
 }
 
 func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {

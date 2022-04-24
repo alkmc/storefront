@@ -23,7 +23,7 @@ type chiRouter struct {
 	mux *chi.Mux
 }
 
-// NewChiRouter construct new Router
+// NewChiRouter initializes and returns new Router
 func NewChiRouter() Router {
 	return &chiRouter{
 		mux: setUpChi(),
@@ -56,26 +56,26 @@ func (c *chiRouter) SERVE(port string) {
 		IdleTimeout:  maxTKA,
 	}
 
-	log.Printf("Starting Chi http server on port %s\n", port)
+	log.Printf("starting http server on port %s", port)
 	go func() {
 		if err := s.ListenAndServe(); err != http.ErrServerClosed {
-			log.Fatalf("Error starting server: %s", err.Error())
+			log.Fatal("failed to start server: ", err)
 		}
 	}()
-	log.Print("Server Started")
+	log.Print("server started")
 
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	<-done
-	log.Print("Signal closing server received")
+	log.Print("signal closing server received")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := s.Shutdown(ctx); err != nil {
-		log.Printf("Server shutdown failed: %s", err.Error())
+		log.Print("server shutdown failed: ", err)
 	}
-	log.Println("Server shutdown completed gracefully")
+	log.Println("server shutdown completed")
 }
 
 func setUpChi() *chi.Mux {
