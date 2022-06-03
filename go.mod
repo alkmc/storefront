@@ -7,8 +7,8 @@ require (
 	github.com/go-redis/redis/v7 v7.4.1
 	github.com/google/uuid v1.3.0
 	github.com/jmoiron/sqlx v1.3.5
-	github.com/lib/pq v1.10.5
-	github.com/mattn/go-sqlite3 v1.14.12
+	github.com/lib/pq v1.10.6
+	github.com/mattn/go-sqlite3 v1.14.13
 	github.com/stretchr/testify v1.7.1
 )
 
