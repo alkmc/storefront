@@ -8,8 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-
-	// register sqlite3 driver
 	_ "github.com/mattn/go-sqlite3"
 )
 

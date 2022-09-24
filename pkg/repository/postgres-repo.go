@@ -9,8 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-
-	// register pg driver
 	_ "github.com/lib/pq"
 )
 
