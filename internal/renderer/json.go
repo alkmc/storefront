@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	appJSON  = "application/json; charset=utf-8"
+	appJSON  = "application/json"
 	encError = "error encoding data"
 )
 
 // JSON replies to the request with the specified payload and HTTP code
-func JSON(w http.ResponseWriter, httpCode int, payload interface{}) {
+func JSON(w http.ResponseWriter, httpCode int, payload any) {
 	w.Header().Set("Content-Type", appJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
@@ -25,7 +25,7 @@ func JSON(w http.ResponseWriter, httpCode int, payload interface{}) {
 }
 
 // Decode decodes request body to given struct
-func Decode(r io.ReadCloser, v interface{}) error {
+func Decode(r io.ReadCloser, v any) error {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&v); err != nil {

@@ -9,7 +9,7 @@ import (
 
 const (
 	valErr     = "product validation error"
-	codecErr   = "JSON error"
+	codecErr   = "json error"
 	internErr  = "service error"
 	userErr    = "invalid input error"
 	payloadErr = "request body error"

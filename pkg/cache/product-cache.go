@@ -1,10 +1,14 @@
 package cache
 
-import "github.com/alkmc/restClean/pkg/entity"
+import (
+	"context"
+
+	"github.com/alkmc/restClean/pkg/entity"
+)
 
 // Cache is responsible for caching mechanism
 type Cache interface {
-	Set(key string, value *entity.Product)
-	Get(key string) *entity.Product
-	Expire(key string)
+	Set(ctx context.Context, key string, value *entity.Product)
+	Get(ctx context.Context, key string) *entity.Product
+	Expire(ctx context.Context, key string)
 }

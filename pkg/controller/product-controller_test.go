@@ -22,8 +22,9 @@ import (
 )
 
 const (
-	NAME  string  = "Car"
-	PRICE float64 = 1.23
+	NAME     string  = "Car"
+	PRICE    float64 = 1.23
+	statusOK         = "ok"
 )
 
 var (
@@ -178,10 +179,7 @@ func TestGetProducts(t *testing.T) {
 }
 
 func TestGetNotExistingProducts(t *testing.T) {
-	const (
-		statusOK = "OK"
-		infoMsg  = "No products found"
-	)
+	const infoMsg = "no products found"
 
 	// create a http GET request
 	req := httptest.NewRequest("GET", "/product", nil)
@@ -261,7 +259,7 @@ func TestAddProductWithExtraField(t *testing.T) {
 		errMsg  = "unknown field \"Email\""
 	)
 	// insert new product
-	data := map[string]interface{}{
+	data := map[string]any{
 		"Name":  NAME,
 		"Price": PRICE,
 		"Email": "a@example.com",
@@ -345,8 +343,7 @@ func TestAddProductWithNegativePrice(t *testing.T) {
 func TestDeleteProduct(t *testing.T) {
 	const (
 		path     = "/product/%v"
-		statusOK = "OK"
-		pDeleted = "Product deleted"
+		pDeleted = "product deleted"
 	)
 	// insert new product
 	uid := uuid.New()
@@ -385,7 +382,7 @@ func TestDeleteNonExistingProduct(t *testing.T) {
 	const (
 		path    = "/product/%v"
 		errCode = "invalid input error"
-		errMsg  = "Unable to delete product, which already does not exist"
+		errMsg  = "unable to delete product, which already does not exist"
 	)
 	// insert new product
 	uid := uuid.New()
@@ -467,7 +464,7 @@ func TestUpdateProduct(t *testing.T) {
 
 func checkResponseCode(t *testing.T, expected, actual int) {
 	if expected != actual {
-		t.Errorf("Expected response code %d. Got %d\n", expected, actual)
+		t.Errorf("expected response code %d. Got %d\n", expected, actual)
 	}
 }
 

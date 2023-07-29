@@ -1,13 +1,14 @@
 package cache
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
 
 	"github.com/alkmc/restClean/pkg/entity"
 
-	"github.com/go-redis/redis/v7"
+	"github.com/redis/go-redis/v9"
 )
 
 type redisCache struct {
@@ -33,7 +34,7 @@ func (r *redisCache) getClient() *redis.Client {
 	})
 }
 
-func (r *redisCache) Set(key string, prod *entity.Product) {
+func (r *redisCache) Set(ctx context.Context, key string, prod *entity.Product) {
 	client := r.getClient()
 
 	jsonProd, err := json.Marshal(prod)
@@ -41,13 +42,13 @@ func (r *redisCache) Set(key string, prod *entity.Product) {
 		log.Println(err)
 		return
 	}
-	client.Set(key, jsonProd, r.expires*time.Second)
+	client.Set(ctx, key, jsonProd, r.expires*time.Second)
 }
 
-func (r *redisCache) Get(key string) *entity.Product {
+func (r *redisCache) Get(ctx context.Context, key string) *entity.Product {
 	client := r.getClient()
 
-	val, err := client.Get(key).Result()
+	val, err := client.Get(ctx, key).Result()
 	if err != nil {
 		return nil
 	}
@@ -59,7 +60,7 @@ func (r *redisCache) Get(key string) *entity.Product {
 	return &p
 }
 
-func (r *redisCache) Expire(key string) {
+func (r *redisCache) Expire(ctx context.Context, key string) {
 	client := r.getClient()
-	client.Del(key)
+	client.Del(ctx, key)
 }

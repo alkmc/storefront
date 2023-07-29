@@ -16,7 +16,7 @@ This is small simple REST API Web Application which thanks to Dependency Inversi
 
 ## Technologies
 
-This project is build with Go 1.18.
+This project is build with Go 1.20.
 
 Other dependencies:
 
