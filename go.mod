@@ -1,14 +1,14 @@
 module github.com/alkmc/restClean
 
-go 1.23
+go 1.24
 
 require (
-	github.com/go-chi/chi/v5 v5.2.0
+	github.com/go-chi/chi/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.24
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/mattn/go-sqlite3 v1.14.27
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/stretchr/testify v1.10.0
 )
 
