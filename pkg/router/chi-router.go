@@ -47,7 +47,6 @@ func (c *chiRouter) DELETE(uri string, f func(w http.ResponseWriter, r *http.Req
 }
 
 func (c *chiRouter) SERVE(port string) {
-
 	s := http.Server{
 		Addr:         port,
 		Handler:      c.mux,
@@ -55,6 +54,10 @@ func (c *chiRouter) SERVE(port string) {
 		WriteTimeout: maxWR,
 		IdleTimeout:  maxTKA,
 	}
+
+	ctx, stop := signal.NotifyContext(
+		context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	log.Printf("starting http server on port %s", port)
 	go func() {
@@ -64,15 +67,13 @@ func (c *chiRouter) SERVE(port string) {
 	}()
 	log.Print("server started")
 
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	<-ctx.Done()
 
-	<-done
 	log.Print("signal closing server received")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := s.Shutdown(ctx); err != nil {
+	if err := s.Shutdown(shutdownCtx); err != nil {
 		log.Print("server shutdown failed: ", err)
 	}
 	log.Println("server shutdown completed")
