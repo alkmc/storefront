@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )

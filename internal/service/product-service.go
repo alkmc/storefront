@@ -3,8 +3,8 @@ package service
 import (
 	"context"
 
-	"github.com/alkmc/restClean/pkg/entity"
-	"github.com/alkmc/restClean/pkg/repository"
+	"github.com/alkmc/restClean/internal/entity"
+	"github.com/alkmc/restClean/internal/repository"
 	"github.com/google/uuid"
 )
 

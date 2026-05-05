@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 
-	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/internal/entity"
 )
 
 // Cache is responsible for caching mechanism

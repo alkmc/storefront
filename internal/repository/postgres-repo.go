@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/internal/entity"
 
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/internal/entity"
 
 	"github.com/redis/go-redis/v9"
 )

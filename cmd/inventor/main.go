@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alkmc/restClean/pkg/cache"
-	"github.com/alkmc/restClean/pkg/httpapi"
-	"github.com/alkmc/restClean/pkg/repository"
-	"github.com/alkmc/restClean/pkg/service"
-	"github.com/alkmc/restClean/pkg/validator"
+	"github.com/alkmc/restClean/internal/cache"
+	"github.com/alkmc/restClean/internal/httpapi"
+	"github.com/alkmc/restClean/internal/repository"
+	"github.com/alkmc/restClean/internal/service"
+	"github.com/alkmc/restClean/internal/validator"
 )
 
 const (

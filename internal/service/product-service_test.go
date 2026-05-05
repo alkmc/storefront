@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/alkmc/restClean/pkg/entity"
+	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
