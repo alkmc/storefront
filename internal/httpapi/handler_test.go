@@ -160,7 +160,7 @@ func TestGetProducts(t *testing.T) {
 		name           string
 		setupMock      func()
 		expectedStatus int
-		expectedMsg    string // for error cases
+		expectedMsg    string
 		expectedNames  []string
 	}{
 		{
