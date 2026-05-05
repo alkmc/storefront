@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-
-	"github.com/alkmc/restClean/internal/serviceerr"
 )
 
 const (
@@ -19,25 +17,14 @@ func respond(w http.ResponseWriter, httpCode int, payload any) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	w.WriteHeader(httpCode)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(payload); err != nil {
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, encError, http.StatusInternalServerError)
 	}
 }
 
-// respondError replies to the request with the service error and its mapped HTTP code
-func respondError(w http.ResponseWriter, err *serviceerr.ServiceError) {
-	codes := map[string]int{
-		"product validation error": http.StatusUnprocessableEntity,
-		"invalid input error":      http.StatusBadRequest,
-		"request body error":       http.StatusUnprocessableEntity,
-	}
-	code, ok := codes[err.Code]
-	if !ok {
-		code = http.StatusInternalServerError
-	}
-	respond(w, code, err)
+// respondError replies to the request with an error message and its HTTP code
+func respondError(w http.ResponseWriter, code int, msg string) {
+	respond(w, code, map[string]string{"message": msg})
 }
 
 // decodeBody decodes request body to given struct

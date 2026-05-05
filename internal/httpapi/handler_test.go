@@ -12,7 +12,7 @@ import (
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
-	"github.com/alkmc/restClean/internal/serviceerr"
+
 	"github.com/alkmc/restClean/internal/validator"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +23,10 @@ const (
 	NAME  = "Car"
 	PRICE = 1.23
 )
+
+type responseMessage struct {
+	Message string `json:"message"`
+}
 
 func setupTest(t *testing.T) (*Handler, http.Handler) {
 	logger := slog.New(slog.DiscardHandler)
@@ -70,8 +74,8 @@ func TestGetProductByID(t *testing.T) {
 		{
 			name:           "non-existing product",
 			id:             uuid.New().String(),
-			expectedStatus: http.StatusBadRequest,
-			expectedMsg:    "no product found!",
+			expectedStatus: http.StatusNotFound,
+			expectedMsg:    "product not found",
 		},
 	}
 
@@ -90,7 +94,7 @@ func TestGetProductByID(t *testing.T) {
 				assert.Equal(t, uid, p.ID)
 				assert.Equal(t, NAME, p.Name)
 			} else {
-				var e serviceerr.ServiceError
+				var e responseMessage
 				err := json.NewDecoder(resp.Body).Decode(&e)
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedMsg, e.Message)
@@ -108,7 +112,7 @@ func TestGetProducts(t *testing.T) {
 		mux.ServeHTTP(resp, req)
 
 		assert.Equal(t, http.StatusOK, resp.Code)
-		var e serviceerr.ServiceError
+		var e responseMessage
 		err := json.NewDecoder(resp.Body).Decode(&e)
 		require.NoError(t, err)
 		assert.Equal(t, "no products found", e.Message)
@@ -171,7 +175,7 @@ func TestAddProduct(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, resp.Code)
 
 			if tt.expectedMsg != "" {
-				var e serviceerr.ServiceError
+				var e responseMessage
 				err := json.NewDecoder(resp.Body).Decode(&e)
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedMsg, e.Message)
@@ -188,7 +192,7 @@ func TestDeleteProduct(t *testing.T) {
 		req := httptest.NewRequest("DELETE", "/product/"+uuid.New().String(), nil)
 		resp := httptest.NewRecorder()
 		mux.ServeHTTP(resp, req)
-		assert.Equal(t, http.StatusBadRequest, resp.Code)
+		assert.Equal(t, http.StatusNotFound, resp.Code)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -200,7 +204,7 @@ func TestDeleteProduct(t *testing.T) {
 		mux.ServeHTTP(resp, req)
 
 		assert.Equal(t, http.StatusOK, resp.Code)
-		var e serviceerr.ServiceError
+		var e responseMessage
 		err = json.NewDecoder(resp.Body).Decode(&e)
 		require.NoError(t, err)
 		assert.Equal(t, "product deleted", e.Message)
