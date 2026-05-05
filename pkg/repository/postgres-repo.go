@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/alkmc/restClean/pkg/entity"
@@ -14,33 +14,37 @@ import (
 )
 
 type pgRepository struct {
-	db *sql.DB
+	logger *slog.Logger
+	db     *sql.DB
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG() Repository {
-	dbConn := getDbConn()
+func NewPG(l *slog.Logger) (Repository, error) {
+	dbConn, err := getDbConn()
+	if err != nil {
+		return nil, err
+	}
 	pdb, err := sql.Open("pgx", dbConn)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
 
 	if err := pdb.Ping(); err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to ping pg database: %w", err)
 	}
-	log.Println("successfully connected to db")
+	l.Info("successfully connected to db")
 
 	if _, err := pdb.Exec(sqlSchema); err != nil {
-		log.Printf("%q: %s", err, sqlSchema)
+		l.Error("failed to execute sql schema", slog.Any("error", err), slog.String("schema", sqlSchema))
 	}
-	return &pgRepository{db: pdb}
+	return &pgRepository{logger: l, db: pdb}, nil
 }
 
 func (pg *pgRepository) CloseDB() {
 	if err := pg.db.Close(); err != nil {
-		log.Println("failed to close db connection")
+		pg.logger.Error("failed to close db connection", slog.Any("error", err))
 	}
-	log.Println("connection to db closed")
+	pg.logger.Info("connection to db closed")
 }
 
 func (pg *pgRepository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
@@ -163,12 +167,12 @@ func getEnvVars() (map[string]string, error) {
 	return t, nil
 }
 
-func getDbConn() string {
+func getDbConn() (string, error) {
 	const connStr = "host=%s port=%s user=%s password=%s dbname=%s sslmode=disable"
 
 	e, err := getEnvVars()
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	return fmt.Sprintf(connStr,
@@ -176,5 +180,5 @@ func getDbConn() string {
 		e["PG_PORT"],
 		e["PG_USER"],
 		e["PG_PASSWORD"],
-		e["PG_DB"])
+		e["PG_DB"]), nil
 }

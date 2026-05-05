@@ -25,15 +25,17 @@ const (
 )
 
 func setupTest(t *testing.T) (*Handler, http.Handler) {
-	repo := repository.NewSQLite()
+	logger := slog.New(slog.DiscardHandler)
+	repo, err := repository.NewSQLite(logger)
+	require.NoError(t, err)
+
 	t.Cleanup(func() {
 		repo.CloseDB()
 	})
 
 	srv := service.NewService(repo)
-	cacheSrv := cache.NewRedis("localhost:6379", 0, 10)
+	cacheSrv := cache.NewRedis(logger, "localhost:6379", 0, 10)
 	valid := validator.NewValidator()
-	logger := slog.New(slog.DiscardHandler)
 	h := NewHandler(logger, srv, cacheSrv, valid)
 	mux := NewMux(logger, h)
 

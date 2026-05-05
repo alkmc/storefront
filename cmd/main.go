@@ -44,17 +44,20 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	repository := repository.NewPG() // can be set to repository.NewSQLite()
-	defer repository.CloseDB()
+	repo, err := repository.NewPG(logger) // can be set to repository.NewSQLite(logger)
+	if err != nil {
+		return err
+	}
+	defer repo.CloseDB()
 
-	service := service.NewService(repository)
-	cache := cache.NewRedis(redisHost, redisDB, cacheExpiration)
-	validator := validator.NewValidator()
-	handler := httpapi.NewHandler(logger, service, cache, validator)
+	srv := service.NewService(repo)
+	rCache := cache.NewRedis(logger, redisHost, redisDB, cacheExpiration)
+	valid := validator.NewValidator()
+	h := httpapi.NewHandler(logger, srv, rCache, valid)
 
 	s := &http.Server{
 		Addr:         port,
-		Handler:      httpapi.NewMux(logger, handler),
+		Handler:      httpapi.NewMux(logger, h),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  keepAlive,

@@ -3,7 +3,8 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/alkmc/restClean/pkg/entity"
@@ -12,34 +13,35 @@ import (
 )
 
 type sqliteRepo struct {
-	db *sql.DB
+	logger *slog.Logger
+	db     *sql.DB
 }
 
 // NewSQLite creates a new SQL lite repository
-func NewSQLite() Repository {
-	if err := os.Remove("./prods.db"); err != nil {
-		log.Println(err)
+func NewSQLite(l *slog.Logger) (Repository, error) {
+	if err := os.Remove("./prods.db"); err != nil && !os.IsNotExist(err) {
+		l.Error("failed to remove existing db", slog.Any("error", err))
 	}
 
 	sdb, err := sql.Open("sqlite3", "./prods.db")
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to open sqlite connection: %w", err)
 	}
 	if err := sdb.Ping(); err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to ping sqlite database: %w", err)
 	}
 
 	if _, err = sdb.Exec(sqlSchema); err != nil {
-		log.Printf("%q: %s", err, sqlSchema)
+		l.Error("failed to execute sql schema", slog.Any("error", err), slog.String("schema", sqlSchema))
 	}
-	return &sqliteRepo{db: sdb}
+	return &sqliteRepo{logger: l, db: sdb}, nil
 }
 
 func (s *sqliteRepo) CloseDB() {
 	if err := s.db.Close(); err != nil {
-		log.Println("failed to close database", err)
+		s.logger.Error("failed to close database", slog.Any("error", err))
 	}
-	log.Println("connection to db closed")
+	s.logger.Info("connection to db closed")
 }
 
 func (s *sqliteRepo) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {

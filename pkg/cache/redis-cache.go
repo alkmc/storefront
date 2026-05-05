@@ -3,7 +3,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/alkmc/restClean/pkg/entity"
@@ -12,14 +12,16 @@ import (
 )
 
 type redisCache struct {
+	logger  *slog.Logger
 	host    string
 	db      int
 	expires time.Duration
 }
 
 // NewRedis returns new redisCache struct
-func NewRedis(host string, db int, exp time.Duration) Cache {
+func NewRedis(l *slog.Logger, host string, db int, exp time.Duration) Cache {
 	return &redisCache{
+		logger:  l,
 		host:    host,
 		db:      db,
 		expires: exp,
@@ -39,7 +41,7 @@ func (r *redisCache) Set(ctx context.Context, key string, prod *entity.Product) 
 
 	jsonProd, err := json.Marshal(prod)
 	if err != nil {
-		log.Println(err)
+		r.logger.Error("failed to marshal product for cache", slog.Any("error", err))
 		return
 	}
 	client.Set(ctx, key, jsonProd, r.expires*time.Second)
@@ -54,7 +56,7 @@ func (r *redisCache) Get(ctx context.Context, key string) *entity.Product {
 	}
 	p := entity.Product{}
 	if err := json.Unmarshal([]byte(val), &p); err != nil {
-		log.Println(err)
+		r.logger.Error("failed to unmarshal product from cache", slog.Any("error", err))
 		return nil
 	}
 	return &p

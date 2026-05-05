@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -39,10 +38,8 @@ func (v *productValidator) Body(err error) error {
 	case errors.Is(err, io.EOF):
 		return errors.New("request body must not be empty")
 
-	// Otherwise log the error
+	// Otherwise return wrapped error
 	default:
-		log.Println(err.Error())
-		return errors.New("error decoding JSON")
-		//http.StatusInternalServerError)
+		return fmt.Errorf("error decoding JSON: %w", err)
 	}
 }

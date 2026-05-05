@@ -55,7 +55,7 @@ func TestProductService(t *testing.T) {
 	t.Run("Create", func(t *testing.T) {
 		p := &entity.Product{Name: "Test", Price: 10.0}
 		mockRepo.On("Save", ctx, mock.AnythingOfType("*entity.Product")).Return(p, nil).Once()
-		
+
 		res, err := srv.Create(ctx, p)
 		assert.NoError(t, err)
 		assert.Equal(t, "Test", res.Name)
@@ -66,7 +66,7 @@ func TestProductService(t *testing.T) {
 		id := uuid.New()
 		p := &entity.Product{ID: id, Name: "Test"}
 		mockRepo.On("FindByID", ctx, id).Return(p, nil).Once()
-		
+
 		res, err := srv.FindByID(ctx, id)
 		assert.NoError(t, err)
 		assert.Equal(t, id, res.ID)
@@ -76,7 +76,7 @@ func TestProductService(t *testing.T) {
 	t.Run("FindAll", func(t *testing.T) {
 		products := []entity.Product{{Name: "P1"}, {Name: "P2"}}
 		mockRepo.On("FindAll", ctx).Return(products, nil).Once()
-		
+
 		res, err := srv.FindAll(ctx)
 		assert.NoError(t, err)
 		assert.Len(t, res, 2)
@@ -86,7 +86,7 @@ func TestProductService(t *testing.T) {
 	t.Run("Update", func(t *testing.T) {
 		p := &entity.Product{Name: "Update"}
 		mockRepo.On("Update", ctx, p).Return(nil).Once()
-		
+
 		err := srv.Update(ctx, p)
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
@@ -95,7 +95,7 @@ func TestProductService(t *testing.T) {
 	t.Run("Delete", func(t *testing.T) {
 		id := uuid.New()
 		mockRepo.On("Delete", ctx, id).Return(nil).Once()
-		
+
 		err := srv.Delete(ctx, id)
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
