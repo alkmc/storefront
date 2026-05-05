@@ -1,7 +1,8 @@
 package httpapi
 
 import (
-	"log"
+	"cmp"
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"time"
@@ -25,26 +26,36 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 }
 
 // logging logs method, path, status, and request duration.
-func logging() middleware {
+func logging(logger *slog.Logger) middleware {
+	logger = cmp.Or(logger, slog.Default())
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			defer func() {
-				log.Printf("request completed: %s %s %d (%v)", r.Method, r.URL.Path, rec.status, time.Since(start))
+				logger.Info("http request",
+					slog.String("method", r.Method),
+					slog.String("path", r.URL.Path),
+					slog.Int("status", rec.status),
+					slog.Duration("duration", time.Since(start)),
+				)
 			}()
 			next.ServeHTTP(rec, r)
 		})
 	}
 }
 
-// recover catches panics and prevents the server from crashing
-func recoverPanic() middleware {
+// recoverPanic catches panics and prevents the server from crashing
+func recoverPanic(logger *slog.Logger) middleware {
+	logger = cmp.Or(logger, slog.Default())
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Printf("panic: %v\n%s", err, debug.Stack())
+					logger.Error("panic recovered",
+						slog.Any("error", err),
+						slog.String("stack", string(debug.Stack())),
+					)
 					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				}
 			}()

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,26 +31,30 @@ const (
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatalf("application failed: %v", err)
+	logger := setupLogger()
+	slog.SetDefault(logger)
+
+	if err := run(logger); err != nil {
+		logger.Error("application failed", slog.Any("error", err))
+		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	productRepository := repository.NewPG() // can be set to repository.NewSQLite()
-	defer productRepository.CloseDB()
+	repository := repository.NewPG() // can be set to repository.NewSQLite()
+	defer repository.CloseDB()
 
-	productService := service.NewService(productRepository)
-	productCache := cache.NewRedis(redisHost, redisDB, cacheExpiration)
-	productValidator := validator.NewValidator()
-	productHandler := httpapi.NewHandler(productService, productCache, productValidator)
+	service := service.NewService(repository)
+	cache := cache.NewRedis(redisHost, redisDB, cacheExpiration)
+	validator := validator.NewValidator()
+	handler := httpapi.NewHandler(logger, service, cache, validator)
 
 	s := &http.Server{
 		Addr:         port,
-		Handler:      httpapi.NewMux(productHandler),
+		Handler:      httpapi.NewMux(logger, handler),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  keepAlive,
@@ -62,18 +66,29 @@ func run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 
-		log.Print("signal closing server received")
+		logger.Info("signal closing server received")
 		if err := s.Shutdown(shutdownCtx); err != nil {
-			log.Printf("server shutdown failed: %v", err)
+			logger.Error("server shutdown failed", slog.Any("error", err))
 		}
 	})
 
-	log.Printf("starting http server on port %s", port)
+	logger.Info("starting http server", slog.String("port", port))
 	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server listen failed: %w", err)
 	}
 
 	wg.Wait()
-	log.Print("server shutdown completed")
+	logger.Info("server shutdown completed")
 	return nil
+}
+
+func setupLogger() *slog.Logger {
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
+			if a.Value.Kind() == slog.KindDuration {
+				return slog.String(a.Key, fmt.Sprintf("%dms", a.Value.Duration().Milliseconds()))
+			}
+			return a
+		},
+	}))
 }

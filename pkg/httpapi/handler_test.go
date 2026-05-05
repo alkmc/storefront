@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,7 +31,7 @@ var (
 	pSrv      = service.NewService(pRepo)
 	pCacheSrv = cache.NewRedis("localhost:6379", 0, 10)
 	pValid    = validator.NewValidator()
-	pHandler  = NewHandler(pSrv, pCacheSrv, pValid)
+	pHandler  = NewHandler(slog.New(slog.NewJSONHandler(io.Discard, nil)), pSrv, pCacheSrv, pValid)
 )
 
 func TestGetProductByID(t *testing.T) {

@@ -1,11 +1,12 @@
 package httpapi
 
 import (
+	"log/slog"
 	"net/http"
 )
 
 // NewMux initializes and returns a new standard library based ServeMux wrapped in middlewares
-func NewMux(h *Handler) http.Handler {
+func NewMux(l *slog.Logger, h *Handler) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /product", h.Add)
@@ -14,5 +15,5 @@ func NewMux(h *Handler) http.Handler {
 	mux.HandleFunc("PUT /product/{id}", h.Update)
 	mux.HandleFunc("DELETE /product/{id}", h.Delete)
 
-	return recoverPanic()(logging()(mux))
+	return recoverPanic(l)(logging(l)(mux))
 }

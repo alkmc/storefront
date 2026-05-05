@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,14 +18,16 @@ import (
 const timeout = 2 * time.Second
 
 type Handler struct {
+	logger           *slog.Logger
 	productService   service.Service
 	productCache     cache.Cache
 	productValidator validator.Validator
 }
 
-// NewHandler returns Product Controller
-func NewHandler(s service.Service, c cache.Cache, v validator.Validator) *Handler {
+// NewHandler returns Product Handler
+func NewHandler(l *slog.Logger, s service.Service, c cache.Cache, v validator.Validator) *Handler {
 	return &Handler{
+		logger:           l,
 		productService:   s,
 		productCache:     c,
 		productValidator: v,
@@ -63,7 +65,7 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	products, err := c.productService.FindAll(ctx)
 	if err != nil {
-		log.Println(err.Error())
+		c.logger.Error("failed to find all products", slog.Any("error", err))
 		errs := serviceerr.Codec("decoding error")
 		errs.Encode(w)
 		return
@@ -96,6 +98,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	result, err := c.productService.Create(ctx, &p)
 	if err != nil {
+		c.logger.Error("failed to create product", slog.Any("error", err))
 		errs := serviceerr.Internal("error saving the product")
 		errs.Encode(w)
 		return
@@ -124,7 +127,8 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.productService.Delete(ctx, id); err != nil {
-		log.Println(err.Error())
+		c.logger.Error("failed to delete product",
+			slog.Any("error", err), slog.String("id", id.String()))
 		err := serviceerr.Internal("error deleting product")
 		err.Encode(w)
 		return
@@ -171,7 +175,8 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := c.productService.Update(ctx, &p); err != nil {
-		log.Println(err.Error())
+		c.logger.Error("failed to update product",
+			slog.Any("error", err), slog.String("id", id.String()))
 		err := serviceerr.Internal("error updating product")
 		err.Encode(w)
 		return
