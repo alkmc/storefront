@@ -6,98 +6,270 @@ import (
 
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
 type MockRepository struct {
-	mock.Mock
+	SaveFn     func(ctx context.Context, p *entity.Product) (*entity.Product, error)
+	FindByIDFn func(ctx context.Context, id uuid.UUID) (*entity.Product, error)
+	FindAllFn  func(ctx context.Context) ([]entity.Product, error)
+	UpdateFn   func(ctx context.Context, p *entity.Product) error
+	DeleteFn   func(ctx context.Context, id uuid.UUID) error
+	CloseDBFn  func()
 }
 
 func (m *MockRepository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
-	args := m.Called(ctx, p)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if m.SaveFn != nil {
+		return m.SaveFn(ctx, p)
 	}
-	return args.Get(0).(*entity.Product), args.Error(1)
+	return nil, nil
 }
 
 func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
+	if m.FindByIDFn != nil {
+		return m.FindByIDFn(ctx, id)
 	}
-	return args.Get(0).(*entity.Product), args.Error(1)
+	return nil, nil
 }
 
 func (m *MockRepository) FindAll(ctx context.Context) ([]entity.Product, error) {
-	args := m.Called(ctx)
-	return args.Get(0).([]entity.Product), args.Error(1)
+	if m.FindAllFn != nil {
+		return m.FindAllFn(ctx)
+	}
+	return nil, nil
 }
 
 func (m *MockRepository) Update(ctx context.Context, p *entity.Product) error {
-	args := m.Called(ctx, p)
-	return args.Error(0)
+	if m.UpdateFn != nil {
+		return m.UpdateFn(ctx, p)
+	}
+	return nil
 }
 
 func (m *MockRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called(ctx, id)
-	return args.Error(0)
+	if m.DeleteFn != nil {
+		return m.DeleteFn(ctx, id)
+	}
+	return nil
 }
 
-func (m *MockRepository) CloseDB() {}
+func (m *MockRepository) CloseDB() {
+	if m.CloseDBFn != nil {
+		m.CloseDBFn()
+	}
+}
 
-func TestProductService(t *testing.T) {
-	mockRepo := new(MockRepository)
-	srv := NewService(mockRepo)
+func TestService_Create(t *testing.T) {
 	ctx := t.Context()
 
-	t.Run("Create", func(t *testing.T) {
-		p := &entity.Product{Name: "Test", Price: 10.0}
-		mockRepo.On("Save", ctx, mock.AnythingOfType("*entity.Product")).Return(p, nil).Once()
+	tests := []struct {
+		name      string
+		product   *entity.Product
+		mockSetup func(*MockRepository)
+		wantErr   bool
+	}{
+		{
+			name:    "success",
+			product: new(entity.Product{Name: "Test", Price: 10.0}),
+			mockSetup: func(m *MockRepository) {
+				m.SaveFn = func(ctx context.Context, p *entity.Product) (*entity.Product, error) {
+					return p, nil
+				}
+			},
+			wantErr: false,
+		},
+	}
 
-		res, err := srv.Create(ctx, p)
-		assert.NoError(t, err)
-		assert.Equal(t, "Test", res.Name)
-		mockRepo.AssertExpectations(t)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository{})
+			tt.mockSetup(mockRepo)
+			srv := NewService(mockRepo)
 
-	t.Run("FindByID", func(t *testing.T) {
-		id := uuid.New()
-		p := &entity.Product{ID: id, Name: "Test"}
-		mockRepo.On("FindByID", ctx, id).Return(p, nil).Once()
+			res, err := srv.Create(ctx, tt.product)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if res.Name != tt.product.Name {
+					t.Errorf("got %v, want %v", res.Name, tt.product.Name)
+				}
+			}
+		})
+	}
+}
 
-		res, err := srv.FindByID(ctx, id)
-		assert.NoError(t, err)
-		assert.Equal(t, id, res.ID)
-		mockRepo.AssertExpectations(t)
-	})
+func TestService_FindByID(t *testing.T) {
+	ctx := t.Context()
+	id := uuid.New()
 
-	t.Run("FindAll", func(t *testing.T) {
-		products := []entity.Product{{Name: "P1"}, {Name: "P2"}}
-		mockRepo.On("FindAll", ctx).Return(products, nil).Once()
+	tests := []struct {
+		name      string
+		id        uuid.UUID
+		mockSetup func(*MockRepository)
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			id:   id,
+			mockSetup: func(m *MockRepository) {
+				m.FindByIDFn = func(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: id, Name: "Test"}), nil
+				}
+			},
+			wantErr: false,
+		},
+	}
 
-		res, err := srv.FindAll(ctx)
-		assert.NoError(t, err)
-		assert.Len(t, res, 2)
-		mockRepo.AssertExpectations(t)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository{})
+			tt.mockSetup(mockRepo)
+			srv := NewService(mockRepo)
 
-	t.Run("Update", func(t *testing.T) {
-		p := &entity.Product{Name: "Update"}
-		mockRepo.On("Update", ctx, p).Return(nil).Once()
+			res, err := srv.FindByID(ctx, tt.id)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if res.ID != tt.id {
+					t.Errorf("got %v, want %v", res.ID, tt.id)
+				}
+			}
+		})
+	}
+}
 
-		err := srv.Update(ctx, p)
-		assert.NoError(t, err)
-		mockRepo.AssertExpectations(t)
-	})
+func TestService_FindAll(t *testing.T) {
+	ctx := t.Context()
 
-	t.Run("Delete", func(t *testing.T) {
-		id := uuid.New()
-		mockRepo.On("Delete", ctx, id).Return(nil).Once()
+	tests := []struct {
+		name      string
+		mockSetup func(*MockRepository)
+		wantLen   int
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			mockSetup: func(m *MockRepository) {
+				m.FindAllFn = func(ctx context.Context) ([]entity.Product, error) {
+					return []entity.Product{{Name: "P1"}, {Name: "P2"}}, nil
+				}
+			},
+			wantLen: 2,
+			wantErr: false,
+		},
+	}
 
-		err := srv.Delete(ctx, id)
-		assert.NoError(t, err)
-		mockRepo.AssertExpectations(t)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository{})
+			tt.mockSetup(mockRepo)
+			srv := NewService(mockRepo)
+
+			res, err := srv.FindAll(ctx)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(res) != tt.wantLen {
+					t.Errorf("got length %d, want %d", len(res), tt.wantLen)
+				}
+			}
+		})
+	}
+}
+
+func TestService_Update(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		name      string
+		product   *entity.Product
+		mockSetup func(*MockRepository)
+		wantErr   bool
+	}{
+		{
+			name:    "success",
+			product: new(entity.Product{Name: "Update"}),
+			mockSetup: func(m *MockRepository) {
+				m.UpdateFn = func(ctx context.Context, p *entity.Product) error {
+					return nil
+				}
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository{})
+			tt.mockSetup(mockRepo)
+			srv := NewService(mockRepo)
+
+			err := srv.Update(ctx, tt.product)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestService_Delete(t *testing.T) {
+	ctx := t.Context()
+	id := uuid.New()
+
+	tests := []struct {
+		name      string
+		id        uuid.UUID
+		mockSetup func(*MockRepository)
+		wantErr   bool
+	}{
+		{
+			name: "success",
+			id:   id,
+			mockSetup: func(m *MockRepository) {
+				m.DeleteFn = func(ctx context.Context, id uuid.UUID) error {
+					return nil
+				}
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo := new(MockRepository{})
+			tt.mockSetup(mockRepo)
+			srv := NewService(mockRepo)
+
+			err := srv.Delete(ctx, tt.id)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error")
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
 }

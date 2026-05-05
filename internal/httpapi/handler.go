@@ -26,12 +26,12 @@ type Handler struct {
 
 // NewHandler returns Product Handler
 func NewHandler(l *slog.Logger, s service.Service, c cache.Cache, v validator.Validator) *Handler {
-	return &Handler{
+	return new(Handler{
 		logger:           l,
 		productService:   s,
 		productCache:     c,
 		productValidator: v,
-	}
+	})
 }
 
 func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
@@ -197,7 +197,7 @@ func (c *Handler) validID(id string) (uuid.UUID, error) {
 }
 
 func (c *Handler) decodeBody(r *http.Request, p *entity.Product) error {
-	if err := decodeBody(r.Body, &p); err != nil {
+	if err := decodeBody(r.Body, p); err != nil {
 		valErr := c.productValidator.Body(err)
 		return valErr
 	}

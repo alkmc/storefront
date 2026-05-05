@@ -44,7 +44,7 @@ func run(logger *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	repo, err := repository.NewPG(logger) // can be set to repository.NewSQLite(logger)
+	repo, err := repository.NewPG(ctx, logger)
 	if err != nil {
 		return err
 	}
@@ -55,13 +55,13 @@ func run(logger *slog.Logger) error {
 	valid := validator.NewValidator()
 	h := httpapi.NewHandler(logger, srv, rCache, valid)
 
-	s := &http.Server{
+	s := new(http.Server{
 		Addr:         port,
 		Handler:      httpapi.NewMux(logger, h),
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  keepAlive,
-	}
+	})
 
 	var wg sync.WaitGroup
 	wg.Go(func() {

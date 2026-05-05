@@ -10,19 +10,19 @@ import (
 
 // Body checks for various possible request body decoding errors
 func (v *productValidator) Body(err error) error {
-
-	var syntaxError *json.SyntaxError
-	var unmarshalTypeError *json.UnmarshalTypeError
+	var (
+		syntaxError        *json.SyntaxError
+		unmarshalTypeError *json.UnmarshalTypeError
+	)
 
 	switch {
 	// Catch any syntax errors in the JSON
 	case errors.As(err, &syntaxError):
 		return fmt.Errorf("request body contains badly-formed JSON at position: %d", syntaxError.Offset)
 
-	// In some circumstances Decode() may also return an
-	// io.ErrUnexpectedEOF error for syntax errors in the JSON
+	// Decode() can also return io.ErrUnexpectedEOF for JSON syntax errors
 	case errors.Is(err, io.ErrUnexpectedEOF):
-		return fmt.Errorf("request body contains badly-formed JSON")
+		return errors.New("request body contains badly-formed JSON")
 
 	// Catch any type errors
 	case errors.As(err, &unmarshalTypeError):

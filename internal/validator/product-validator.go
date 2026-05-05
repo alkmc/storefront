@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/alkmc/restClean/internal/entity"
-
 	"github.com/google/uuid"
 )
 
@@ -13,7 +12,7 @@ type productValidator struct {
 
 // NewValidator returns new Product Validator
 func NewValidator() Validator {
-	return &productValidator{}
+	return new(productValidator{})
 }
 
 func (v *productValidator) Product(p *entity.Product) error {

@@ -20,8 +20,8 @@ This project is build with Go 1.26.
 
 Other dependencies:
 
-* PostgreSQL / SQLite3 for datastore and testing
-* Redis for cache
+* PostgreSQL 18.x for datastore and testing
+* Redis 8.x for cache
 
 ## Usage
 

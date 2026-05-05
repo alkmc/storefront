@@ -31,7 +31,7 @@ func logging(logger *slog.Logger) middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+			rec := new(statusRecorder{ResponseWriter: w, status: http.StatusOK})
 			defer func() {
 				logger.Info("http request",
 					slog.String("method", r.Method),

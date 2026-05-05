@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/alkmc/restClean/internal/entity"
-
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -19,7 +18,7 @@ type pgRepository struct {
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG(l *slog.Logger) (Repository, error) {
+func NewPG(ctx context.Context, l *slog.Logger) (Repository, error) {
 	dbConn, err := getDbConn()
 	if err != nil {
 		return nil, err
@@ -29,15 +28,15 @@ func NewPG(l *slog.Logger) (Repository, error) {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
 
-	if err := pdb.Ping(); err != nil {
+	if err := pdb.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping pg database: %w", err)
 	}
 	l.Info("successfully connected to db")
 
-	if _, err := pdb.Exec(sqlSchema); err != nil {
+	if _, err := pdb.ExecContext(ctx, sqlSchema); err != nil {
 		l.Error("failed to execute sql schema", slog.Any("error", err), slog.String("schema", sqlSchema))
 	}
-	return &pgRepository{logger: l, db: pdb}, nil
+	return new(pgRepository{logger: l, db: pdb}), nil
 }
 
 func (pg *pgRepository) CloseDB() {
@@ -60,7 +59,9 @@ func (pg *pgRepository) Save(ctx context.Context, p *entity.Product) (*entity.Pr
 	defer stmt.Close()
 
 	if _, err := stmt.ExecContext(ctx, p.ID, p.Name, p.Price); err != nil {
-		tx.Rollback()
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return nil, fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
+		}
 		return nil, err
 	}
 
@@ -116,7 +117,9 @@ func (pg *pgRepository) Update(ctx context.Context, p *entity.Product) error {
 	defer stmt.Close()
 
 	if _, err := stmt.ExecContext(ctx, p.ID, p.Name, p.Price); err != nil {
-		tx.Rollback()
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
+		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -138,7 +141,9 @@ func (pg *pgRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	defer stmt.Close()
 
 	if _, err = stmt.ExecContext(ctx, id); err != nil {
-		tx.Rollback()
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
+		}
 		return err
 	}
 	if err := tx.Commit(); err != nil {

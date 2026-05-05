@@ -31,7 +31,7 @@ func respondError(w http.ResponseWriter, code int, msg string) {
 func decodeBody(r io.ReadCloser, v any) error {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(&v); err != nil {
+	if err := dec.Decode(v); err != nil {
 		return err
 	}
 	return nil

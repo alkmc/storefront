@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/alkmc/restClean/internal/entity"
-
 	"github.com/redis/go-redis/v9"
 )
 
@@ -29,11 +28,11 @@ func NewRedis(l *slog.Logger, host string, db int, exp time.Duration) Cache {
 }
 
 func (r *redisCache) getClient() *redis.Client {
-	return redis.NewClient(&redis.Options{
+	return redis.NewClient(new(redis.Options{
 		Addr:     r.host,
 		Password: "",
 		DB:       r.db,
-	})
+	}))
 }
 
 func (r *redisCache) Set(ctx context.Context, key string, prod *entity.Product) {
