@@ -1,18 +1,18 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
 	"log"
 	"os"
 
 	"github.com/alkmc/restClean/pkg/entity"
-
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type sqliteRepo struct {
-	db *sqlx.DB
+	db *sql.DB
 }
 
 // NewSQLite creates a new SQL lite repository
@@ -21,7 +21,7 @@ func NewSQLite() Repository {
 		log.Println(err)
 	}
 
-	sdb, err := sqlx.Open("sqlite3", "./prods.db")
+	sdb, err := sql.Open("sqlite3", "./prods.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -42,19 +42,20 @@ func (s *sqliteRepo) CloseDB() {
 	log.Println("connection to db closed")
 }
 
-func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
-	tx, err := s.db.Begin()
+func (s *sqliteRepo) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	stmt, err := tx.Prepare(queryInsert)
+	stmt, err := tx.PrepareContext(ctx, queryInsert)
 	if err != nil {
 		return nil, err
 	}
 	defer stmt.Close()
 
-	if _, err = stmt.Exec(p.ID, p.Name, p.Price); err != nil {
+	if _, err = stmt.ExecContext(ctx, p.ID, p.Name, p.Price); err != nil {
+		tx.Rollback()
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -63,8 +64,8 @@ func (s *sqliteRepo) Save(p *entity.Product) (*entity.Product, error) {
 	return p, nil
 }
 
-func (s *sqliteRepo) FindByID(id uuid.UUID) (*entity.Product, error) {
-	row := s.db.QueryRow(queryGetByID, id)
+func (s *sqliteRepo) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
+	row := s.db.QueryRowContext(ctx, queryGetByID, id)
 
 	var p entity.Product
 	if err := row.Scan(&p.ID, &p.Name, &p.Price); err != nil {
@@ -74,8 +75,8 @@ func (s *sqliteRepo) FindByID(id uuid.UUID) (*entity.Product, error) {
 	return &p, nil
 }
 
-func (s *sqliteRepo) FindAll() ([]entity.Product, error) {
-	rows, err := s.db.Query(queryGetAll)
+func (s *sqliteRepo) FindAll(ctx context.Context) ([]entity.Product, error) {
+	rows, err := s.db.QueryContext(ctx, queryGetAll)
 	if err != nil {
 		return nil, err
 	}
@@ -96,18 +97,19 @@ func (s *sqliteRepo) FindAll() ([]entity.Product, error) {
 	return products, nil
 }
 
-func (s *sqliteRepo) Update(p *entity.Product) error {
-	tx, err := s.db.Begin()
+func (s *sqliteRepo) Update(ctx context.Context, p *entity.Product) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(queryUpdate)
+	stmt, err := tx.PrepareContext(ctx, queryUpdate)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.Exec(p.Name, p.Price, p.ID); err != nil {
+	if _, err := stmt.ExecContext(ctx, p.Name, p.Price, p.ID); err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := tx.Commit(); err != nil {
@@ -116,18 +118,19 @@ func (s *sqliteRepo) Update(p *entity.Product) error {
 	return nil
 }
 
-func (s *sqliteRepo) Delete(id uuid.UUID) error {
-	tx, err := s.db.Begin()
+func (s *sqliteRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	stmt, err := tx.Prepare(queryDelete)
+	stmt, err := tx.PrepareContext(ctx, queryDelete)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	if _, err = stmt.Exec(id); err != nil {
+	if _, err = stmt.ExecContext(ctx, id); err != nil {
+		tx.Rollback()
 		return err
 	}
 	if err := tx.Commit(); err != nil {

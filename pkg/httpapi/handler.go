@@ -1,4 +1,4 @@
-package controller
+package httpapi
 
 import (
 	"context"
@@ -12,30 +12,28 @@ import (
 	"github.com/alkmc/restClean/pkg/entity"
 	"github.com/alkmc/restClean/pkg/service"
 	"github.com/alkmc/restClean/pkg/validator"
-
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
-const timeout = 20 * time.Millisecond
+const timeout = 2 * time.Second
 
-type productController struct {
+type Handler struct {
 	productService   service.Service
 	productCache     cache.Cache
 	productValidator validator.Validator
 }
 
-// NewController returns Product Controller
-func NewController(s service.Service, c cache.Cache, v validator.Validator) Controller {
-	return &productController{
+// NewHandler returns Product Controller
+func NewHandler(s service.Service, c cache.Cache, v validator.Validator) *Handler {
+	return &Handler{
 		productService:   s,
 		productCache:     c,
 		productValidator: v,
 	}
 }
 
-func (c *productController) GetByID(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
 	id, err := c.validID(idStr)
 	if err != nil {
 		err.Encode(w)
@@ -46,7 +44,7 @@ func (c *productController) GetByID(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	p := c.productCache.Get(ctx, idStr)
 	if p == nil {
-		p, err := c.findProduct(id)
+		p, err := c.findProduct(ctx, id)
 		if err != nil {
 			errs := serviceerr.Input("no product found!")
 			errs.Encode(w)
@@ -59,8 +57,11 @@ func (c *productController) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *productController) Get(w http.ResponseWriter, r *http.Request) {
-	products, err := c.productService.FindAll()
+func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	products, err := c.productService.FindAll(ctx)
 	if err != nil {
 		log.Println(err.Error())
 		errs := serviceerr.Codec("decoding error")
@@ -77,7 +78,7 @@ func (c *productController) Get(w http.ResponseWriter, r *http.Request) {
 	renderer.JSON(w, http.StatusOK, products)
 }
 
-func (c *productController) Add(w http.ResponseWriter, r *http.Request) {
+func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var p entity.Product
 	if err := c.decode(r, &p); err != nil {
 		err.Encode(w)
@@ -90,43 +91,45 @@ func (c *productController) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := c.productService.Create(&p)
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	result, err := c.productService.Create(ctx, &p)
 	if err != nil {
 		errs := serviceerr.Internal("error saving the product")
 		errs.Encode(w)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
-	defer cancel()
 	c.productCache.Set(ctx, p.ID.String(), &p)
 
 	renderer.JSON(w, http.StatusCreated, result)
 }
 
-func (c *productController) Delete(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
 	id, err := c.validID(idStr)
 	if err != nil {
 		err.Encode(w)
 		return
 	}
 
-	if _, err := c.findProduct(id); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	if _, err := c.findProduct(ctx, id); err != nil {
 		errs := serviceerr.Input("unable to delete product, which already does not exist")
 		errs.Encode(w)
 		return
 	}
 
-	if err := c.productService.Delete(id); err != nil {
+	if err := c.productService.Delete(ctx, id); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error deleting product")
 		err.Encode(w)
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
-	defer cancel()
 	c.productCache.Expire(ctx, idStr)
 	confirmation := &serviceerr.ServiceError{
 		Code: "ok", Message: "product deleted",
@@ -134,15 +137,18 @@ func (c *productController) Delete(w http.ResponseWriter, r *http.Request) {
 	renderer.JSON(w, http.StatusOK, confirmation)
 }
 
-func (c *productController) Update(w http.ResponseWriter, r *http.Request) {
-	idStr := chi.URLParam(r, "id")
+func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
 	id, err := c.validID(idStr)
 	if err != nil {
 		err.Encode(w)
 		return
 	}
 
-	if _, err := c.findProduct(id); err != nil {
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+
+	if _, err := c.findProduct(ctx, id); err != nil {
 		errs := serviceerr.Input("unable to update product, which does not exist")
 		errs.Encode(w)
 		return
@@ -164,7 +170,7 @@ func (c *productController) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.productService.Update(&p); err != nil {
+	if err := c.productService.Update(ctx, &p); err != nil {
 		log.Println(err.Error())
 		err := serviceerr.Internal("error updating product")
 		err.Encode(w)
@@ -173,11 +179,11 @@ func (c *productController) Update(w http.ResponseWriter, r *http.Request) {
 	p.JSON(w)
 }
 
-func (c *productController) findProduct(id uuid.UUID) (*entity.Product, error) {
-	return c.productService.FindByID(id)
+func (c *Handler) findProduct(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
+	return c.productService.FindByID(ctx, id)
 }
 
-func (c *productController) validID(id string) (uuid.UUID, *serviceerr.ServiceError) {
+func (c *Handler) validID(id string) (uuid.UUID, *serviceerr.ServiceError) {
 	uid, err := c.productValidator.UUID(id)
 	if err != nil {
 		return uuid.Nil, serviceerr.Input(err.Error())
@@ -185,7 +191,7 @@ func (c *productController) validID(id string) (uuid.UUID, *serviceerr.ServiceEr
 	return uid, nil
 }
 
-func (c *productController) decode(r *http.Request, p *entity.Product) *serviceerr.ServiceError {
+func (c *Handler) decode(r *http.Request, p *entity.Product) *serviceerr.ServiceError {
 	if err := renderer.Decode(r.Body, &p); err != nil {
 		valErr := c.productValidator.Body(err)
 		return serviceerr.Body(valErr.Error())

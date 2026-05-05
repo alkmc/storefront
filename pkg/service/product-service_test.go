@@ -1,10 +1,10 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alkmc/restClean/pkg/entity"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -14,30 +14,30 @@ type MockRepository struct {
 	mock.Mock
 }
 
-func (m *MockRepository) Save(p *entity.Product) (*entity.Product, error) {
+func (m *MockRepository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
 	args := m.Called()
 	result := args.Get(0)
 	return result.(*entity.Product), args.Error(1)
 }
 
-func (m *MockRepository) FindByID(id uuid.UUID) (*entity.Product, error) {
+func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
 	args := m.Called()
 	result := args.Get(0)
 	return result.(*entity.Product), args.Error(1)
 }
 
-func (m *MockRepository) FindAll() ([]entity.Product, error) {
+func (m *MockRepository) FindAll(ctx context.Context) ([]entity.Product, error) {
 	args := m.Called()
 	result := args.Get(0)
 	return result.([]entity.Product), args.Error(1)
 }
 
-func (m *MockRepository) Update(p *entity.Product) error {
+func (m *MockRepository) Update(ctx context.Context, p *entity.Product) error {
 	args := m.Called()
 	return args.Error(0)
 }
 
-func (m *MockRepository) Delete(id uuid.UUID) error {
+func (m *MockRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	args := m.Called()
 	return args.Error(0)
 }
@@ -51,7 +51,7 @@ func TestCreate(t *testing.T) {
 
 	mockRepo.On("Save").Return(&p, nil)
 	testService := NewService(mockRepo)
-	result, err := testService.Create(&p)
+	result, err := testService.Create(t.Context(), &p)
 
 	mockRepo.AssertExpectations(t)
 
@@ -68,7 +68,7 @@ func TestFindByID(t *testing.T) {
 
 	mockRepo.On("FindByID").Return(&p, nil)
 	testService := NewService(mockRepo)
-	result, err := testService.FindByID(id)
+	result, err := testService.FindByID(t.Context(), id)
 
 	mockRepo.AssertExpectations(t)
 
@@ -85,7 +85,7 @@ func TestFinalAll(t *testing.T) {
 
 	mockRepo.On("FindAll").Return([]entity.Product{p}, nil)
 	testService := NewService(mockRepo)
-	result, err := testService.FindAll()
+	result, err := testService.FindAll(t.Context())
 
 	mockRepo.AssertExpectations(t)
 
@@ -103,7 +103,7 @@ func TestUpdate(t *testing.T) {
 	mockRepo.On("Update").Return(nil)
 
 	testService := NewService(mockRepo)
-	err := testService.Update(&p)
+	err := testService.Update(t.Context(), &p)
 
 	mockRepo.AssertExpectations(t)
 
@@ -116,7 +116,7 @@ func TestDelete(t *testing.T) {
 
 	mockRepo.On("Delete").Return(nil)
 	testService := NewService(mockRepo)
-	err := testService.Delete(id)
+	err := testService.Delete(t.Context(), id)
 
 	mockRepo.AssertExpectations(t)
 
