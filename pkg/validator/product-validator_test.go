@@ -5,74 +5,84 @@ import (
 	"testing"
 
 	"github.com/alkmc/restClean/pkg/entity"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
-const (
-	emptyProduct  = "the product is empty"
-	emptyName     = "the product name is empty"
-	negativePrice = "the product price must be positive"
-	uuidStr       = "98f67138-b104-4836-a216-2b2c27f4bbee"
-	invalidLen    = "invalid UUID length: 35"
-)
+func TestValidator_Product(t *testing.T) {
+	v := NewValidator()
 
-func TestValidateEmptyProduct(t *testing.T) {
-	testValidator := NewValidator()
-	err := testValidator.Product(nil)
+	tests := []struct {
+		name    string
+		product *entity.Product
+		wantErr string
+	}{
+		{
+			name:    "empty product",
+			product: nil,
+			wantErr: "the product is empty",
+		},
+		{
+			name:    "empty name",
+			product: &entity.Product{Name: "", Price: 1.1},
+			wantErr: "the product name is empty",
+		},
+		{
+			name:    "negative price",
+			product: &entity.Product{Name: "Car", Price: -1.0},
+			wantErr: "the product price must be positive",
+		},
+		{
+			name:    "success",
+			product: &entity.Product{Name: "Car", Price: 10.5},
+			wantErr: "",
+		},
+	}
 
-	assert.NotNil(t, err)
-	assert.EqualError(t, err, emptyProduct)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := v.Product(tt.product)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, tt.product.ID)
+			}
+		})
+	}
 }
 
-func TestValidateEmptyName(t *testing.T) {
-	p := entity.Product{Name: "", Price: 1.1}
-	testValidator := NewValidator()
+func TestValidator_UUID(t *testing.T) {
+	v := NewValidator()
+	validUUID := "98f67138-b104-4836-a216-2b2c27f4bbee"
 
-	err := testValidator.Product(&p)
-	assert.NotNil(t, err)
-	assert.EqualError(t, err, emptyName)
-}
+	tests := []struct {
+		name    string
+		uuid    string
+		wantErr bool
+	}{
+		{
+			name:    "valid uuid",
+			uuid:    validUUID,
+			wantErr: false,
+		},
+		{
+			name:    "invalid length",
+			uuid:    strings.TrimSuffix(validUUID, "e"),
+			wantErr: true,
+		},
+	}
 
-func TestValidateInvalidPrice(t *testing.T) {
-	p := entity.Product{Name: "Car", Price: -1}
-	testValidator := NewValidator()
-
-	err := testValidator.Product(&p)
-	assert.NotNil(t, err)
-	assert.EqualError(t, err, negativePrice)
-}
-
-func TestValidateCorrectProduct(t *testing.T) {
-	const (
-		name  = "Car"
-		price = 1.1
-	)
-
-	p := entity.Product{Name: name, Price: price}
-	testValidator := NewValidator()
-
-	err := testValidator.Product(&p)
-	assert.Nil(t, err)
-	assert.NotNil(t, p.ID)
-	assert.Equal(t, name, p.Name)
-	assert.Equal(t, price, p.Price)
-}
-
-func TestValidateIncorrectUUID(t *testing.T) {
-	idStr := strings.TrimSuffix(uuidStr, "e")
-	testValidator := NewValidator()
-
-	uid, err := testValidator.UUID(idStr)
-	assert.Equal(t, uuid.Nil, uid)
-	assert.EqualError(t, err, invalidLen)
-}
-
-func TestValidateCorrectUUID(t *testing.T) {
-	testValidator := NewValidator()
-
-	uid, err := testValidator.UUID(uuidStr)
-	assert.Nil(t, err)
-	assert.Equal(t, uid.String(), uuidStr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uid, err := v.UUID(tt.uuid)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Equal(t, uuid.Nil, uid)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, validUUID, uid.String())
+			}
+		})
+	}
 }

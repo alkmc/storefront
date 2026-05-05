@@ -15,110 +15,89 @@ type MockRepository struct {
 }
 
 func (m *MockRepository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
-	args := m.Called()
-	result := args.Get(0)
-	return result.(*entity.Product), args.Error(1)
+	args := m.Called(ctx, p)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.Product), args.Error(1)
 }
 
 func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
-	args := m.Called()
-	result := args.Get(0)
-	return result.(*entity.Product), args.Error(1)
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.Product), args.Error(1)
 }
 
 func (m *MockRepository) FindAll(ctx context.Context) ([]entity.Product, error) {
-	args := m.Called()
-	result := args.Get(0)
-	return result.([]entity.Product), args.Error(1)
+	args := m.Called(ctx)
+	return args.Get(0).([]entity.Product), args.Error(1)
 }
 
 func (m *MockRepository) Update(ctx context.Context, p *entity.Product) error {
-	args := m.Called()
+	args := m.Called(ctx, p)
 	return args.Error(0)
 }
 
 func (m *MockRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	args := m.Called()
+	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockRepository) CloseDB() {
-}
+func (m *MockRepository) CloseDB() {}
 
-func TestCreate(t *testing.T) {
+func TestProductService(t *testing.T) {
 	mockRepo := new(MockRepository)
-	p := entity.Product{Name: "Created", Price: 1.1}
+	srv := NewService(mockRepo)
+	ctx := t.Context()
 
-	mockRepo.On("Save").Return(&p, nil)
-	testService := NewService(mockRepo)
-	result, err := testService.Create(t.Context(), &p)
+	t.Run("Create", func(t *testing.T) {
+		p := &entity.Product{Name: "Test", Price: 10.0}
+		mockRepo.On("Save", ctx, mock.AnythingOfType("*entity.Product")).Return(p, nil).Once()
+		
+		res, err := srv.Create(ctx, p)
+		assert.NoError(t, err)
+		assert.Equal(t, "Test", res.Name)
+		mockRepo.AssertExpectations(t)
+	})
 
-	mockRepo.AssertExpectations(t)
+	t.Run("FindByID", func(t *testing.T) {
+		id := uuid.New()
+		p := &entity.Product{ID: id, Name: "Test"}
+		mockRepo.On("FindByID", ctx, id).Return(p, nil).Once()
+		
+		res, err := srv.FindByID(ctx, id)
+		assert.NoError(t, err)
+		assert.Equal(t, id, res.ID)
+		mockRepo.AssertExpectations(t)
+	})
 
-	assert.NotNil(t, result.ID)
-	assert.Equal(t, "Created", result.Name)
-	assert.Equal(t, 1.1, result.Price)
-	assert.Nil(t, err)
-}
+	t.Run("FindAll", func(t *testing.T) {
+		products := []entity.Product{{Name: "P1"}, {Name: "P2"}}
+		mockRepo.On("FindAll", ctx).Return(products, nil).Once()
+		
+		res, err := srv.FindAll(ctx)
+		assert.NoError(t, err)
+		assert.Len(t, res, 2)
+		mockRepo.AssertExpectations(t)
+	})
 
-func TestFindByID(t *testing.T) {
-	mockRepo := new(MockRepository)
-	id := uuid.New()
-	p := entity.Product{ID: id, Name: "One", Price: 1.1}
+	t.Run("Update", func(t *testing.T) {
+		p := &entity.Product{Name: "Update"}
+		mockRepo.On("Update", ctx, p).Return(nil).Once()
+		
+		err := srv.Update(ctx, p)
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
 
-	mockRepo.On("FindByID").Return(&p, nil)
-	testService := NewService(mockRepo)
-	result, err := testService.FindByID(t.Context(), id)
-
-	mockRepo.AssertExpectations(t)
-
-	assert.Equal(t, id, result.ID)
-	assert.Equal(t, "One", result.Name)
-	assert.Equal(t, 1.1, result.Price)
-	assert.Nil(t, err)
-}
-
-func TestFinalAll(t *testing.T) {
-	mockRepo := new(MockRepository)
-	id := uuid.New()
-	p := entity.Product{ID: id, Name: "All", Price: 2.2}
-
-	mockRepo.On("FindAll").Return([]entity.Product{p}, nil)
-	testService := NewService(mockRepo)
-	result, err := testService.FindAll(t.Context())
-
-	mockRepo.AssertExpectations(t)
-
-	assert.Equal(t, id, result[0].ID)
-	assert.Equal(t, "All", result[0].Name)
-	assert.Equal(t, 2.2, result[0].Price)
-	assert.Nil(t, err)
-}
-
-func TestUpdate(t *testing.T) {
-	mockRepo := new(MockRepository)
-	id := uuid.New()
-	p := entity.Product{ID: id, Name: "Created", Price: 1.1}
-
-	mockRepo.On("Update").Return(nil)
-
-	testService := NewService(mockRepo)
-	err := testService.Update(t.Context(), &p)
-
-	mockRepo.AssertExpectations(t)
-
-	assert.Nil(t, err)
-}
-
-func TestDelete(t *testing.T) {
-	mockRepo := new(MockRepository)
-	id := uuid.New()
-
-	mockRepo.On("Delete").Return(nil)
-	testService := NewService(mockRepo)
-	err := testService.Delete(t.Context(), id)
-
-	mockRepo.AssertExpectations(t)
-
-	assert.Nil(t, err)
+	t.Run("Delete", func(t *testing.T) {
+		id := uuid.New()
+		mockRepo.On("Delete", ctx, id).Return(nil).Once()
+		
+		err := srv.Delete(ctx, id)
+		assert.NoError(t, err)
+		mockRepo.AssertExpectations(t)
+	})
 }

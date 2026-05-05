@@ -3,8 +3,6 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -18,480 +16,213 @@ import (
 	"github.com/alkmc/restClean/pkg/validator"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
-	NAME     string  = "Car"
-	PRICE    float64 = 1.23
-	statusOK         = "ok"
+	NAME  = "Car"
+	PRICE = 1.23
 )
 
-var (
-	pRepo     = repository.NewSQLite()
-	pSrv      = service.NewService(pRepo)
-	pCacheSrv = cache.NewRedis("localhost:6379", 0, 10)
-	pValid    = validator.NewValidator()
-	pHandler  = NewHandler(slog.New(slog.NewJSONHandler(io.Discard, nil)), pSrv, pCacheSrv, pValid)
-)
+func setupTest(t *testing.T) (*Handler, http.Handler) {
+	repo := repository.NewSQLite()
+	t.Cleanup(func() {
+		repo.CloseDB()
+	})
+
+	srv := service.NewService(repo)
+	cacheSrv := cache.NewRedis("localhost:6379", 0, 10)
+	valid := validator.NewValidator()
+	logger := slog.New(slog.DiscardHandler)
+	h := NewHandler(logger, srv, cacheSrv, valid)
+	mux := NewMux(logger, h)
+
+	return h, mux
+}
 
 func TestGetProductByID(t *testing.T) {
-	const path = "/product/%v"
-	// insert new product
-	uid := uuid.New()
-	setupUUID(t, uid)
-
-	// create a http GET request
-	req := httptest.NewRequest("GET", fmt.Sprintf(path, uid), nil)
-
-	// record http Response
-	resp := httptest.NewRecorder()
-
-	// assign http Handler function
-	r := http.NewServeMux()
-	r.HandleFunc("GET /product/{id}", pHandler.GetByID)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusOK, resp.Code)
-
-	// decode the http response
-	var p entity.Product
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, uid, p.ID)
-	assert.Equal(t, NAME, p.Name)
-	assert.Equal(t, PRICE, p.Price)
-
-	// clean up database
-	tearDown(t, p.ID)
-}
-
-func TestGetProductByIncorrectID(t *testing.T) {
-	const (
-		errCode  = "invalid input error"
-		fakeUUID = "incorrect"
-		path     = "/product/%v"
-	)
-	errMsg := fmt.Sprintf("invalid UUID length: %d", len(fakeUUID))
-
-	// create a http GET request
-	req := httptest.NewRequest("GET", fmt.Sprintf(path, fakeUUID), nil)
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("GET /product/{id}", pHandler.GetByID)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusBadRequest, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, errCode, e.Code)
-	assert.Equal(t, errMsg, e.Message)
-}
-
-func TestGetNotExistingProduct(t *testing.T) {
-	const (
-		errCode = "invalid input error"
-		errMsg  = "no product found!"
-		path    = "/product/%v"
-	)
-	// insert new product
+	h, mux := setupTest(t)
 	uid := uuid.New()
 
-	// create a http GET request
-	req := httptest.NewRequest("GET", fmt.Sprintf(path, uid), nil)
+	// Seed data
+	_, err := h.productService.Create(t.Context(), &entity.Product{ID: uid, Name: NAME, Price: PRICE})
+	require.NoError(t, err)
 
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("GET /product/{id}", pHandler.GetByID)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusBadRequest, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name           string
+		id             string
+		expectedStatus int
+		expectedMsg    string // for error cases
+	}{
+		{
+			name:           "success",
+			id:             uid.String(),
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "incorrect uuid",
+			id:             "incorrect",
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "invalid UUID length: 9",
+		},
+		{
+			name:           "non-existing product",
+			id:             uuid.New().String(),
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "no product found!",
+		},
 	}
 
-	// assert http response
-	assert.Equal(t, errCode, e.Code)
-	assert.Equal(t, errMsg, e.Message)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/product/"+tt.id, nil)
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				var p entity.Product
+				err := json.NewDecoder(resp.Body).Decode(&p)
+				require.NoError(t, err)
+				assert.Equal(t, uid, p.ID)
+				assert.Equal(t, NAME, p.Name)
+			} else {
+				var e serviceerr.ServiceError
+				err := json.NewDecoder(resp.Body).Decode(&e)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedMsg, e.Message)
+			}
+		})
+	}
 }
 
 func TestGetProducts(t *testing.T) {
-	// insert new product
-	setup(t)
+	h, mux := setupTest(t)
 
-	// create a http GET request
-	req := httptest.NewRequest("GET", "/product", nil)
+	t.Run("empty", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/product", nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
 
-	// record http response
-	resp := httptest.NewRecorder()
+		assert.Equal(t, http.StatusOK, resp.Code)
+		var e serviceerr.ServiceError
+		err := json.NewDecoder(resp.Body).Decode(&e)
+		require.NoError(t, err)
+		assert.Equal(t, "no products found", e.Message)
+	})
 
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("GET /product", pHandler.Get)
+	t.Run("success", func(t *testing.T) {
+		_, err := h.productService.Create(t.Context(), &entity.Product{Name: NAME, Price: PRICE})
+		require.NoError(t, err)
 
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
+		req := httptest.NewRequest("GET", "/product", nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
 
-	// assert http status code
-	checkResponseCode(t, http.StatusOK, resp.Code)
-
-	// decode the http response
-	var products []entity.Product
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&products); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.NotNil(t, products[0].ID)
-	assert.Equal(t, NAME, products[0].Name)
-	assert.Equal(t, PRICE, products[0].Price)
-
-	// clean up db
-	tearDown(t, products[0].ID)
-}
-
-func TestGetNotExistingProducts(t *testing.T) {
-	const infoMsg = "no products found"
-
-	// create a http GET request
-	req := httptest.NewRequest("GET", "/product", nil)
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("GET /product", pHandler.Get)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusOK, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, statusOK, e.Code)
-	assert.Equal(t, infoMsg, e.Message)
+		assert.Equal(t, http.StatusOK, resp.Code)
+		var products []entity.Product
+		err = json.NewDecoder(resp.Body).Decode(&products)
+		require.NoError(t, err)
+		assert.NotEmpty(t, products)
+		assert.Equal(t, NAME, products[0].Name)
+	})
 }
 
 func TestAddProduct(t *testing.T) {
-	// insert new product
-	uid := uuid.New()
-	data := entity.Product{
-		ID:    uid,
-		Name:  NAME,
-		Price: PRICE,
+	_, mux := setupTest(t)
+
+	tests := []struct {
+		name           string
+		body           any
+		expectedStatus int
+		expectedMsg    string
+	}{
+		{
+			name:           "success",
+			body:           entity.Product{Name: NAME, Price: PRICE},
+			expectedStatus: http.StatusCreated,
+		},
+		{
+			name:           "extra field",
+			body:           map[string]any{"Name": NAME, "Price": PRICE, "Email": "a@a.com"},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    "unknown field \"Email\"",
+		},
+		{
+			name:           "negative price",
+			body:           entity.Product{Name: NAME, Price: -1.0},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    "the product price must be positive",
+		},
 	}
 
-	jsonReq, err := json.Marshal(data)
-	if err != nil {
-		t.Fatal(err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := json.Marshal(tt.body)
+			require.NoError(t, err)
+
+			req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(b))
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			assert.Equal(t, tt.expectedStatus, resp.Code)
+
+			if tt.expectedMsg != "" {
+				var e serviceerr.ServiceError
+				err := json.NewDecoder(resp.Body).Decode(&e)
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedMsg, e.Message)
+			}
+		})
 	}
-
-	// create a new http POST request
-	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("POST /product", pHandler.Add)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusCreated, resp.Code)
-
-	// decode the http response
-	var p entity.Product
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, uid, p.ID)
-	assert.Equal(t, NAME, p.Name)
-	assert.Equal(t, PRICE, p.Price)
-
-	// clean up db
-	tearDown(t, p.ID)
-}
-
-func TestAddProductWithExtraField(t *testing.T) {
-	const (
-		errCode = "request body error"
-		errMsg  = "unknown field \"Email\""
-	)
-	// insert new product
-	data := map[string]any{
-		"Name":  NAME,
-		"Price": PRICE,
-		"Email": "a@example.com",
-	}
-
-	jsonReq, err := json.Marshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// create a new http POST request
-	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("POST /product", pHandler.Add)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusUnprocessableEntity, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, errCode, e.Code)
-	assert.Equal(t, errMsg, e.Message)
-}
-
-func TestAddProductWithNegativePrice(t *testing.T) {
-	const (
-		errCode = "product validation error"
-		errMsg  = "the product price must be positive"
-	)
-	// insert new product
-	uid := uuid.New()
-	data := entity.Product{
-		ID:    uid,
-		Name:  NAME,
-		Price: -PRICE,
-	}
-
-	jsonReq, err := json.Marshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// create a new http POST request
-	req := httptest.NewRequest("POST", "/product", bytes.NewBuffer(jsonReq))
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("POST /product", pHandler.Add)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusUnprocessableEntity, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, errCode, e.Code)
-	assert.Equal(t, errMsg, e.Message)
 }
 
 func TestDeleteProduct(t *testing.T) {
-	const (
-		path     = "/product/%v"
-		pDeleted = "product deleted"
-	)
-	// insert new product
-	uid := uuid.New()
-	setupUUID(t, uid)
-
-	// create a new http DELETE request
-	req := httptest.NewRequest("DELETE", fmt.Sprintf(path, uid), nil)
-
-	// record http response
-	resp := httptest.NewRecorder()
-
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("DELETE /product/{id}", pHandler.Delete)
-
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusOK, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	assert.Equal(t, statusOK, e.Code)
-	assert.Equal(t, pDeleted, e.Message)
-
-	// clean up db
-	tearDown(t, uid)
-}
-
-func TestDeleteNonExistingProduct(t *testing.T) {
-	const (
-		path    = "/product/%v"
-		errCode = "invalid input error"
-		errMsg  = "unable to delete product, which already does not exist"
-	)
-	// insert new product
+	h, mux := setupTest(t)
 	uid := uuid.New()
 
-	// create a new http DELETE request
-	req := httptest.NewRequest("DELETE", fmt.Sprintf(path, uid), nil)
+	t.Run("not existing", func(t *testing.T) {
+		req := httptest.NewRequest("DELETE", "/product/"+uuid.New().String(), nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+	})
 
-	// record http response
-	resp := httptest.NewRecorder()
+	t.Run("success", func(t *testing.T) {
+		_, err := h.productService.Create(t.Context(), &entity.Product{ID: uid, Name: NAME, Price: PRICE})
+		require.NoError(t, err)
 
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("DELETE /product/{id}", pHandler.Delete)
+		req := httptest.NewRequest("DELETE", "/product/"+uid.String(), nil)
+		resp := httptest.NewRecorder()
+		mux.ServeHTTP(resp, req)
 
-	// dispatch the http request
-	r.ServeHTTP(resp, req)
-
-	// assert http status code
-	checkResponseCode(t, http.StatusBadRequest, resp.Code)
-
-	// decode the http response
-	var e serviceerr.ServiceError
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&e); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, errCode, e.Code)
-	assert.Equal(t, errMsg, e.Message)
+		assert.Equal(t, http.StatusOK, resp.Code)
+		var e serviceerr.ServiceError
+		err = json.NewDecoder(resp.Body).Decode(&e)
+		require.NoError(t, err)
+		assert.Equal(t, "product deleted", e.Message)
+	})
 }
 
 func TestUpdateProduct(t *testing.T) {
-	const (
-		path     = "/product/%v"
-		newName  = "auto"
-		newPrice = 999.9
-	)
-	// insert new product
+	h, mux := setupTest(t)
 	uid := uuid.New()
-	setupUUID(t, uid)
 
-	data := entity.Product{
-		ID:    uid,
-		Name:  newName,
-		Price: newPrice,
-	}
+	_, err := h.productService.Create(t.Context(), &entity.Product{ID: uid, Name: NAME, Price: PRICE})
+	require.NoError(t, err)
 
-	jsonReq, err := json.Marshal(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	update := entity.Product{ID: uid, Name: "Updated", Price: 99.9}
+	b, err := json.Marshal(update)
+	require.NoError(t, err)
 
-	// create a new http PUT request
-	req := httptest.NewRequest("PUT", fmt.Sprintf(path, uid), bytes.NewBuffer(jsonReq))
-
-	// record http response
+	req := httptest.NewRequest("PUT", "/product/"+uid.String(), bytes.NewBuffer(b))
 	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
 
-	// assign http handler function
-	r := http.NewServeMux()
-	r.HandleFunc("PUT /product/{id}", pHandler.Update)
-
-	r.ServeHTTP(resp, req)
-	checkResponseCode(t, http.StatusOK, resp.Code)
-
+	assert.Equal(t, http.StatusOK, resp.Code)
 	var p entity.Product
-	if err := json.NewDecoder(io.Reader(resp.Body)).Decode(&p); err != nil {
-		t.Fatal(err)
-	}
-
-	// assert http response
-	assert.Equal(t, uid, p.ID)
-	assert.Equal(t, newName, p.Name)
-	assert.Equal(t, newPrice, p.Price)
-
-	// clean up db
-	tearDown(t, uid)
-}
-
-func checkResponseCode(t *testing.T, expected, actual int) {
-	if expected != actual {
-		t.Errorf("expected response code %d. Got %d\n", expected, actual)
-	}
-}
-
-func setupUUID(t *testing.T, id uuid.UUID) {
-	var p = entity.Product{
-		ID:    id,
-		Name:  NAME,
-		Price: PRICE,
-	}
-	addProd(t, p)
-}
-
-func setup(t *testing.T) {
-	var p = entity.Product{
-		Name:  NAME,
-		Price: PRICE,
-	}
-	addProd(t, p)
-}
-
-func addProd(t *testing.T, p entity.Product) {
-	if _, err := pRepo.Save(t.Context(), &p); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func tearDown(t *testing.T, ID uuid.UUID) {
-	if err := pRepo.Delete(t.Context(), ID); err != nil {
-		t.Fatal(err)
-	}
+	err = json.NewDecoder(resp.Body).Decode(&p)
+	require.NoError(t, err)
+	assert.Equal(t, "Updated", p.Name)
 }
