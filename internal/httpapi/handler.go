@@ -15,27 +15,32 @@ import (
 
 const timeout = 2 * time.Second
 
-// cacher defines the cache operations required by the handler
-type cacher interface {
-	Set(ctx context.Context, key string, value entity.Product) error
-	Get(ctx context.Context, key string) (entity.Product, error)
-	Invalidate(ctx context.Context, key string) error
-}
+type (
+	cacher interface {
+		Set(ctx context.Context, key string, value entity.Product) error
+		Get(ctx context.Context, key string) (entity.Product, error)
+		Invalidate(ctx context.Context, key string) error
+	}
 
-// processor defines the core business logic operations for managing products
-type processor interface {
-	Create(context.Context, *entity.Product) (*entity.Product, error)
-	FindByID(context.Context, uuid.UUID) (*entity.Product, error)
-	FindAll(context.Context) ([]entity.Product, error)
-	Update(context.Context, *entity.Product) error
-	Delete(context.Context, uuid.UUID) error
-}
+	processor interface {
+		Create(context.Context, *entity.Product) (*entity.Product, error)
+		FindByID(context.Context, uuid.UUID) (*entity.Product, error)
+		FindAll(context.Context) ([]entity.Product, error)
+		Update(context.Context, *entity.Product) error
+		Delete(context.Context, uuid.UUID) error
+	}
 
-type Handler struct {
-	logger    *slog.Logger
-	processor processor
-	cache     cacher
-}
+	Handler struct {
+		logger    *slog.Logger
+		processor processor
+		cache     cacher
+	}
+
+	productInput struct {
+		Name  string  `json:"name"`
+		Price float64 `json:"price"`
+	}
+)
 
 // NewHandler initializes a product API handler with its required dependencies
 func NewHandler(l *slog.Logger, p processor, c cacher) *Handler {
@@ -101,12 +106,13 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
-	var p entity.Product
-	if err := decodeBody(r.Body, &p); err != nil {
+	var in productInput
+	if err := decodeBody(r.Body, &in); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
+	p := entity.Product{Name: in.Name, Price: in.Price}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -187,18 +193,15 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var p entity.Product
-	if err := decodeBody(r.Body, &p); err != nil {
+	var in productInput
+	if err := decodeBody(r.Body, &in); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
-	if p.ID == uuid.Nil {
-		p.ID = id
-	}
-
-	if p.ID != id {
-		respondError(w, http.StatusBadRequest, "uuid is guaranteed to be unique and shall be not changed")
+	p := entity.Product{ID: id, Name: in.Name, Price: in.Price}
+	if err := p.Validate(); err != nil {
+		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 

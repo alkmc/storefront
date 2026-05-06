@@ -25,9 +25,7 @@ func NewService(r repository) *service {
 }
 
 func (s *service) Create(ctx context.Context, p *entity.Product) (*entity.Product, error) {
-	if p.ID == uuid.Nil {
-		p.ID = uuid.New()
-	}
+	p.ID = uuid.New()
 	return s.repo.Save(ctx, p)
 }
 

@@ -239,10 +239,9 @@ func TestAddProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			body: entity.Product{Name: NAME, Price: PRICE},
+			body: productInput{Name: NAME, Price: PRICE},
 			setupMock: func() {
 				repo.save = func(p *entity.Product) (*entity.Product, error) {
-					p.ID = uuid.New()
 					return p, nil
 				}
 			},
@@ -250,14 +249,21 @@ func TestAddProduct(t *testing.T) {
 		},
 		{
 			name:           "extra field",
-			body:           map[string]any{"Name": NAME, "Price": PRICE, "Email": "a@a.com"},
+			body:           map[string]any{"name": NAME, "price": PRICE, "email": "a@a.com"},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
-			expectedMsg:    "unknown field \"Email\"",
+			expectedMsg:    "unknown field \"email\"",
+		},
+		{
+			name:           "client supplied id rejected",
+			body:           map[string]any{"id": uuid.NewString(), "name": NAME, "price": PRICE},
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    "unknown field \"id\"",
 		},
 		{
 			name:           "negative price",
-			body:           entity.Product{Name: NAME, Price: -1.0},
+			body:           productInput{Name: NAME, Price: -1.0},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "the product price must be positive",
@@ -371,7 +377,7 @@ func TestUpdateProduct(t *testing.T) {
 		{
 			name: "success",
 			id:   uid.String(),
-			body: entity.Product{ID: uid, Name: "Updated", Price: 99.9},
+			body: productInput{Name: "Updated", Price: 99.9},
 			setupMock: func() {
 				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
 					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
@@ -382,6 +388,17 @@ func TestUpdateProduct(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedName:   "Updated",
+		},
+		{
+			name: "client supplied id rejected",
+			id:   uid.String(),
+			body: map[string]any{"id": uid.String(), "name": "Updated", "price": 99.9},
+			setupMock: func() {
+				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
+				}
+			},
+			expectedStatus: http.StatusUnprocessableEntity,
 		},
 	}
 
