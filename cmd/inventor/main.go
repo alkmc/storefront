@@ -16,7 +16,6 @@ import (
 	"github.com/alkmc/restClean/internal/httpapi"
 	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
-	"github.com/alkmc/restClean/internal/validator"
 )
 
 const (
@@ -63,8 +62,7 @@ func run(logger *slog.Logger) error {
 		}
 		logger.Info("connection to redis closed")
 	}()
-	valid := validator.NewValidator()
-	h := httpapi.NewHandler(logger, srv, rCache, valid)
+	h := httpapi.NewHandler(logger, srv, rCache)
 
 	s := new(http.Server{
 		Addr:         port,

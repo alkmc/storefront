@@ -15,14 +15,15 @@ import (
 
 const timeout = 2 * time.Second
 
-// productCache is what the handler needs from a cache implementation
-type productCache interface {
+// cacher defines the cache operations required by the handler
+type cacher interface {
 	Set(ctx context.Context, key string, value entity.Product) error
 	Get(ctx context.Context, key string) (entity.Product, error)
 	Invalidate(ctx context.Context, key string) error
 }
 
-type productService interface {
+// processor defines the core business logic operations for managing products
+type processor interface {
 	Create(context.Context, *entity.Product) (*entity.Product, error)
 	FindByID(context.Context, uuid.UUID) (*entity.Product, error)
 	FindAll(context.Context) ([]entity.Product, error)
@@ -30,33 +31,24 @@ type productService interface {
 	Delete(context.Context, uuid.UUID) error
 }
 
-type productValidator interface {
-	Product(*entity.Product) error
-	DecodeError(error) error
-	UUID(string) (uuid.UUID, error)
-}
-
 type Handler struct {
 	logger    *slog.Logger
-	service   productService
-	cache     productCache
-	validator productValidator
+	processor processor
+	cache     cacher
 }
 
-// NewHandler returns Product Handler
-func NewHandler(l *slog.Logger, s productService, c productCache, v productValidator,
-) *Handler {
-	return new(Handler{
+// NewHandler initializes a product API handler with its required dependencies
+func NewHandler(l *slog.Logger, p processor, c cacher) *Handler {
+	return &Handler{
 		logger:    l,
-		service:   s,
+		processor: p,
 		cache:     c,
-		validator: v,
-	})
+	}
 }
 
 func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := c.validID(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -95,7 +87,7 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	products, err := c.service.FindAll(ctx)
+	products, err := c.processor.FindAll(ctx)
 	if err != nil {
 		c.logger.Error("failed to find all products", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "failed to fetch products")
@@ -110,12 +102,12 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var p entity.Product
-	if err := c.decodeBody(r, &p); err != nil {
+	if err := decodeBody(r.Body, &p); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
 
-	if err := c.validator.Product(&p); err != nil {
+	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
@@ -123,7 +115,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	result, err := c.service.Create(ctx, &p)
+	result, err := c.processor.Create(ctx, &p)
 	if err != nil {
 		c.logger.Error("failed to create product", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "error saving the product")
@@ -140,7 +132,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := c.validID(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -160,7 +152,7 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.service.Delete(ctx, id); err != nil {
+	if err := c.processor.Delete(ctx, id); err != nil {
 		c.logger.Error("failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error deleting product")
@@ -175,7 +167,7 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	id, err := c.validID(idStr)
+	id, err := uuid.Parse(idStr)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -196,7 +188,7 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var p entity.Product
-	if err := c.decodeBody(r, &p); err != nil {
+	if err := decodeBody(r.Body, &p); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
@@ -210,7 +202,7 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.service.Update(ctx, &p); err != nil {
+	if err := c.processor.Update(ctx, &p); err != nil {
 		c.logger.Error("failed to update product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error updating product")
@@ -224,21 +216,5 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Handler) findProduct(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
-	return c.service.FindByID(ctx, id)
-}
-
-func (c *Handler) validID(id string) (uuid.UUID, error) {
-	uid, err := c.validator.UUID(id)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	return uid, nil
-}
-
-func (c *Handler) decodeBody(r *http.Request, p *entity.Product) error {
-	if err := decodeBody(r.Body, p); err != nil {
-		valErr := c.validator.DecodeError(err)
-		return valErr
-	}
-	return nil
+	return c.processor.FindByID(ctx, id)
 }

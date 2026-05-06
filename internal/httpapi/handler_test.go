@@ -13,7 +13,6 @@ import (
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/alkmc/restClean/internal/service"
-	"github.com/alkmc/restClean/internal/validator"
 	"github.com/google/uuid"
 )
 
@@ -73,8 +72,7 @@ func setupTest(t *testing.T) (http.Handler, *mockRepo) {
 
 	srv := service.NewService(repo)
 	cacheSrv := new(mockCache)
-	valid := validator.NewValidator()
-	h := NewHandler(logger, srv, cacheSrv, valid)
+	h := NewHandler(logger, srv, cacheSrv)
 	mux := NewMux(logger, h)
 
 	return mux, repo

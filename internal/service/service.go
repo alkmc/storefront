@@ -19,7 +19,7 @@ type service struct {
 	repo repository
 }
 
-// NewService returns new Service
+// NewService initializes the business logic layer backed by the provided repository
 func NewService(r repository) *service {
 	return new(service{repo: r})
 }
