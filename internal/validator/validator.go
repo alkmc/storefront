@@ -6,10 +6,44 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/alkmc/restClean/internal/entity"
+	"github.com/google/uuid"
 )
 
-// Body checks for various possible request body decoding errors
-func (v *productValidator) Body(err error) error {
+type validator struct{}
+
+// NewValidator returns new Validator
+func NewValidator() *validator {
+	return new(validator{})
+}
+
+func (v *validator) Product(p *entity.Product) error {
+	if p == nil {
+		err := errors.New("the product is empty")
+		return err
+	}
+	if p.Name == "" {
+		err := errors.New("the product name is empty")
+		return err
+	}
+	if p.Price <= 0 {
+		err := errors.New("the product price must be positive")
+		return err
+	}
+	return nil
+}
+
+func (v *validator) UUID(id string) (uuid.UUID, error) {
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return uid, nil
+}
+
+// DecodeError checks for various possible request body decoding errors
+func (v *validator) DecodeError(err error) error {
 	var (
 		syntaxError        *json.SyntaxError
 		unmarshalTypeError *json.UnmarshalTypeError

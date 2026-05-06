@@ -32,25 +32,25 @@ type productService interface {
 
 type productValidator interface {
 	Product(*entity.Product) error
-	Body(error) error
+	DecodeError(error) error
 	UUID(string) (uuid.UUID, error)
 }
 
 type Handler struct {
-	logger           *slog.Logger
-	productService   productService
-	productCache     productCache
-	productValidator productValidator
+	logger    *slog.Logger
+	service   productService
+	cache     productCache
+	validator productValidator
 }
 
 // NewHandler returns Product Handler
 func NewHandler(l *slog.Logger, s productService, c productCache, v productValidator,
 ) *Handler {
 	return new(Handler{
-		logger:           l,
-		productService:   s,
-		productCache:     c,
-		productValidator: v,
+		logger:    l,
+		service:   s,
+		cache:     c,
+		validator: v,
 	})
 }
 
@@ -65,7 +65,7 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	cached, err := c.productCache.Get(ctx, idStr)
+	cached, err := c.cache.Get(ctx, idStr)
 	if err == nil {
 		respond(w, http.StatusOK, cached)
 		return
@@ -85,7 +85,7 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if err := c.productCache.Set(ctx, idStr, *p); err != nil {
+	if err := c.cache.Set(ctx, idStr, *p); err != nil {
 		c.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, p)
@@ -95,7 +95,7 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	products, err := c.productService.FindAll(ctx)
+	products, err := c.service.FindAll(ctx)
 	if err != nil {
 		c.logger.Error("failed to find all products", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "failed to fetch products")
@@ -115,7 +115,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.productValidator.Product(&p); err != nil {
+	if err := c.validator.Product(&p); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
 	}
@@ -123,7 +123,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	result, err := c.productService.Create(ctx, &p)
+	result, err := c.service.Create(ctx, &p)
 	if err != nil {
 		c.logger.Error("failed to create product", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "error saving the product")
@@ -131,7 +131,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := result.ID.String()
-	if err := c.productCache.Set(ctx, key, *result); err != nil {
+	if err := c.cache.Set(ctx, key, *result); err != nil {
 		c.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
 	}
 
@@ -160,14 +160,14 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.productService.Delete(ctx, id); err != nil {
+	if err := c.service.Delete(ctx, id); err != nil {
 		c.logger.Error("failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error deleting product")
 		return
 	}
 
-	if err := c.productCache.Invalidate(ctx, idStr); err != nil {
+	if err := c.cache.Invalidate(ctx, idStr); err != nil {
 		c.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "product deleted"})
@@ -210,25 +210,25 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.productService.Update(ctx, &p); err != nil {
+	if err := c.service.Update(ctx, &p); err != nil {
 		c.logger.Error("failed to update product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error updating product")
 		return
 	}
 
-	if err := c.productCache.Invalidate(ctx, idStr); err != nil {
+	if err := c.cache.Invalidate(ctx, idStr); err != nil {
 		c.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, p)
 }
 
 func (c *Handler) findProduct(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
-	return c.productService.FindByID(ctx, id)
+	return c.service.FindByID(ctx, id)
 }
 
 func (c *Handler) validID(id string) (uuid.UUID, error) {
-	uid, err := c.productValidator.UUID(id)
+	uid, err := c.validator.UUID(id)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -237,7 +237,7 @@ func (c *Handler) validID(id string) (uuid.UUID, error) {
 
 func (c *Handler) decodeBody(r *http.Request, p *entity.Product) error {
 	if err := decodeBody(r.Body, p); err != nil {
-		valErr := c.productValidator.Body(err)
+		valErr := c.validator.DecodeError(err)
 		return valErr
 	}
 	return nil
