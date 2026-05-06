@@ -10,8 +10,6 @@ import (
 
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
-	"github.com/alkmc/restClean/internal/service"
-	"github.com/alkmc/restClean/internal/validator"
 	"github.com/google/uuid"
 )
 
@@ -24,15 +22,29 @@ type productCache interface {
 	Invalidate(ctx context.Context, key string) error
 }
 
+type productService interface {
+	Create(context.Context, *entity.Product) (*entity.Product, error)
+	FindByID(context.Context, uuid.UUID) (*entity.Product, error)
+	FindAll(context.Context) ([]entity.Product, error)
+	Update(context.Context, *entity.Product) error
+	Delete(context.Context, uuid.UUID) error
+}
+
+type productValidator interface {
+	Product(*entity.Product) error
+	Body(error) error
+	UUID(string) (uuid.UUID, error)
+}
+
 type Handler struct {
 	logger           *slog.Logger
-	productService   service.Service
+	productService   productService
 	productCache     productCache
-	productValidator validator.Validator
+	productValidator productValidator
 }
 
 // NewHandler returns Product Handler
-func NewHandler(l *slog.Logger, s service.Service, c productCache, v validator.Validator,
+func NewHandler(l *slog.Logger, s productService, c productCache, v productValidator,
 ) *Handler {
 	return new(Handler{
 		logger:           l,

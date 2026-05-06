@@ -4,16 +4,23 @@ import (
 	"context"
 
 	"github.com/alkmc/restClean/internal/entity"
-	"github.com/alkmc/restClean/internal/repository"
 	"github.com/google/uuid"
 )
 
+type productRepository interface {
+	Save(context.Context, *entity.Product) (*entity.Product, error)
+	FindByID(context.Context, uuid.UUID) (*entity.Product, error)
+	FindAll(context.Context) ([]entity.Product, error)
+	Update(context.Context, *entity.Product) error
+	Delete(context.Context, uuid.UUID) error
+}
+
 type productService struct {
-	repo repository.Repository
+	repo productRepository
 }
 
 // NewService returns new Product Service
-func NewService(r repository.Repository) Service {
+func NewService(r productRepository) *productService {
 	return new(productService{repo: r})
 }
 

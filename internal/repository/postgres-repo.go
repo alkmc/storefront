@@ -18,7 +18,7 @@ type pgRepository struct {
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG(ctx context.Context, l *slog.Logger) (Repository, error) {
+func NewPG(ctx context.Context, l *slog.Logger) (*pgRepository, error) {
 	dbConn, err := getDbConn()
 	if err != nil {
 		return nil, err

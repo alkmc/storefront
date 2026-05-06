@@ -7,11 +7,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type productValidator struct {
-}
+type productValidator struct{}
 
 // NewValidator returns new Product Validator
-func NewValidator() Validator {
+func NewValidator() *productValidator {
 	return new(productValidator{})
 }
 

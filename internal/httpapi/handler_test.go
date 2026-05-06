@@ -12,7 +12,6 @@ import (
 
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
-	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
 	"github.com/alkmc/restClean/internal/validator"
 	"github.com/google/uuid"
@@ -28,7 +27,6 @@ type responseMessage struct {
 }
 
 type mockRepo struct {
-	repository.Repository
 	save     func(p *entity.Product) (*entity.Product, error)
 	findByID func(id uuid.UUID) (*entity.Product, error)
 	findAll  func() ([]entity.Product, error)

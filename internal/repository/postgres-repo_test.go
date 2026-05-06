@@ -13,7 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestContainerDB(t *testing.T) (Repository, func()) {
+func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 	t.Helper()
 	ctx := t.Context()
 
