@@ -51,7 +51,18 @@ func run(logger *slog.Logger) error {
 	defer repo.CloseDB()
 
 	srv := service.NewService(repo)
-	rCache := cache.NewRedis(logger, redisHost, redisDB, cacheExpiration)
+	rCache, err := cache.NewRedis(ctx, redisHost, redisDB, cacheExpiration)
+	if err != nil {
+		return err
+	}
+	logger.Info("successfully connected to redis")
+	defer func() {
+		if err := rCache.Close(); err != nil {
+			logger.Error("failed to close redis cache", slog.Any("error", err))
+			return
+		}
+		logger.Info("connection to redis closed")
+	}()
 	valid := validator.NewValidator()
 	h := httpapi.NewHandler(logger, srv, rCache, valid)
 

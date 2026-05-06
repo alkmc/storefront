@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
@@ -57,9 +58,15 @@ func (m mockRepo) CloseDB() {}
 
 type mockCache struct{}
 
-func (m *mockCache) Set(ctx context.Context, key string, value *entity.Product) {}
-func (m *mockCache) Get(ctx context.Context, key string) *entity.Product        { return nil }
-func (m *mockCache) Expire(ctx context.Context, key string)                     {}
+func (m *mockCache) Set(ctx context.Context, key string, value entity.Product) error {
+	return nil
+}
+func (m *mockCache) Get(ctx context.Context, key string) (entity.Product, error) {
+	return entity.Product{}, cache.ErrCacheMiss
+}
+func (m *mockCache) Invalidate(ctx context.Context, key string) error {
+	return nil
+}
 
 func setupTest(t *testing.T) (http.Handler, *mockRepo) {
 	t.Helper()
