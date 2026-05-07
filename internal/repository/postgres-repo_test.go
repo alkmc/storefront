@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go"
@@ -46,14 +47,17 @@ func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 		t.Fatalf("failed to get mapped port: %v", err)
 	}
 
-	t.Setenv("PG_HOST", host)
-	t.Setenv("PG_PORT", port.Port())
-	t.Setenv("PG_USER", dbUser)
-	t.Setenv("PG_PASSWORD", dbPassword)
-	t.Setenv("PG_DB", dbName)
+	pgConfig := config.Postgres{
+		Host:     host,
+		Port:     int(port.Num()),
+		User:     dbUser,
+		Password: dbPassword,
+		Database: dbName,
+		SSLMode:  "disable",
+	}
 
 	logger := slog.New(slog.DiscardHandler)
-	repo, err := NewPG(ctx, logger)
+	repo, err := NewPG(ctx, logger, pgConfig.DSN())
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
 	}

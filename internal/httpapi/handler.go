@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	timeout      = 2 * time.Second
 	defaultLimit = 50
 	maxLimit     = 200
 )
@@ -37,9 +36,10 @@ type (
 	}
 
 	Handler struct {
-		logger    *slog.Logger
-		processor processor
-		cache     cacher
+		logger         *slog.Logger
+		processor      processor
+		cache          cacher
+		requestTimeout time.Duration
 	}
 
 	productInput struct {
@@ -49,11 +49,12 @@ type (
 )
 
 // NewHandler initializes a product API handler with its required dependencies
-func NewHandler(l *slog.Logger, p processor, c cacher) *Handler {
+func NewHandler(l *slog.Logger, p processor, c cacher, requestTimeout time.Duration) *Handler {
 	return &Handler{
-		logger:    l,
-		processor: p,
-		cache:     c,
+		logger:         l,
+		processor:      p,
+		cache:          c,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -65,7 +66,7 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
 	cached, err := c.cache.Get(ctx, idStr)
@@ -107,7 +108,7 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
 	products, err := c.processor.FindAll(ctx, limit, offset)
@@ -135,7 +136,7 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
 	result, err := c.processor.Create(ctx, &p)
@@ -161,7 +162,7 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
 	if _, err := c.findProduct(ctx, id); err != nil {
@@ -196,7 +197,7 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
 	if _, err := c.findProduct(ctx, id); err != nil {

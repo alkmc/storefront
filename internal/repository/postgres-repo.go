@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
@@ -18,12 +17,8 @@ type pgRepository struct {
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG(ctx context.Context, l *slog.Logger) (*pgRepository, error) {
-	dbConn, err := getDbConn()
-	if err != nil {
-		return nil, err
-	}
-	pdb, err := sql.Open("pgx", dbConn)
+func NewPG(ctx context.Context, l *slog.Logger, dsn string) (*pgRepository, error) {
+	pdb, err := sql.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
 	}
@@ -147,40 +142,4 @@ func (pg *pgRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	return nil
-}
-
-func getEnvVars() (map[string]string, error) {
-	const req = "environment variable %q is required"
-	keys := []string{
-		"PG_HOST",
-		"PG_PORT",
-		"PG_USER",
-		"PG_PASSWORD",
-		"PG_DB",
-	}
-	t := map[string]string{}
-	for _, key := range keys {
-		v := os.Getenv(key)
-		if v == "" {
-			return nil, fmt.Errorf(req, key)
-		}
-		t[key] = v
-	}
-	return t, nil
-}
-
-func getDbConn() (string, error) {
-	const connStr = "host=%s port=%s user=%s password=%s dbname=%s sslmode=disable"
-
-	e, err := getEnvVars()
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf(connStr,
-		e["PG_HOST"],
-		e["PG_PORT"],
-		e["PG_USER"],
-		e["PG_PASSWORD"],
-		e["PG_DB"]), nil
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
@@ -72,7 +73,7 @@ func setupTest(t *testing.T) (http.Handler, *mockRepo) {
 
 	srv := service.NewService(repo)
 	cacheSrv := new(mockCache)
-	h := NewHandler(logger, srv, cacheSrv)
+	h := NewHandler(logger, srv, cacheSrv, 2*time.Second)
 	mux := NewMux(logger, h)
 
 	return mux, repo
