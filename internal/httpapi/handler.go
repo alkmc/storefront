@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/alkmc/restClean/internal/cache"
@@ -13,7 +15,11 @@ import (
 	"github.com/google/uuid"
 )
 
-const timeout = 2 * time.Second
+const (
+	timeout      = 2 * time.Second
+	defaultLimit = 50
+	maxLimit     = 200
+)
 
 type (
 	cacher interface {
@@ -25,7 +31,7 @@ type (
 	processor interface {
 		Create(context.Context, *entity.Product) (*entity.Product, error)
 		FindByID(context.Context, uuid.UUID) (*entity.Product, error)
-		FindAll(context.Context) ([]entity.Product, error)
+		FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error)
 		Update(context.Context, *entity.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
@@ -89,18 +95,29 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, err := parseLimit(q.Get("limit"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	offset, err := parseOffset(q.Get("offset"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	products, err := c.processor.FindAll(ctx)
+	products, err := c.processor.FindAll(ctx, limit, offset)
 	if err != nil {
 		c.logger.Error("failed to find all products", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "failed to fetch products")
 		return
 	}
-	if len(products) == 0 {
-		respond(w, http.StatusOK, map[string]string{"message": "no products found"})
-		return
+	if products == nil {
+		products = []entity.Product{}
 	}
 	respond(w, http.StatusOK, products)
 }
@@ -220,4 +237,29 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 func (c *Handler) findProduct(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
 	return c.processor.FindByID(ctx, id)
+}
+
+func parseLimit(raw string) (int, error) {
+	if raw == "" {
+		return defaultLimit, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid limit: %q", raw)
+	}
+	if n <= 0 {
+		return defaultLimit, nil
+	}
+	return min(n, maxLimit), nil
+}
+
+func parseOffset(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid offset: %q", raw)
+	}
+	return max(n, 0), nil
 }

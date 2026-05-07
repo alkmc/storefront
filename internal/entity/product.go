@@ -8,7 +8,7 @@ import (
 
 // Product represents a purchasable item in the system
 type Product struct {
-	ID    uuid.UUID `json:"id" db:"uid"`
+	ID    uuid.UUID `json:"id" db:"id"`
 	Name  string    `json:"name" db:"name"`
 	Price float64   `json:"price" db:"price"`
 }

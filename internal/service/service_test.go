@@ -11,7 +11,7 @@ import (
 type MockRepository struct {
 	SaveFn     func(ctx context.Context, p *entity.Product) (*entity.Product, error)
 	FindByIDFn func(ctx context.Context, id uuid.UUID) (*entity.Product, error)
-	FindAllFn  func(ctx context.Context) ([]entity.Product, error)
+	FindAllFn  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
 	UpdateFn   func(ctx context.Context, p *entity.Product) error
 	DeleteFn   func(ctx context.Context, id uuid.UUID) error
 	CloseDBFn  func()
@@ -31,9 +31,9 @@ func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Pr
 	return nil, nil
 }
 
-func (m *MockRepository) FindAll(ctx context.Context) ([]entity.Product, error) {
+func (m *MockRepository) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
 	if m.FindAllFn != nil {
-		return m.FindAllFn(ctx)
+		return m.FindAllFn(ctx, limit, offset)
 	}
 	return nil, nil
 }
@@ -159,7 +159,7 @@ func TestService_FindAll(t *testing.T) {
 		{
 			name: "success",
 			mockSetup: func(m *MockRepository) {
-				m.FindAllFn = func(ctx context.Context) ([]entity.Product, error) {
+				m.FindAllFn = func(ctx context.Context, limit, offset int) ([]entity.Product, error) {
 					return []entity.Product{{Name: "P1"}, {Name: "P2"}}, nil
 				}
 			},
@@ -174,7 +174,7 @@ func TestService_FindAll(t *testing.T) {
 			tt.mockSetup(mockRepo)
 			srv := NewService(mockRepo)
 
-			res, err := srv.FindAll(ctx)
+			res, err := srv.FindAll(ctx, 50, 0)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")

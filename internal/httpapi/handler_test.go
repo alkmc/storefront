@@ -28,7 +28,7 @@ type responseMessage struct {
 type mockRepo struct {
 	save     func(p *entity.Product) (*entity.Product, error)
 	findByID func(id uuid.UUID) (*entity.Product, error)
-	findAll  func() ([]entity.Product, error)
+	findAll  func(limit, offset int) ([]entity.Product, error)
 	update   func(p *entity.Product) error
 	delete   func(id uuid.UUID) error
 }
@@ -42,8 +42,8 @@ func (m mockRepo) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, 
 	}
 	return m.findByID(id)
 }
-func (m mockRepo) FindAll(ctx context.Context) ([]entity.Product, error) {
-	return m.findAll()
+func (m mockRepo) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
+	return m.findAll(limit, offset)
 }
 func (m mockRepo) Update(ctx context.Context, p *entity.Product) error {
 	return m.update(p)
@@ -161,6 +161,7 @@ func TestGetProducts(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		url            string
 		setupMock      func()
 		expectedStatus int
 		expectedMsg    string
@@ -169,29 +170,106 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "empty",
 			setupMock: func() {
-				repo.findAll = func() ([]entity.Product, error) {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
 					return nil, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
-			expectedMsg:    "no products found",
+			expectedNames:  []string{},
 		},
 		{
-			name: "success",
+			name: "success with default pagination",
 			setupMock: func() {
-				repo.findAll = func() ([]entity.Product, error) {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+					if limit != 50 || offset != 0 {
+						t.Errorf("got limit=%d offset=%d, want 50/0", limit, offset)
+					}
 					return []entity.Product{{Name: NAME, Price: PRICE}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
 			expectedNames:  []string{NAME},
 		},
+		{
+			name: "explicit limit and offset",
+			url:  "/product?limit=10&offset=5",
+			setupMock: func() {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+					if limit != 10 || offset != 5 {
+						t.Errorf("got limit=%d offset=%d, want 10/5", limit, offset)
+					}
+					return []entity.Product{{Name: NAME, Price: PRICE}}, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedNames:  []string{NAME},
+		},
+		{
+			name: "limit clamped to max",
+			url:  "/product?limit=500",
+			setupMock: func() {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+					if limit != 200 {
+						t.Errorf("got limit=%d, want 200", limit)
+					}
+					return nil, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedNames:  []string{},
+		},
+		{
+			name: "negative limit falls back to default",
+			url:  "/product?limit=-5",
+			setupMock: func() {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+					if limit != 50 {
+						t.Errorf("got limit=%d, want 50", limit)
+					}
+					return nil, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedNames:  []string{},
+		},
+		{
+			name: "negative offset clamped to zero",
+			url:  "/product?offset=-1",
+			setupMock: func() {
+				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+					if offset != 0 {
+						t.Errorf("got offset=%d, want 0", offset)
+					}
+					return nil, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedNames:  []string{},
+		},
+		{
+			name:           "invalid limit",
+			url:            "/product?limit=abc",
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "invalid limit: \"abc\"",
+		},
+		{
+			name:           "invalid offset",
+			url:            "/product?offset=xyz",
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+			expectedMsg:    "invalid offset: \"xyz\"",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			req := httptest.NewRequestWithContext(t.Context(), "GET", "/product", nil)
+			url := tt.url
+			if url == "" {
+				url = "/product"
+			}
+			req := httptest.NewRequestWithContext(t.Context(), "GET", url, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 

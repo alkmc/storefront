@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
@@ -10,7 +11,7 @@ import (
 type repository interface {
 	Save(context.Context, *entity.Product) (*entity.Product, error)
 	FindByID(context.Context, uuid.UUID) (*entity.Product, error)
-	FindAll(context.Context) ([]entity.Product, error)
+	FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error)
 	Update(context.Context, *entity.Product) error
 	Delete(context.Context, uuid.UUID) error
 }
@@ -25,7 +26,11 @@ func NewService(r repository) *service {
 }
 
 func (s *service) Create(ctx context.Context, p *entity.Product) (*entity.Product, error) {
-	p.ID = uuid.New()
+	id, err := uuid.NewV7()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate uuid: %w", err)
+	}
+	p.ID = id
 	return s.repo.Save(ctx, p)
 }
 
@@ -33,8 +38,8 @@ func (s *service) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, 
 	return s.repo.FindByID(ctx, id)
 }
 
-func (s *service) FindAll(ctx context.Context) ([]entity.Product, error) {
-	return s.repo.FindAll(ctx)
+func (s *service) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
+	return s.repo.FindAll(ctx, limit, offset)
 }
 
 func (s *service) Update(ctx context.Context, p *entity.Product) error {

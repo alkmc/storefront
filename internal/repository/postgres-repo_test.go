@@ -26,6 +26,7 @@ func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
+		postgres.WithInitScripts("../../migrations/1_create_tables_up.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -167,7 +168,7 @@ func TestRepository_FindAll(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	res, err := repo.FindAll(ctx)
+	res, err := repo.FindAll(ctx, 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -182,7 +183,7 @@ func TestRepository_FindAll(t *testing.T) {
 		t.Fatalf("failed to save product 2: %v", err)
 	}
 
-	res, err = repo.FindAll(ctx)
+	res, err = repo.FindAll(ctx, 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
