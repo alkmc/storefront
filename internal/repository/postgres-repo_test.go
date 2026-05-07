@@ -2,12 +2,14 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
+	"github.com/alkmc/restClean/internal/migrate"
 	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -27,7 +29,6 @@ func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
-		postgres.WithInitScripts("../../migrations/1_create_tables_up.sql"),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -54,6 +55,17 @@ func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 		Password: dbPassword,
 		Database: dbName,
 		SSLMode:  "disable",
+	}
+
+	migrationDB, err := sql.Open("pgx", pgConfig.DSN())
+	if err != nil {
+		t.Fatalf("failed to open migration db: %v", err)
+	}
+	if err := migrate.Up(ctx, migrationDB); err != nil {
+		t.Fatalf("failed to apply migrations: %v", err)
+	}
+	if err := migrationDB.Close(); err != nil {
+		t.Fatalf("failed to close migration db: %v", err)
 	}
 
 	logger := slog.New(slog.DiscardHandler)

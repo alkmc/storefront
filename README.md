@@ -6,6 +6,7 @@
 * [Technologies](#technologies)
 * [Usage](#usage)
 * [Setup](#setup)
+* [Migrations](#migrations)
 
 ## General Info
 
@@ -37,3 +38,22 @@ In order to use PostgreSQL as database, make sure the following environment vari
 * PG_USER
 * PG_PASSWORD
 * PG_DB
+
+## Migrations
+
+Schema changes live in `internal/migrate/migrations/` and are bundled into the
+binary via `embed.FS`. The `cmd/migrate` CLI applies them using
+[goose](https://github.com/pressly/goose).
+
+```bash
+make migrate-up       # apply all pending migrations
+make migrate-status   # show applied and pending migrations
+make migrate-down     # roll back the last migration (local dev only)
+```
+
+Run `make migrate-up` before deploying a new version of the application.
+The application performs a fail-fast check at startup and refuses to run if
+the database schema is older than the embedded migrations.
+
+Production is forward-only — `make migrate-down` exists for local development
+and is not part of the deployment pipeline.

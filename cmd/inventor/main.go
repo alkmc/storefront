@@ -14,6 +14,7 @@ import (
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/httpapi"
+	"github.com/alkmc/restClean/internal/migrate"
 	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
 )
@@ -34,6 +35,10 @@ func run(logger *slog.Logger) error {
 
 	cfg, err := config.Load()
 	if err != nil {
+		return err
+	}
+
+	if err := migrate.Verify(ctx, cfg.Postgres.DSN()); err != nil {
 		return err
 	}
 
