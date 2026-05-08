@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
 	"testing"
 	"time"
@@ -11,12 +10,14 @@ import (
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/alkmc/restClean/internal/migrate"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
+func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -57,10 +58,11 @@ func setupTestContainerDB(t *testing.T) (*pgRepository, func()) {
 		SSLMode:  "disable",
 	}
 
-	migrationDB, err := sql.Open("pgx", pgConfig.DSN())
+	pgxCfg, err := pgx.ParseConfig(pgConfig.DSN())
 	if err != nil {
-		t.Fatalf("failed to open migration db: %v", err)
+		t.Fatalf("failed to parse pg config: %v", err)
 	}
+	migrationDB := stdlib.OpenDB(*pgxCfg)
 	if err := migrate.Up(ctx, migrationDB); err != nil {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
@@ -96,12 +98,12 @@ func TestRepository_Save(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: new(entity.Product{ID: uuid.New(), Name: "Car", Price: 10.5}),
+			product: new(entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: 10.5}),
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: new(entity.Product{ID: uuid.New(), Name: "Bike", Price: -5.0}),
+			product: new(entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: -5.0}),
 			wantErr: true,
 		},
 		{
@@ -111,8 +113,10 @@ func TestRepository_Save(t *testing.T) {
 		},
 	}
 
-	preExistingProductID := uuid.New()
-	if _, err := repo.Save(ctx, new(entity.Product{ID: preExistingProductID, Name: "Boat", Price: 10.0})); err != nil {
+	preExistingProductID := uuid.Must(uuid.NewV7())
+	if _, err := repo.Save(ctx,
+		new(entity.Product{ID: preExistingProductID, Name: "Boat", Price: 10.0}),
+	); err != nil {
 		t.Fatalf("failed to save setup product: %v", err)
 	}
 	tests[2].product.ID = preExistingProductID
@@ -138,7 +142,7 @@ func TestRepository_FindByID(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(ctx, new(entity.Product{ID: id, Name: "Car", Price: 10.5})); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -155,7 +159,7 @@ func TestRepository_FindByID(t *testing.T) {
 		},
 		{
 			name:    "non-existing product",
-			id:      uuid.New(),
+			id:      uuid.Must(uuid.NewV7()),
 			wantErr: true,
 		},
 	}
@@ -192,10 +196,12 @@ func TestRepository_FindAll(t *testing.T) {
 		t.Errorf("expected 0 products, got %d", len(res))
 	}
 
-	if _, err := repo.Save(ctx, new(entity.Product{ID: uuid.New(), Name: "P1", Price: 1.0})); err != nil {
+	p1 := new(entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: 1.0})
+	if _, err := repo.Save(ctx, p1); err != nil {
 		t.Fatalf("failed to save product 1: %v", err)
 	}
-	if _, err := repo.Save(ctx, new(entity.Product{ID: uuid.New(), Name: "P2", Price: 2.0})); err != nil {
+	p2 := new(entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: 2.0})
+	if _, err := repo.Save(ctx, p2); err != nil {
 		t.Fatalf("failed to save product 2: %v", err)
 	}
 
@@ -213,7 +219,7 @@ func TestRepository_Update(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(ctx, new(entity.Product{ID: id, Name: "OldName", Price: 10.0})); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -263,7 +269,7 @@ func TestRepository_Delete(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	id := uuid.New()
+	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(ctx, new(entity.Product{ID: id, Name: "ToDelete", Price: 10.0})); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}

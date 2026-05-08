@@ -74,7 +74,7 @@ func run(logger *slog.Logger) error {
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.HTTP.ShutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
 		defer cancel()
 
 		logger.Info("signal closing server received")

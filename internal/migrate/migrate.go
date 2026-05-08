@@ -6,7 +6,8 @@ import (
 	"embed"
 	"fmt"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
@@ -48,10 +49,11 @@ func Status(ctx context.Context, db *sql.DB) ([]*goose.MigrationStatus, error) {
 }
 
 func Verify(ctx context.Context, dsn string) error {
-	db, err := sql.Open("pgx", dsn)
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return fmt.Errorf("open db: %w", err)
+		return fmt.Errorf("parse pg config: %w", err)
 	}
+	db := stdlib.OpenDB(*cfg)
 	defer db.Close()
 
 	if err := db.PingContext(ctx); err != nil {

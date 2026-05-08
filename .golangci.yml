@@ -1,0 +1,57 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  relative-path-mode: gomod
+
+linters:
+  default: standard
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - contextcheck
+    - durationcheck
+    - errorlint
+    - forbidigo
+    - gosec
+    - gocritic
+    - lll
+    - nilnesserr
+    - nilnil
+    - noctx
+    - perfsprint
+    - prealloc
+    - predeclared
+    - revive
+    - rowserrcheck
+    - sloglint
+    - sqlclosecheck
+    - unparam
+    - unconvert
+    - usetesting
+    - usestdlibvars
+    - wastedassign
+  settings:
+    gosec:
+      excludes:
+        - G101
+        - G117
+    lll:
+      line-length: 110
+      tab-width: 1
+  exclusions:
+    generated: strict
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports

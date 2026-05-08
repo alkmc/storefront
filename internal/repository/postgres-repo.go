@@ -8,37 +8,39 @@ import (
 
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
-type pgRepository struct {
+type Repository struct {
 	logger *slog.Logger
 	db     *sql.DB
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG(ctx context.Context, l *slog.Logger, dsn string) (*pgRepository, error) {
-	pdb, err := sql.Open("pgx", dsn)
+func NewPG(ctx context.Context, l *slog.Logger, dsn string) (*Repository, error) {
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open pgx connection: %w", err)
+		return nil, fmt.Errorf("failed to parse pg config: %w", err)
 	}
+	pdb := stdlib.OpenDB(*cfg)
 
 	if err := pdb.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping pg database: %w", err)
 	}
 	l.Info("successfully connected to db")
 
-	return new(pgRepository{logger: l, db: pdb}), nil
+	return new(Repository{logger: l, db: pdb}), nil
 }
 
-func (pg *pgRepository) CloseDB() {
+func (pg *Repository) CloseDB() {
 	if err := pg.db.Close(); err != nil {
 		pg.logger.Error("failed to close db connection", slog.Any("error", err))
 	}
 	pg.logger.Info("connection to db closed")
 }
 
-func (pg *pgRepository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
+func (pg *Repository) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
 	tx, err := pg.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -63,7 +65,7 @@ func (pg *pgRepository) Save(ctx context.Context, p *entity.Product) (*entity.Pr
 	return p, nil
 }
 
-func (pg *pgRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
+func (pg *Repository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
 	row := pg.db.QueryRowContext(ctx, queryGetByID, id)
 
 	var p entity.Product
@@ -73,7 +75,7 @@ func (pg *pgRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Pro
 	return &p, nil
 }
 
-func (pg *pgRepository) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
+func (pg *Repository) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
 	rows, err := pg.db.QueryContext(ctx, queryGetAll, limit, offset)
 	if err != nil {
 		return nil, err
@@ -96,7 +98,7 @@ func (pg *pgRepository) FindAll(ctx context.Context, limit, offset int) ([]entit
 	return products, nil
 }
 
-func (pg *pgRepository) Update(ctx context.Context, p *entity.Product) error {
+func (pg *Repository) Update(ctx context.Context, p *entity.Product) error {
 	tx, err := pg.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -120,7 +122,7 @@ func (pg *pgRepository) Update(ctx context.Context, p *entity.Product) error {
 	return nil
 }
 
-func (pg *pgRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (pg *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 	tx, err := pg.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

@@ -15,6 +15,8 @@ import (
 
 	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/migrate"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 const usage = `usage: migrate <command>
@@ -80,10 +82,11 @@ func parseCommand() string {
 }
 
 func openDB(ctx context.Context, dsn string) (*sql.DB, error) {
-	db, err := sql.Open("pgx", dsn)
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
-		return nil, fmt.Errorf("open db: %w", err)
+		return nil, fmt.Errorf("parse pg config: %w", err)
 	}
+	db := stdlib.OpenDB(*cfg)
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping db: %w", err)

@@ -27,42 +27,49 @@ type responseMessage struct {
 }
 
 type mockRepo struct {
-	save     func(p *entity.Product) (*entity.Product, error)
-	findByID func(id uuid.UUID) (*entity.Product, error)
-	findAll  func(limit, offset int) ([]entity.Product, error)
-	update   func(p *entity.Product) error
-	delete   func(id uuid.UUID) error
+	save     func(ctx context.Context, p *entity.Product) (*entity.Product, error)
+	findByID func(ctx context.Context, id uuid.UUID) (*entity.Product, error)
+	findAll  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
+	update   func(ctx context.Context, p *entity.Product) error
+	delete   func(ctx context.Context, id uuid.UUID) error
 }
 
 func (m mockRepo) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
-	return m.save(p)
+	return m.save(ctx, p)
 }
+
 func (m mockRepo) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
 	if m.findByID == nil {
 		return nil, sql.ErrNoRows
 	}
-	return m.findByID(id)
+	return m.findByID(ctx, id)
 }
+
 func (m mockRepo) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
-	return m.findAll(limit, offset)
+	return m.findAll(ctx, limit, offset)
 }
+
 func (m mockRepo) Update(ctx context.Context, p *entity.Product) error {
-	return m.update(p)
+	return m.update(ctx, p)
 }
+
 func (m mockRepo) Delete(ctx context.Context, id uuid.UUID) error {
-	return m.delete(id)
+	return m.delete(ctx, id)
 }
+
 func (m mockRepo) CloseDB() {}
 
 type mockCache struct{}
 
-func (m *mockCache) Set(ctx context.Context, key string, value entity.Product) error {
+func (m *mockCache) Set(_ context.Context, _ string, _ entity.Product) error {
 	return nil
 }
-func (m *mockCache) Get(ctx context.Context, key string) (entity.Product, error) {
+
+func (m *mockCache) Get(_ context.Context, _ string) (entity.Product, error) {
 	return entity.Product{}, cache.ErrCacheMiss
 }
-func (m *mockCache) Invalidate(ctx context.Context, key string) error {
+
+func (m *mockCache) Invalidate(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -81,7 +88,6 @@ func setupTest(t *testing.T) (http.Handler, *mockRepo) {
 
 func TestGetProductByID(t *testing.T) {
 	mux, repo := setupTest(t)
-	uid := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -92,10 +98,10 @@ func TestGetProductByID(t *testing.T) {
 	}{
 		{
 			name: "success",
-			id:   uid.String(),
+			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
+				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -109,9 +115,9 @@ func TestGetProductByID(t *testing.T) {
 		},
 		{
 			name: "non-existing product",
-			id:   uuid.New().String(),
+			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
+				repo.findByID = func(_ context.Context, _ uuid.UUID) (*entity.Product, error) {
 					return nil, sql.ErrNoRows
 				}
 			},
@@ -137,8 +143,8 @@ func TestGetProductByID(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if p.ID != uid {
-					t.Errorf("got id %v, want %v", p.ID, uid)
+				if p.ID != uuid.MustParse(tt.id) {
+					t.Errorf("got id %v, want %v", p.ID, tt.id)
 				}
 				if p.Name != NAME {
 					t.Errorf("got name %v, want %v", p.Name, NAME)
@@ -171,7 +177,7 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "empty",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, _, _ int) ([]entity.Product, error) {
 					return nil, nil
 				}
 			},
@@ -181,7 +187,7 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "success with default pagination",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, limit, offset int) ([]entity.Product, error) {
 					if limit != 50 || offset != 0 {
 						t.Errorf("got limit=%d offset=%d, want 50/0", limit, offset)
 					}
@@ -195,7 +201,7 @@ func TestGetProducts(t *testing.T) {
 			name: "explicit limit and offset",
 			url:  "/product?limit=10&offset=5",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, limit, offset int) ([]entity.Product, error) {
 					if limit != 10 || offset != 5 {
 						t.Errorf("got limit=%d offset=%d, want 10/5", limit, offset)
 					}
@@ -209,7 +215,7 @@ func TestGetProducts(t *testing.T) {
 			name: "limit clamped to max",
 			url:  "/product?limit=500",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, limit, _ int) ([]entity.Product, error) {
 					if limit != 200 {
 						t.Errorf("got limit=%d, want 200", limit)
 					}
@@ -223,7 +229,7 @@ func TestGetProducts(t *testing.T) {
 			name: "negative limit falls back to default",
 			url:  "/product?limit=-5",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, limit, _ int) ([]entity.Product, error) {
 					if limit != 50 {
 						t.Errorf("got limit=%d, want 50", limit)
 					}
@@ -237,7 +243,7 @@ func TestGetProducts(t *testing.T) {
 			name: "negative offset clamped to zero",
 			url:  "/product?offset=-1",
 			setupMock: func() {
-				repo.findAll = func(limit, offset int) ([]entity.Product, error) {
+				repo.findAll = func(_ context.Context, _, offset int) ([]entity.Product, error) {
 					if offset != 0 {
 						t.Errorf("got offset=%d, want 0", offset)
 					}
@@ -320,7 +326,7 @@ func TestAddProduct(t *testing.T) {
 			name: "success",
 			body: productInput{Name: NAME, Price: PRICE},
 			setupMock: func() {
-				repo.save = func(p *entity.Product) (*entity.Product, error) {
+				repo.save = func(_ context.Context, p *entity.Product) (*entity.Product, error) {
 					return p, nil
 				}
 			},
@@ -335,7 +341,7 @@ func TestAddProduct(t *testing.T) {
 		},
 		{
 			name:           "client supplied id rejected",
-			body:           map[string]any{"id": uuid.NewString(), "name": NAME, "price": PRICE},
+			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": NAME, "price": PRICE},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "unknown field \"id\"",
@@ -381,7 +387,6 @@ func TestAddProduct(t *testing.T) {
 
 func TestDeleteProduct(t *testing.T) {
 	mux, repo := setupTest(t)
-	uid := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -392,9 +397,9 @@ func TestDeleteProduct(t *testing.T) {
 	}{
 		{
 			name: "not existing",
-			id:   uuid.New().String(),
+			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
+				repo.findByID = func(_ context.Context, _ uuid.UUID) (*entity.Product, error) {
 					return nil, sql.ErrNoRows
 				}
 			},
@@ -402,12 +407,12 @@ func TestDeleteProduct(t *testing.T) {
 		},
 		{
 			name: "success",
-			id:   uid.String(),
+			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
+				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
 				}
-				repo.delete = func(id uuid.UUID) error {
+				repo.delete = func(_ context.Context, _ uuid.UUID) error {
 					return nil
 				}
 			},
@@ -443,7 +448,6 @@ func TestDeleteProduct(t *testing.T) {
 
 func TestUpdateProduct(t *testing.T) {
 	mux, repo := setupTest(t)
-	uid := uuid.New()
 
 	tests := []struct {
 		name           string
@@ -455,13 +459,13 @@ func TestUpdateProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			id:   uid.String(),
+			id:   uuid.Must(uuid.NewV7()).String(),
 			body: productInput{Name: "Updated", Price: 99.9},
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
+				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
 				}
-				repo.update = func(p *entity.Product) error {
+				repo.update = func(_ context.Context, _ *entity.Product) error {
 					return nil
 				}
 			},
@@ -470,11 +474,11 @@ func TestUpdateProduct(t *testing.T) {
 		},
 		{
 			name: "client supplied id rejected",
-			id:   uid.String(),
-			body: map[string]any{"id": uid.String(), "name": "Updated", "price": 99.9},
+			id:   uuid.Must(uuid.NewV7()).String(),
+			body: map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Updated", "price": 99.9},
 			setupMock: func() {
-				repo.findByID = func(id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: uid, Name: NAME, Price: PRICE}), nil
+				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
+					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
 				}
 			},
 			expectedStatus: http.StatusUnprocessableEntity,
