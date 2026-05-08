@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,12 +19,15 @@ type Repository struct {
 }
 
 // NewPG creates a new PostgreSQL repository
-func NewPG(ctx context.Context, l *slog.Logger, dsn string) (*Repository, error) {
-	cfg, err := pgx.ParseConfig(dsn)
+func NewPG(ctx context.Context, l *slog.Logger, cfg config.Postgres) (*Repository, error) {
+	pgCfg, err := pgx.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse pg config: %w", err)
 	}
-	pdb := stdlib.OpenDB(*cfg)
+	pdb := stdlib.OpenDB(*pgCfg)
+	pdb.SetMaxOpenConns(cfg.MaxOpenConns)
+	pdb.SetMaxIdleConns(cfg.MaxIdleConns)
+	pdb.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	if err := pdb.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("failed to ping pg database: %w", err)

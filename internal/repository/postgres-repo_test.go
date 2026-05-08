@@ -50,12 +50,15 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	}
 
 	pgConfig := config.Postgres{
-		Host:     host,
-		Port:     int(port.Num()),
-		User:     dbUser,
-		Password: dbPassword,
-		Database: dbName,
-		SSLMode:  "disable",
+		Host:            host,
+		Port:            int(port.Num()),
+		User:            dbUser,
+		Password:        dbPassword,
+		Database:        dbName,
+		SSLMode:         "disable",
+		MaxOpenConns:    5,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: 5 * time.Minute,
 	}
 
 	pgxCfg, err := pgx.ParseConfig(pgConfig.DSN())
@@ -71,7 +74,7 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	repo, err := NewPG(ctx, logger, pgConfig.DSN())
+	repo, err := NewPG(ctx, logger, pgConfig)
 	if err != nil {
 		t.Fatalf("failed to create repo: %v", err)
 	}

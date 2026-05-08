@@ -34,23 +34,24 @@ var validCommands = map[string]struct{}{
 }
 
 func main() {
-	logger := setupLogger()
+	cmd := parseCommand()
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	logger := cfg.Log.NewLogger(os.Stderr)
 	slog.SetDefault(logger)
 
-	if err := run(logger); err != nil {
+	if err := run(logger, cfg, cmd); err != nil {
 		logger.Error("migration command failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
-	cmd := parseCommand()
-
-	cfg, err := config.Load()
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
+func run(logger *slog.Logger, cfg config.Config, cmd string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -131,15 +132,4 @@ func printStatus(ctx context.Context, w io.Writer, db *sql.DB) error {
 		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", r.Source.Version, r.State, applied, r.Source.Path)
 	}
 	return tw.Flush()
-}
-
-func setupLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			if a.Value.Kind() == slog.KindDuration {
-				return slog.String(a.Key, fmt.Sprintf("%dms", a.Value.Duration().Milliseconds()))
-			}
-			return a
-		},
-	}))
 }

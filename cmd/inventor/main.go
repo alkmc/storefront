@@ -20,29 +20,30 @@ import (
 )
 
 func main() {
-	logger := setupLogger()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		os.Exit(1)
+	}
+
+	logger := cfg.Log.NewLogger(os.Stdout)
 	slog.SetDefault(logger)
 
-	if err := run(logger); err != nil {
+	if err := run(logger, cfg); err != nil {
 		logger.Error("application failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 }
 
-func run(logger *slog.Logger) error {
+func run(logger *slog.Logger, cfg config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
 
 	if err := migrate.Verify(ctx, cfg.Postgres.DSN()); err != nil {
 		return err
 	}
 
-	repo, err := repository.NewPG(ctx, logger, cfg.Postgres.DSN())
+	repo, err := repository.NewPG(ctx, logger, cfg.Postgres)
 	if err != nil {
 		return err
 	}
@@ -91,15 +92,4 @@ func run(logger *slog.Logger) error {
 	wg.Wait()
 	logger.Info("server shutdown completed")
 	return nil
-}
-
-func setupLogger() *slog.Logger {
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
-			if a.Value.Kind() == slog.KindDuration {
-				return slog.String(a.Key, fmt.Sprintf("%dms", a.Value.Duration().Milliseconds()))
-			}
-			return a
-		},
-	}))
 }
