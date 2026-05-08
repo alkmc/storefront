@@ -1,19 +1,22 @@
-.PHONY: build test test-race testcontainers testcontainers-race fmt vet deadcode lint check migrate-up migrate-down migrate-status
+.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check tools docker-build up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/inventor ./cmd/migrate
 
+run:
+	go run ./cmd/inventor
+
 test:
-	go test ./cmd/inventor ./cmd/migrate ./internal/cache ./internal/config ./internal/entity ./internal/httpapi ./internal/migrate ./internal/service
+	go test ./...
 
 test-race:
-	go test -race ./cmd/inventor ./cmd/migrate ./internal/cache ./internal/config ./internal/entity ./internal/httpapi ./internal/migrate ./internal/service
+	go test -race ./...
 
 testcontainers:
-	go test ./internal/repository
+	go test -tags integration ./internal/repository
 
 testcontainers-race:
-	go test -race ./internal/repository
+	go test -race -tags integration ./internal/repository
 
 fmt:
 	go fmt ./...
@@ -28,13 +31,29 @@ lint:
 	golangci-lint run
 
 check:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	govulncheck ./...
+
+tools:
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	go install golang.org/x/vuln/cmd/govulncheck@latest
+
+docker-build:
+	docker build -t restclean:dev .
+
+up:
+	docker compose up --build -d
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
 
 migrate-up:
-	go run ./cmd/migrate up
+	docker compose run --rm migrate up
 
 migrate-down:
-	go run ./cmd/migrate down
+	docker compose run --rm migrate down
 
 migrate-status:
-	go run ./cmd/migrate status
+	docker compose run --rm migrate status
