@@ -78,7 +78,7 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		c.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 
-	p, err := c.findProduct(ctx, id)
+	p, err := c.processor.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "product not found")
@@ -165,7 +165,7 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
-	if _, err := c.findProduct(ctx, id); err != nil {
+	if _, err := c.processor.FindByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 		} else {
@@ -200,7 +200,7 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
 	defer cancel()
 
-	if _, err := c.findProduct(ctx, id); err != nil {
+	if _, err := c.processor.FindByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 		} else {
@@ -234,10 +234,6 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		c.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, p)
-}
-
-func (c *Handler) findProduct(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
-	return c.processor.FindByID(ctx, id)
 }
 
 func parseLimit(raw string) (int, error) {
