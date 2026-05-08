@@ -1,10 +1,10 @@
 .PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check tools docker-build up down logs migrate-up migrate-down migrate-status
 
 build:
-	go build ./cmd/inventor ./cmd/migrate
+	go build ./cmd/server ./cmd/migrate
 
 run:
-	go run ./cmd/inventor
+	go run ./cmd/server
 
 test:
 	go test ./...

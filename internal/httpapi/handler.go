@@ -58,7 +58,7 @@ func NewHandler(l *slog.Logger, p processor, c cacher, requestTimeout time.Durat
 	}
 }
 
-func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -66,36 +66,36 @@ func (c *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	cached, err := c.cache.Get(ctx, idStr)
+	cached, err := h.cache.Get(ctx, idStr)
 	if err == nil {
 		respond(w, http.StatusOK, cached)
 		return
 	}
 	if !errors.Is(err, cache.ErrCacheMiss) {
-		c.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", idStr))
+		h.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 
-	p, err := c.processor.FindByID(ctx, id)
+	p, err := h.processor.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "product not found")
 		} else {
-			c.logger.Error("failed to find product by id",
+			h.logger.Error("failed to find product by id",
 				slog.Any("error", err), slog.String("id", id.String()))
 			respondError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
 	}
-	if err := c.cache.Set(ctx, idStr, *p); err != nil {
-		c.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", idStr))
+	if err := h.cache.Set(ctx, idStr, *p); err != nil {
+		h.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, p)
 }
 
-func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, err := parseLimit(q.Get("limit"))
 	if err != nil {
@@ -108,12 +108,12 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	products, err := c.processor.FindAll(ctx, limit, offset)
+	products, err := h.processor.FindAll(ctx, limit, offset)
 	if err != nil {
-		c.logger.Error("failed to find all products", slog.Any("error", err))
+		h.logger.Error("failed to find all products", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "failed to fetch products")
 		return
 	}
@@ -123,7 +123,7 @@ func (c *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, products)
 }
 
-func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 	var in productInput
 	if err := decodeBody(r.Body, &in); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
@@ -136,25 +136,25 @@ func (c *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	result, err := c.processor.Create(ctx, &p)
+	result, err := h.processor.Create(ctx, &p)
 	if err != nil {
-		c.logger.Error("failed to create product", slog.Any("error", err))
+		h.logger.Error("failed to create product", slog.Any("error", err))
 		respondError(w, http.StatusInternalServerError, "error saving the product")
 		return
 	}
 
 	key := result.ID.String()
-	if err := c.cache.Set(ctx, key, *result); err != nil {
-		c.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
+	if err := h.cache.Set(ctx, key, *result); err != nil {
+		h.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
 	}
 
 	respond(w, http.StatusCreated, result)
 }
 
-func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -162,34 +162,34 @@ func (c *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	if _, err := c.processor.FindByID(ctx, id); err != nil {
+	if _, err := h.processor.FindByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 		} else {
-			c.logger.Error("failed to find product before delete",
+			h.logger.Error("failed to find product before delete",
 				slog.Any("error", err), slog.String("id", id.String()))
 			respondError(w, http.StatusInternalServerError, "internal server error")
 		}
 		return
 	}
 
-	if err := c.processor.Delete(ctx, id); err != nil {
-		c.logger.Error("failed to delete product",
+	if err := h.processor.Delete(ctx, id); err != nil {
+		h.logger.Error("failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error deleting product")
 		return
 	}
 
-	if err := c.cache.Invalidate(ctx, idStr); err != nil {
-		c.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
+	if err := h.cache.Invalidate(ctx, idStr); err != nil {
+		h.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, map[string]string{"message": "product deleted"})
 }
 
-func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -197,14 +197,14 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), c.requestTimeout)
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	if _, err := c.processor.FindByID(ctx, id); err != nil {
+	if _, err := h.processor.FindByID(ctx, id); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 		} else {
-			c.logger.Error("failed to find product before update",
+			h.logger.Error("failed to find product before update",
 				slog.Any("error", err), slog.String("id", id.String()))
 			respondError(w, http.StatusInternalServerError, "internal server error")
 		}
@@ -223,15 +223,15 @@ func (c *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.processor.Update(ctx, &p); err != nil {
-		c.logger.Error("failed to update product",
+	if err := h.processor.Update(ctx, &p); err != nil {
+		h.logger.Error("failed to update product",
 			slog.Any("error", err), slog.String("id", id.String()))
 		respondError(w, http.StatusInternalServerError, "error updating product")
 		return
 	}
 
-	if err := c.cache.Invalidate(ctx, idStr); err != nil {
-		c.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
+	if err := h.cache.Invalidate(ctx, idStr); err != nil {
+		h.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", idStr))
 	}
 	respond(w, http.StatusOK, p)
 }

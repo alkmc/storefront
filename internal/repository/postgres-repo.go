@@ -30,6 +30,7 @@ func NewPG(ctx context.Context, l *slog.Logger, cfg config.Postgres) (*Repositor
 	pdb.SetConnMaxLifetime(cfg.ConnMaxLifetime)
 
 	if err := pdb.PingContext(ctx); err != nil {
+		_ = pdb.Close()
 		return nil, fmt.Errorf("failed to ping pg database: %w", err)
 	}
 	l.Info("successfully connected to db")
@@ -52,6 +53,7 @@ func (pg *Repository) Save(ctx context.Context, p *entity.Product) (*entity.Prod
 
 	stmt, err := tx.PrepareContext(ctx, queryInsert)
 	if err != nil {
+		_ = tx.Rollback()
 		return nil, err
 	}
 	defer stmt.Close()
@@ -110,6 +112,7 @@ func (pg *Repository) Update(ctx context.Context, p *entity.Product) error {
 
 	stmt, err := tx.PrepareContext(ctx, queryUpdate)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	defer stmt.Close()
@@ -134,6 +137,7 @@ func (pg *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 
 	stmt, err := tx.PrepareContext(ctx, queryDelete)
 	if err != nil {
+		_ = tx.Rollback()
 		return err
 	}
 	defer stmt.Close()
