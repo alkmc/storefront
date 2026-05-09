@@ -65,18 +65,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	h := httpapi.NewHandler(logger, srv, rCache, cfg.HTTP.RequestTimeout)
 	ih := httpapi.NewInternalHandler(repo, rCache)
 
-	apiServer := new(http.Server{
-		Addr:         cfg.HTTP.Address(),
-		Handler:      httpapi.NewMux(logger, h),
-		ReadTimeout:  cfg.HTTP.ReadTimeout,
-		WriteTimeout: cfg.HTTP.WriteTimeout,
-		IdleTimeout:  cfg.HTTP.IdleTimeout,
-	})
-	internalServer := new(http.Server{
-		Addr:        cfg.HTTP.InternalAddress(),
-		Handler:     httpapi.NewInternalMux(ih),
-		ReadTimeout: cfg.HTTP.ReadTimeout,
-	})
+	apiServer := httpapi.NewAPIServer(cfg.HTTP, httpapi.NewMux(logger, h))
+	internalServer := httpapi.NewInternalServer(cfg.HTTP, httpapi.NewInternalMux(ih))
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
