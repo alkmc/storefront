@@ -6,11 +6,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrNotFound signals a missing aggregate at the domain boundary.
+var ErrNotFound = errors.New("entity: not found")
+
 // Product represents a purchasable item in the system
 type Product struct {
-	ID    uuid.UUID `json:"id" db:"id"`
-	Name  string    `json:"name" db:"name"`
-	Price float64   `json:"price" db:"price"`
+	ID    uuid.UUID
+	Name  string
+	Price float64
 }
 
 // Validate ensures the product meets basic business rules before processing

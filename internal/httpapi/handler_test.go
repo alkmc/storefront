@@ -3,7 +3,6 @@ package httpapi
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -27,20 +26,20 @@ type responseMessage struct {
 }
 
 type mockRepo struct {
-	save     func(ctx context.Context, p *entity.Product) (*entity.Product, error)
-	findByID func(ctx context.Context, id uuid.UUID) (*entity.Product, error)
+	save     func(ctx context.Context, p entity.Product) (entity.Product, error)
+	findByID func(ctx context.Context, id uuid.UUID) (entity.Product, error)
 	findAll  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
-	update   func(ctx context.Context, p *entity.Product) error
+	update   func(ctx context.Context, p entity.Product) error
 	delete   func(ctx context.Context, id uuid.UUID) error
 }
 
-func (m mockRepo) Save(ctx context.Context, p *entity.Product) (*entity.Product, error) {
+func (m mockRepo) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
 	return m.save(ctx, p)
 }
 
-func (m mockRepo) FindByID(ctx context.Context, id uuid.UUID) (*entity.Product, error) {
+func (m mockRepo) FindByID(ctx context.Context, id uuid.UUID) (entity.Product, error) {
 	if m.findByID == nil {
-		return nil, sql.ErrNoRows
+		return entity.Product{}, entity.ErrNotFound
 	}
 	return m.findByID(ctx, id)
 }
@@ -49,7 +48,7 @@ func (m mockRepo) FindAll(ctx context.Context, limit, offset int) ([]entity.Prod
 	return m.findAll(ctx, limit, offset)
 }
 
-func (m mockRepo) Update(ctx context.Context, p *entity.Product) error {
+func (m mockRepo) Update(ctx context.Context, p entity.Product) error {
 	return m.update(ctx, p)
 }
 
@@ -78,9 +77,8 @@ func setupTest(t *testing.T) (http.Handler, *mockRepo) {
 	logger := slog.New(slog.DiscardHandler)
 	repo := new(mockRepo{})
 
-	srv := service.NewService(repo)
-	cacheSrv := new(mockCache)
-	h := NewHandler(logger, srv, cacheSrv, 2*time.Second)
+	srv := service.NewService(logger, repo, &mockCache{})
+	h := NewHandler(logger, srv, 2*time.Second)
 	mux := NewMux(logger, h)
 
 	return mux, repo
@@ -100,8 +98,8 @@ func TestGetProductByID(t *testing.T) {
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
+				repo.findByID = func(_ context.Context, id uuid.UUID) (entity.Product, error) {
+					return entity.Product{ID: id, Name: NAME, Price: PRICE}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -117,8 +115,8 @@ func TestGetProductByID(t *testing.T) {
 			name: "non-existing product",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(_ context.Context, _ uuid.UUID) (*entity.Product, error) {
-					return nil, sql.ErrNoRows
+				repo.findByID = func(_ context.Context, _ uuid.UUID) (entity.Product, error) {
+					return entity.Product{}, entity.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -326,7 +324,7 @@ func TestAddProduct(t *testing.T) {
 			name: "success",
 			body: productInput{Name: NAME, Price: PRICE},
 			setupMock: func() {
-				repo.save = func(_ context.Context, p *entity.Product) (*entity.Product, error) {
+				repo.save = func(_ context.Context, p entity.Product) (entity.Product, error) {
 					return p, nil
 				}
 			},
@@ -399,8 +397,8 @@ func TestDeleteProduct(t *testing.T) {
 			name: "not existing",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(_ context.Context, _ uuid.UUID) (*entity.Product, error) {
-					return nil, sql.ErrNoRows
+				repo.delete = func(_ context.Context, _ uuid.UUID) error {
+					return entity.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -409,9 +407,6 @@ func TestDeleteProduct(t *testing.T) {
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
-				}
 				repo.delete = func(_ context.Context, _ uuid.UUID) error {
 					return nil
 				}
@@ -462,10 +457,7 @@ func TestUpdateProduct(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			body: productInput{Name: "Updated", Price: 99.9},
 			setupMock: func() {
-				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
-				}
-				repo.update = func(_ context.Context, _ *entity.Product) error {
+				repo.update = func(_ context.Context, _ entity.Product) error {
 					return nil
 				}
 			},
@@ -473,14 +465,10 @@ func TestUpdateProduct(t *testing.T) {
 			expectedName:   "Updated",
 		},
 		{
-			name: "client supplied id rejected",
-			id:   uuid.Must(uuid.NewV7()).String(),
-			body: map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Updated", "price": 99.9},
-			setupMock: func() {
-				repo.findByID = func(_ context.Context, id uuid.UUID) (*entity.Product, error) {
-					return new(entity.Product{ID: id, Name: NAME, Price: PRICE}), nil
-				}
-			},
+			name:           "client supplied id rejected",
+			id:             uuid.Must(uuid.NewV7()).String(),
+			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Updated", "price": 99.9},
+			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 		},
 	}

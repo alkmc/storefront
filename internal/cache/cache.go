@@ -8,11 +8,19 @@ import (
 	"time"
 
 	"github.com/alkmc/restClean/internal/entity"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 // ErrCacheMiss is returned by Get when the key is not present in the cache.
 var ErrCacheMiss = errors.New("cache: key not found")
+
+// cacheEntry is the JSON shape stored in Redis, decoupled from entity.Product.
+type cacheEntry struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Price float64 `json:"price"`
+}
 
 type RedisCache struct {
 	client *redis.Client
@@ -35,7 +43,11 @@ func NewRedis(ctx context.Context, host string, db int, ttl time.Duration) (*Red
 }
 
 func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) error {
-	data, err := json.Marshal(value)
+	data, err := json.Marshal(cacheEntry{
+		ID:    value.ID.String(),
+		Name:  value.Name,
+		Price: value.Price,
+	})
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
@@ -53,11 +65,15 @@ func (r *RedisCache) Get(ctx context.Context, key string) (entity.Product, error
 		}
 		return entity.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
 	}
-	var p entity.Product
-	if err := json.Unmarshal(data, &p); err != nil {
+	var e cacheEntry
+	if err := json.Unmarshal(data, &e); err != nil {
 		return entity.Product{}, fmt.Errorf("unmarshal cache value for key %q: %w", key, err)
 	}
-	return p, nil
+	id, err := uuid.Parse(e.ID)
+	if err != nil {
+		return entity.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
+	}
+	return entity.Product{ID: id, Name: e.Name, Price: e.Price}, nil
 }
 
 func (r *RedisCache) Invalidate(ctx context.Context, key string) error {

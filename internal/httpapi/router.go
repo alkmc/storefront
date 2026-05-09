@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// NewMux initializes and returns a new standard library based ServeMux wrapped in middlewares
+// NewMux initializes and returns a new ServeMux wrapped in middlewares
 func NewMux(l *slog.Logger, h *Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /product", h.Add)
