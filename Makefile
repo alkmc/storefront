@@ -31,11 +31,11 @@ lint:
 	golangci-lint run
 
 check:
-	govulncheck ./...
+	go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
 
 tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	go install golang.org/x/vuln/cmd/govulncheck@latest
+	go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
 
 docker-build:
 	docker build -t restclean:dev .

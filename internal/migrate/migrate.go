@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -15,7 +16,11 @@ import (
 var fsys embed.FS
 
 func newProvider(db *sql.DB) (*goose.Provider, error) {
-	return goose.NewProvider(goose.DialectPostgres, db, fsys)
+	sub, err := fs.Sub(fsys, "migrations")
+	if err != nil {
+		return nil, fmt.Errorf("sub migrations fs: %w", err)
+	}
+	return goose.NewProvider(goose.DialectPostgres, db, sub)
 }
 
 func Up(ctx context.Context, db *sql.DB) error {
