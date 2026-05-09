@@ -1,6 +1,6 @@
 @scheme = http
 @hostname = localhost
-@port = 7000
+@port = 8080
 @host = {{hostname}}:{{port}}
 @baseUrl = {{scheme}}://{{host}}
 @json = application/json
