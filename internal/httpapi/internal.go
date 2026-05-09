@@ -19,7 +19,7 @@ func NewInternalHandler(db pinger, cache pinger) *InternalHandler {
 	return &InternalHandler{db: db, cache: cache}
 }
 
-func (h *InternalHandler) Healthz(w http.ResponseWriter, r *http.Request) {
+func (h *InternalHandler) Healthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 

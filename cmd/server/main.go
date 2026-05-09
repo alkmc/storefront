@@ -73,8 +73,9 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		IdleTimeout:  cfg.HTTP.IdleTimeout,
 	})
 	internalServer := new(http.Server{
-		Addr:    cfg.HTTP.InternalAddress(),
-		Handler: httpapi.NewInternalMux(ih),
+		Addr:        cfg.HTTP.InternalAddress(),
+		Handler:     httpapi.NewInternalMux(ih),
+		ReadTimeout: cfg.HTTP.ReadTimeout,
 	})
 
 	var wg sync.WaitGroup
