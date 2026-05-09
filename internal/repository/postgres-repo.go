@@ -38,6 +38,10 @@ func NewPG(ctx context.Context, l *slog.Logger, cfg config.Postgres) (*Repositor
 	return new(Repository{logger: l, db: pdb}), nil
 }
 
+func (pg *Repository) Ping(ctx context.Context) error {
+	return pg.db.PingContext(ctx)
+}
+
 func (pg *Repository) CloseDB() {
 	if err := pg.db.Close(); err != nil {
 		pg.logger.Error("failed to close db connection", slog.Any("error", err))

@@ -20,6 +20,7 @@ type (
 	HTTP struct {
 		Host            string        `env:"HTTP_HOST"`
 		Port            int           `env:"HTTP_PORT" envDefault:"7000"`
+		InternalPort    int           `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
 		ReadTimeout     time.Duration `env:"HTTP_READ_TIMEOUT" envDefault:"5s"`
 		WriteTimeout    time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"10s"`
 		IdleTimeout     time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"120s"`
@@ -50,6 +51,10 @@ type (
 
 func (h HTTP) Address() string {
 	return net.JoinHostPort(h.Host, strconv.Itoa(h.Port))
+}
+
+func (h HTTP) InternalAddress() string {
+	return net.JoinHostPort(h.Host, strconv.Itoa(h.InternalPort))
 }
 
 func (r Redis) Address() string {

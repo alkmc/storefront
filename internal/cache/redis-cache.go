@@ -67,6 +67,10 @@ func (r *RedisCache) Invalidate(ctx context.Context, key string) error {
 	return nil
 }
 
+func (r *RedisCache) Ping(ctx context.Context) error {
+	return r.client.Ping(ctx).Err()
+}
+
 func (r *RedisCache) Close() error {
 	if err := r.client.Close(); err != nil {
 		return fmt.Errorf("close redis client: %w", err)

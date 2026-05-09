@@ -63,13 +63,18 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		logger.Info("connection to redis closed")
 	}()
 	h := httpapi.NewHandler(logger, srv, rCache, cfg.HTTP.RequestTimeout)
+	ih := httpapi.NewInternalHandler(repo, rCache)
 
-	s := new(http.Server{
+	apiServer := new(http.Server{
 		Addr:         cfg.HTTP.Address(),
 		Handler:      httpapi.NewMux(logger, h),
 		ReadTimeout:  cfg.HTTP.ReadTimeout,
 		WriteTimeout: cfg.HTTP.WriteTimeout,
 		IdleTimeout:  cfg.HTTP.IdleTimeout,
+	})
+	internalServer := new(http.Server{
+		Addr:    cfg.HTTP.InternalAddress(),
+		Handler: httpapi.NewInternalMux(ih),
 	})
 
 	var wg sync.WaitGroup
@@ -77,15 +82,23 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
 		defer cancel()
-
 		logger.Info("signal closing server received")
-		if err := s.Shutdown(shutdownCtx); err != nil {
-			logger.Error("server shutdown failed", slog.Any("error", err))
+		if err := apiServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("api server shutdown failed", slog.Any("error", err))
+		}
+		if err := internalServer.Shutdown(shutdownCtx); err != nil {
+			logger.Error("internal server shutdown failed", slog.Any("error", err))
+		}
+	})
+	wg.Go(func() {
+		logger.Info("starting internal server", slog.String("address", cfg.HTTP.InternalAddress()))
+		if err := internalServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("internal server failed", slog.Any("error", err))
 		}
 	})
 
 	logger.Info("starting http server", slog.String("address", cfg.HTTP.Address()))
-	if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	if err := apiServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server listen failed: %w", err)
 	}
 
