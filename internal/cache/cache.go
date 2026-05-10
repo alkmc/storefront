@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -27,11 +28,12 @@ type RedisCache struct {
 	ttl    time.Duration
 }
 
-// NewRedis returns a Redis-backed cache with the given TTL.
-func NewRedis(ctx context.Context, host string, db int, ttl time.Duration) (*RedisCache, error) {
+// NewRedis returns a Redis-backed cache configured from cfg.
+func NewRedis(ctx context.Context, cfg config.Redis) (*RedisCache, error) {
 	client := redis.NewClient(new(redis.Options{
-		Addr: host,
-		DB:   db,
+		Addr:     cfg.Address(),
+		Password: cfg.Password.Reveal(),
+		DB:       cfg.DB,
 	}))
 
 	if err := client.Ping(ctx).Err(); err != nil {
@@ -39,7 +41,7 @@ func NewRedis(ctx context.Context, host string, db int, ttl time.Duration) (*Red
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
 
-	return new(RedisCache{client: client, ttl: ttl}), nil
+	return new(RedisCache{client: client, ttl: cfg.TTL}), nil
 }
 
 func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) error {

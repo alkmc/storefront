@@ -31,7 +31,7 @@ type (
 		Host            string        `env:"PG_HOST,required"`
 		Port            int           `env:"PG_PORT,required"`
 		User            string        `env:"PG_USER,required"`
-		Password        string        `env:"PG_PASSWORD,required,unset"`
+		Password        Secret        `env:"PG_PASSWORD,required,unset"`
 		Database        string        `env:"PG_DB,required"`
 		SSLMode         string        `env:"PG_SSLMODE" envDefault:"disable"`
 		MaxOpenConns    int           `env:"PG_MAX_OPEN_CONNS" envDefault:"25"`
@@ -39,10 +39,11 @@ type (
 		ConnMaxLifetime time.Duration `env:"PG_CONN_MAX_LIFETIME" envDefault:"30m"`
 	}
 	Redis struct {
-		Host string        `env:"REDIS_HOST,required"`
-		Port int           `env:"REDIS_PORT,required"`
-		DB   int           `env:"REDIS_DB" envDefault:"0"`
-		TTL  time.Duration `env:"REDIS_CACHE_TTL" envDefault:"10s"`
+		Host     string        `env:"REDIS_HOST,required"`
+		Port     int           `env:"REDIS_PORT,required"`
+		Password Secret        `env:"REDIS_PASSWORD,required,unset"`
+		DB       int           `env:"REDIS_DB" envDefault:"0"`
+		TTL      time.Duration `env:"REDIS_CACHE_TTL" envDefault:"10s"`
 	}
 	Log struct {
 		Level slog.Level `env:"LOG_LEVEL" envDefault:"INFO"`
@@ -64,7 +65,7 @@ func (r Redis) Address() string {
 func (p Postgres) DSN() string {
 	u := url.URL{
 		Scheme: "postgres",
-		User:   url.UserPassword(p.User, p.Password),
+		User:   url.UserPassword(p.User, p.Password.Reveal()),
 		Host:   net.JoinHostPort(p.Host, strconv.Itoa(p.Port)),
 		Path:   p.Database,
 	}

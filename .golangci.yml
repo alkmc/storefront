@@ -36,10 +36,6 @@ linters:
     - usestdlibvars
     - wastedassign
   settings:
-    gosec:
-      excludes:
-        - G101
-        - G117
     lll:
       line-length: 110
       tab-width: 1

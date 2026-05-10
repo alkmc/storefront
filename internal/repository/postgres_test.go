@@ -56,7 +56,7 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		Host:            host,
 		Port:            int(port.Num()),
 		User:            dbUser,
-		Password:        dbPassword,
+		Password:        config.Secret(dbPassword),
 		Database:        dbName,
 		SSLMode:         "disable",
 		MaxOpenConns:    5,
