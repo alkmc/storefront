@@ -10,7 +10,7 @@ import (
 	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 )
 
 // ErrCacheMiss is returned by Get when the key is not present in the cache.
@@ -24,20 +24,23 @@ type cacheEntry struct {
 }
 
 type RedisCache struct {
-	client *redis.Client
+	client rueidis.Client
 	ttl    time.Duration
 }
 
 // NewRedis returns a Redis-backed cache configured from cfg.
 func NewRedis(ctx context.Context, cfg config.Redis) (*RedisCache, error) {
-	client := redis.NewClient(new(redis.Options{
-		Addr:     cfg.Address(),
-		Password: cfg.Password.Reveal(),
-		DB:       cfg.DB,
-	}))
+	client, err := rueidis.NewClient(rueidis.ClientOption{
+		InitAddress: []string{cfg.Address()},
+		Password:    cfg.Password.Reveal(),
+		SelectDB:    cfg.DB,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create redis client: %w", err)
+	}
 
-	if err := client.Ping(ctx).Err(); err != nil {
-		_ = client.Close()
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		client.Close()
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
 
@@ -53,16 +56,20 @@ func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) 
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
-	if err := r.client.Set(ctx, key, data, r.ttl).Err(); err != nil {
+	cmd := r.client.B().Set().Key(key).
+		Value(rueidis.BinaryString(data)).
+		PxMilliseconds(r.ttl.Milliseconds()).
+		Build()
+	if err := r.client.Do(ctx, cmd).Error(); err != nil {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
 	return nil
 }
 
 func (r *RedisCache) Get(ctx context.Context, key string) (entity.Product, error) {
-	data, err := r.client.Get(ctx, key).Bytes()
+	data, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
-		if errors.Is(err, redis.Nil) {
+		if rueidis.IsRedisNil(err) {
 			return entity.Product{}, ErrCacheMiss
 		}
 		return entity.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
@@ -79,19 +86,16 @@ func (r *RedisCache) Get(ctx context.Context, key string) (entity.Product, error
 }
 
 func (r *RedisCache) Invalidate(ctx context.Context, key string) error {
-	if err := r.client.Del(ctx, key).Err(); err != nil {
+	if err := r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error(); err != nil {
 		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
 	return nil
 }
 
 func (r *RedisCache) Ping(ctx context.Context) error {
-	return r.client.Ping(ctx).Err()
+	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
 }
 
-func (r *RedisCache) Close() error {
-	if err := r.client.Close(); err != nil {
-		return fmt.Errorf("close redis client: %w", err)
-	}
-	return nil
+func (r *RedisCache) Close() {
+	r.client.Close()
 }

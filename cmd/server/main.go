@@ -55,10 +55,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	}
 	logger.Info("successfully connected to redis")
 	defer func() {
-		if err := rCache.Close(); err != nil {
-			logger.Error("failed to close redis cache", slog.Any("error", err))
-			return
-		}
+		rCache.Close()
 		logger.Info("connection to redis closed")
 	}()
 	srv := service.NewService(logger, repo, rCache)
