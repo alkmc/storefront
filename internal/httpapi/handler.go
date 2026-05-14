@@ -98,9 +98,15 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
+	if r.ContentLength == 0 {
+		respondError(w, http.StatusBadRequest, msgEmptyBody)
+		return
+	}
+
 	var in productInput
 	if err := decodeBody(r.Body, &in); err != nil {
-		respondError(w, http.StatusUnprocessableEntity, err.Error())
+		h.logger.Warn("decode body failed", slog.Any("error", err))
+		respondDecodeError(w, err)
 		return
 	}
 
@@ -152,9 +158,15 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.ContentLength == 0 {
+		respondError(w, http.StatusBadRequest, msgEmptyBody)
+		return
+	}
+
 	var in productInput
 	if err := decodeBody(r.Body, &in); err != nil {
-		respondError(w, http.StatusUnprocessableEntity, err.Error())
+		h.logger.Warn("decode body failed", slog.Any("error", err))
+		respondDecodeError(w, err)
 		return
 	}
 

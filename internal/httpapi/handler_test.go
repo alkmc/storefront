@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,10 +17,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	NAME  = "Car"
-	PRICE = 1.23
-)
+const testMaxBodyBytes = 1 << 20 // 1 MiB
 
 type responseMessage struct {
 	Message string `json:"message"`
@@ -70,20 +68,20 @@ func (m *mockCache) Invalidate(_ context.Context, _ string) error {
 	return nil
 }
 
-func setupTest(t *testing.T) (http.Handler, *mockRepo) {
+func setupTest(t *testing.T, maxBody int64) (http.Handler, *mockRepo) {
 	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
 	repo := new(mockRepo{})
 
 	srv := service.NewService(logger, repo, &mockCache{})
 	h := NewHandler(logger, srv, 2*time.Second)
-	mux := NewMux(logger, h)
+	mux := NewMux(logger, h, maxBody)
 
 	return mux, repo
 }
 
 func TestGetProductByID(t *testing.T) {
-	mux, repo := setupTest(t)
+	mux, repo := setupTest(t, testMaxBodyBytes)
 
 	tests := []struct {
 		name           string
@@ -97,7 +95,7 @@ func TestGetProductByID(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
 				repo.findByID = func(_ context.Context, id uuid.UUID) (entity.Product, error) {
-					return entity.Product{ID: id, Name: NAME, Price: PRICE}, nil
+					return entity.Product{ID: id, Name: "Car", Price: 1.23}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -142,8 +140,8 @@ func TestGetProductByID(t *testing.T) {
 				if p.ID != uuid.MustParse(tt.id) {
 					t.Errorf("got id %v, want %v", p.ID, tt.id)
 				}
-				if p.Name != NAME {
-					t.Errorf("got name %v, want %v", p.Name, NAME)
+				if p.Name != "Car" {
+					t.Errorf("got name %v, want %v", p.Name, "Car")
 				}
 			} else {
 				var e responseMessage
@@ -160,7 +158,7 @@ func TestGetProductByID(t *testing.T) {
 }
 
 func TestGetProducts(t *testing.T) {
-	mux, repo := setupTest(t)
+	mux, repo := setupTest(t, testMaxBodyBytes)
 
 	tests := []struct {
 		name           string
@@ -187,11 +185,11 @@ func TestGetProducts(t *testing.T) {
 					if limit != 50 || offset != 0 {
 						t.Errorf("got limit=%d offset=%d, want 50/0", limit, offset)
 					}
-					return []entity.Product{{Name: NAME, Price: PRICE}}, nil
+					return []entity.Product{{Name: "Car", Price: 1.23}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
-			expectedNames:  []string{NAME},
+			expectedNames:  []string{"Car"},
 		},
 		{
 			name: "explicit limit and offset",
@@ -201,11 +199,11 @@ func TestGetProducts(t *testing.T) {
 					if limit != 10 || offset != 5 {
 						t.Errorf("got limit=%d offset=%d, want 10/5", limit, offset)
 					}
-					return []entity.Product{{Name: NAME, Price: PRICE}}, nil
+					return []entity.Product{{Name: "Car", Price: 1.23}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
-			expectedNames:  []string{NAME},
+			expectedNames:  []string{"Car"},
 		},
 		{
 			name: "limit clamped to max",
@@ -309,7 +307,7 @@ func TestGetProducts(t *testing.T) {
 }
 
 func TestAddProduct(t *testing.T) {
-	mux, repo := setupTest(t)
+	mux, repo := setupTest(t, testMaxBodyBytes)
 
 	tests := []struct {
 		name           string
@@ -320,7 +318,7 @@ func TestAddProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			body: productInput{Name: NAME, Price: PRICE},
+			body: productInput{Name: "Car", Price: 1.23},
 			setupMock: func() {
 				repo.save = func(_ context.Context, p entity.Product) (entity.Product, error) {
 					return p, nil
@@ -330,21 +328,21 @@ func TestAddProduct(t *testing.T) {
 		},
 		{
 			name:           "extra field",
-			body:           map[string]any{"name": NAME, "price": PRICE, "email": "a@a.com"},
+			body:           map[string]any{"name": "Car", "price": 1.23, "email": "a@a.com"},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "unknown field \"email\"",
 		},
 		{
 			name:           "client supplied id rejected",
-			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": NAME, "price": PRICE},
+			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Car", "price": 1.23},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "unknown field \"id\"",
 		},
 		{
 			name:           "negative price",
-			body:           productInput{Name: NAME, Price: -1.0},
+			body:           productInput{Name: "Car", Price: -1.0},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "the product price must be positive",
@@ -381,8 +379,29 @@ func TestAddProduct(t *testing.T) {
 	}
 }
 
+func TestAddProductBodyTooLarge(t *testing.T) {
+	const limit = 16 // bytes
+	mux, _ := setupTest(t, limit)
+
+	body := []byte(`{"name":"a long enough name","price":1.0}`)
+	req := httptest.NewRequestWithContext(t.Context(), "POST", "/product", bytes.NewBuffer(body))
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("got status %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
+	}
+	var e responseMessage
+	if err := json.NewDecoder(resp.Body).Decode(&e); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !strings.Contains(e.Message, "request body too large") {
+		t.Errorf("got msg %q, want it to contain %q", e.Message, "request body too large")
+	}
+}
+
 func TestDeleteProduct(t *testing.T) {
-	mux, repo := setupTest(t)
+	mux, repo := setupTest(t, testMaxBodyBytes)
 
 	tests := []struct {
 		name           string
@@ -440,7 +459,7 @@ func TestDeleteProduct(t *testing.T) {
 }
 
 func TestUpdateProduct(t *testing.T) {
-	mux, repo := setupTest(t)
+	mux, repo := setupTest(t, testMaxBodyBytes)
 
 	tests := []struct {
 		name           string

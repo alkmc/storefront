@@ -10,9 +10,18 @@ import (
 )
 
 const (
-	appJSON  = "application/json"
-	encError = "error encoding data"
+	appJSON = "application/json"
+
+	msgEncodeFailed  = "error encoding data"
+	msgBodyTooLarge  = "request body too large"
+	msgEmptyBody     = "request body must not be empty"
+	msgMalformedJSON = "request body contains malformed JSON"
+	msgInvalidBody   = "invalid request body"
 )
+
+type errorResponse struct {
+	Message string `json:"message"`
+}
 
 // respond replies to the request with the specified payload and HTTP code
 func respond(w http.ResponseWriter, httpCode int, payload any) {
@@ -21,45 +30,47 @@ func respond(w http.ResponseWriter, httpCode int, payload any) {
 
 	w.WriteHeader(httpCode)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		http.Error(w, encError, http.StatusInternalServerError)
+		http.Error(w, msgEncodeFailed, http.StatusInternalServerError)
 	}
 }
 
 // respondError replies to the request with an error message and its HTTP code
 func respondError(w http.ResponseWriter, code int, msg string) {
-	respond(w, code, map[string]string{"message": msg})
+	respond(w, code, errorResponse{Message: msg})
 }
 
-// decodeBody decodes request body to given struct and translates errors
+// respondDecodeError responds to a decoder error
+func respondDecodeError(w http.ResponseWriter, err error) {
+	msg, status := mapDecodeError(err)
+	respondError(w, status, msg)
+}
+
+// decodeBody decodes request body to given struct
 func decodeBody(r io.ReadCloser, v any) error {
 	dec := json.NewDecoder(r)
 	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return mapDecodeError(err)
-	}
-	return nil
+	return dec.Decode(v)
 }
 
-func mapDecodeError(err error) error {
-	var (
-		syntaxError        *json.SyntaxError
-		unmarshalTypeError *json.UnmarshalTypeError
-	)
-
-	switch {
-	case errors.As(err, &syntaxError):
-		return fmt.Errorf("request body contains badly-formed JSON at position: %d", syntaxError.Offset)
-	case errors.Is(err, io.ErrUnexpectedEOF):
-		return errors.New("request body contains badly-formed JSON")
-	case errors.As(err, &unmarshalTypeError):
-		return fmt.Errorf("invalid value for the %q field at position: %d",
-			unmarshalTypeError.Field, unmarshalTypeError.Offset)
-	case strings.HasPrefix(err.Error(), "json: unknown field "):
-		fieldErr := strings.TrimPrefix(err.Error(), "json: ")
-		return errors.New(fieldErr)
-	case errors.Is(err, io.EOF):
-		return errors.New("request body must not be empty")
-	default:
-		return fmt.Errorf("error decoding JSON: %w", err)
+// mapDecodeError returns the client-facing message and HTTP status for a decoder error
+func mapDecodeError(err error) (msg string, status int) {
+	if mbe, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		return fmt.Sprintf("%s: max %d bytes", msgBodyTooLarge, mbe.Limit), http.StatusRequestEntityTooLarge
 	}
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
+		return msgMalformedJSON, http.StatusUnprocessableEntity
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) {
+		return msgMalformedJSON, http.StatusUnprocessableEntity
+	}
+	if ute, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
+		return fmt.Sprintf("invalid value for the %q field", ute.Field), http.StatusUnprocessableEntity
+	}
+	if strings.HasPrefix(err.Error(), "json: unknown field ") {
+		return strings.TrimPrefix(err.Error(), "json: "), http.StatusUnprocessableEntity
+	}
+	if errors.Is(err, io.EOF) {
+		return msgEmptyBody, http.StatusBadRequest
+	}
+	return msgInvalidBody, http.StatusUnprocessableEntity
 }
