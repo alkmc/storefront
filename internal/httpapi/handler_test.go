@@ -56,8 +56,6 @@ func (m mockRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.delete(ctx, id)
 }
 
-func (m mockRepo) CloseDB() {}
-
 type mockCache struct{}
 
 func (m *mockCache) Set(_ context.Context, _ string, _ entity.Product) error {

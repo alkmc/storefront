@@ -83,7 +83,7 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	}
 
 	cleanup := func() {
-		repo.CloseDB()
+		repo.Close()
 		if err := pgContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate pg container: %v", err)
 		}

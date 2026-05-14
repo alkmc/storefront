@@ -47,7 +47,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	defer repo.CloseDB()
+	defer repo.Close()
 
 	rCache, err := cache.NewRedis(ctx, cfg.Redis)
 	if err != nil {

@@ -34,7 +34,6 @@ type MockRepository struct {
 	FindAllFn  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
 	UpdateFn   func(ctx context.Context, p entity.Product) error
 	DeleteFn   func(ctx context.Context, id uuid.UUID) error
-	CloseDBFn  func()
 }
 
 func (m *MockRepository) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
@@ -61,12 +60,6 @@ func (m *MockRepository) Delete(ctx context.Context, id uuid.UUID) error {
 		return m.DeleteFn(ctx, id)
 	}
 	return nil
-}
-
-func (m *MockRepository) CloseDB() {
-	if m.CloseDBFn != nil {
-		m.CloseDBFn()
-	}
 }
 
 func TestService_Create(t *testing.T) {

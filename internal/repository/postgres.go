@@ -43,7 +43,7 @@ func (pg *Repository) Ping(ctx context.Context) error {
 	return pg.db.PingContext(ctx)
 }
 
-func (pg *Repository) CloseDB() {
+func (pg *Repository) Close() {
 	if err := pg.db.Close(); err != nil {
 		pg.logger.Error("failed to close db connection", slog.Any("error", err))
 	}
