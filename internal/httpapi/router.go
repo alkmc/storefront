@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"net/http/pprof"
 )
 
 // NewMux initializes new ServeMux and registers routes.
@@ -16,10 +17,14 @@ func NewMux(h *Handler) http.Handler {
 	return mux
 }
 
-// NewInternalMux returns a minimal mux for liveness and readiness probes.
+// NewInternalMux returns a mux for the internal-only port.
 func NewInternalMux(hh *InternalHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", hh.Healthz)
 	mux.HandleFunc("GET /readyz", hh.Readyz)
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+
 	return mux
 }
