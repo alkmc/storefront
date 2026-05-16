@@ -26,7 +26,9 @@ type (
 		IdleTimeout     time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"120s"`
 		ShutdownTimeout time.Duration `env:"HTTP_SHUTDOWN_TIMEOUT" envDefault:"10s"`
 		RequestTimeout  time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"2s"`
-		MaxBodyBytes    int64         `env:"HTTP_MAX_BODY_BYTES" envDefault:"1048576"` // 1 MiB
+
+		MaxBodyBytes     int64 `env:"HTTP_MAX_BODY_BYTES" envDefault:"1048576"` // 1 MiB
+		CompressMinBytes int   `env:"HTTP_COMPRESS_MIN_BYTES" envDefault:"1024"`
 	}
 	Postgres struct {
 		Host            string        `env:"PG_HOST,required"`

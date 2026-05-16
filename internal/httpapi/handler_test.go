@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -12,15 +13,24 @@ import (
 	"time"
 
 	"github.com/alkmc/restClean/internal/cache"
+	"github.com/alkmc/restClean/internal/config"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/alkmc/restClean/internal/service"
 	"github.com/google/uuid"
 )
 
-const testMaxBodyBytes = 1 << 20 // 1 MiB
+var testHTTPConfig = config.HTTP{
+	MaxBodyBytes:     1 << 20, // 1 MiB
+	CompressMinBytes: 1024,
+}
 
-type responseMessage struct {
-	Message string `json:"message"`
+func decodeJSON[T any](t *testing.T, r io.Reader) T {
+	t.Helper()
+	var v T
+	if err := json.NewDecoder(r).Decode(&v); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	return v
 }
 
 type mockRepo struct {
@@ -31,26 +41,26 @@ type mockRepo struct {
 	delete   func(ctx context.Context, id uuid.UUID) error
 }
 
-func (m mockRepo) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
+func (m *mockRepo) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
 	return m.save(ctx, p)
 }
 
-func (m mockRepo) FindByID(ctx context.Context, id uuid.UUID) (entity.Product, error) {
+func (m *mockRepo) FindByID(ctx context.Context, id uuid.UUID) (entity.Product, error) {
 	if m.findByID == nil {
 		return entity.Product{}, entity.ErrNotFound
 	}
 	return m.findByID(ctx, id)
 }
 
-func (m mockRepo) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
+func (m *mockRepo) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
 	return m.findAll(ctx, limit, offset)
 }
 
-func (m mockRepo) Update(ctx context.Context, p entity.Product) error {
+func (m *mockRepo) Update(ctx context.Context, p entity.Product) error {
 	return m.update(ctx, p)
 }
 
-func (m mockRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *mockRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return m.delete(ctx, id)
 }
 
@@ -68,20 +78,18 @@ func (m *mockCache) Invalidate(_ context.Context, _ string) error {
 	return nil
 }
 
-func setupTest(t *testing.T, maxBody int64) (http.Handler, *mockRepo) {
+func setupTest(t *testing.T, cfg config.HTTP) (http.Handler, *mockRepo) {
 	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
 	repo := new(mockRepo{})
 
 	srv := service.NewService(logger, repo, &mockCache{})
 	h := NewHandler(logger, srv, 2*time.Second)
-	mux := NewMux(logger, h, maxBody)
-
-	return mux, repo
+	return bodyLimit(cfg.MaxBodyBytes)(NewMux(h)), repo
 }
 
 func TestGetProductByID(t *testing.T) {
-	mux, repo := setupTest(t, testMaxBodyBytes)
+	mux, repo := setupTest(t, testHTTPConfig)
 
 	tests := []struct {
 		name           string
@@ -123,7 +131,7 @@ func TestGetProductByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			req := httptest.NewRequestWithContext(t.Context(), "GET", "/product/"+tt.id, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/product/"+tt.id, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -132,11 +140,7 @@ func TestGetProductByID(t *testing.T) {
 			}
 
 			if tt.expectedStatus == http.StatusOK {
-				var p entity.Product
-				err := json.NewDecoder(resp.Body).Decode(&p)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				p := decodeJSON[entity.Product](t, resp.Body)
 				if p.ID != uuid.MustParse(tt.id) {
 					t.Errorf("got id %v, want %v", p.ID, tt.id)
 				}
@@ -144,11 +148,7 @@ func TestGetProductByID(t *testing.T) {
 					t.Errorf("got name %v, want %v", p.Name, "Car")
 				}
 			} else {
-				var e responseMessage
-				err := json.NewDecoder(resp.Body).Decode(&e)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				e := decodeJSON[messageResponse](t, resp.Body)
 				if e.Message != tt.expectedMsg {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
@@ -158,7 +158,7 @@ func TestGetProductByID(t *testing.T) {
 }
 
 func TestGetProducts(t *testing.T) {
-	mux, repo := setupTest(t, testMaxBodyBytes)
+	mux, repo := setupTest(t, testHTTPConfig)
 
 	tests := []struct {
 		name           string
@@ -270,7 +270,7 @@ func TestGetProducts(t *testing.T) {
 			if url == "" {
 				url = "/product"
 			}
-			req := httptest.NewRequestWithContext(t.Context(), "GET", url, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -279,20 +279,12 @@ func TestGetProducts(t *testing.T) {
 			}
 
 			if tt.expectedMsg != "" {
-				var e responseMessage
-				err := json.NewDecoder(resp.Body).Decode(&e)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				e := decodeJSON[messageResponse](t, resp.Body)
 				if e.Message != tt.expectedMsg {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
 			} else {
-				var products []entity.Product
-				err := json.NewDecoder(resp.Body).Decode(&products)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				products := decodeJSON[[]entity.Product](t, resp.Body)
 				if len(products) != len(tt.expectedNames) {
 					t.Fatalf("got len %d, want %d", len(products), len(tt.expectedNames))
 				}
@@ -307,7 +299,7 @@ func TestGetProducts(t *testing.T) {
 }
 
 func TestAddProduct(t *testing.T) {
-	mux, repo := setupTest(t, testMaxBodyBytes)
+	mux, repo := setupTest(t, testHTTPConfig)
 
 	tests := []struct {
 		name           string
@@ -357,7 +349,7 @@ func TestAddProduct(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			req := httptest.NewRequestWithContext(t.Context(), "POST", "/product", bytes.NewBuffer(b))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/product", bytes.NewReader(b))
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -366,11 +358,7 @@ func TestAddProduct(t *testing.T) {
 			}
 
 			if tt.expectedMsg != "" {
-				var e responseMessage
-				err := json.NewDecoder(resp.Body).Decode(&e)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				e := decodeJSON[messageResponse](t, resp.Body)
 				if e.Message != tt.expectedMsg {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
@@ -381,27 +369,26 @@ func TestAddProduct(t *testing.T) {
 
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
-	mux, _ := setupTest(t, limit)
+	cfg := testHTTPConfig
+	cfg.MaxBodyBytes = limit
+	mux, _ := setupTest(t, cfg)
 
 	body := []byte(`{"name":"a long enough name","price":1.0}`)
-	req := httptest.NewRequestWithContext(t.Context(), "POST", "/product", bytes.NewBuffer(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/product", bytes.NewReader(body))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
 
 	if resp.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("got status %d, want %d", resp.Code, http.StatusRequestEntityTooLarge)
 	}
-	var e responseMessage
-	if err := json.NewDecoder(resp.Body).Decode(&e); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
+	e := decodeJSON[messageResponse](t, resp.Body)
 	if !strings.Contains(e.Message, "request body too large") {
 		t.Errorf("got msg %q, want it to contain %q", e.Message, "request body too large")
 	}
 }
 
 func TestDeleteProduct(t *testing.T) {
-	mux, repo := setupTest(t, testMaxBodyBytes)
+	mux, repo := setupTest(t, testHTTPConfig)
 
 	tests := []struct {
 		name           string
@@ -436,7 +423,7 @@ func TestDeleteProduct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			req := httptest.NewRequestWithContext(t.Context(), "DELETE", "/product/"+tt.id, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/product/"+tt.id, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -445,11 +432,7 @@ func TestDeleteProduct(t *testing.T) {
 			}
 
 			if tt.expectedMsg != "" {
-				var e responseMessage
-				err := json.NewDecoder(resp.Body).Decode(&e)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				e := decodeJSON[messageResponse](t, resp.Body)
 				if e.Message != tt.expectedMsg {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
@@ -459,7 +442,7 @@ func TestDeleteProduct(t *testing.T) {
 }
 
 func TestUpdateProduct(t *testing.T) {
-	mux, repo := setupTest(t, testMaxBodyBytes)
+	mux, repo := setupTest(t, testHTTPConfig)
 
 	tests := []struct {
 		name           string
@@ -498,7 +481,7 @@ func TestUpdateProduct(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			req := httptest.NewRequestWithContext(t.Context(), "PUT", "/product/"+tt.id, bytes.NewBuffer(b))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/product/"+tt.id, bytes.NewReader(b))
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -507,11 +490,7 @@ func TestUpdateProduct(t *testing.T) {
 			}
 
 			if tt.expectedStatus == http.StatusOK {
-				var p entity.Product
-				err = json.NewDecoder(resp.Body).Decode(&p)
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				p := decodeJSON[entity.Product](t, resp.Body)
 				if p.Name != tt.expectedName {
 					t.Errorf("got name %q, want %q", p.Name, tt.expectedName)
 				}

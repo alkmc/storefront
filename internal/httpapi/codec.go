@@ -10,22 +10,23 @@ import (
 )
 
 const (
-	appJSON = "application/json"
+	MediaTypeJSON = "application/json"
 
 	msgEncodeFailed  = "error encoding data"
 	msgBodyTooLarge  = "request body too large"
 	msgEmptyBody     = "request body must not be empty"
 	msgMalformedJSON = "request body contains malformed JSON"
 	msgInvalidBody   = "invalid request body"
+	msgInternalError = "internal server error"
 )
 
-type errorResponse struct {
+type messageResponse struct {
 	Message string `json:"message"`
 }
 
 // respond replies to the request with the specified payload and HTTP code
 func respond(w http.ResponseWriter, httpCode int, payload any) {
-	w.Header().Set("Content-Type", appJSON)
+	w.Header().Set("Content-Type", MediaTypeJSON)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
 	w.WriteHeader(httpCode)
@@ -36,7 +37,7 @@ func respond(w http.ResponseWriter, httpCode int, payload any) {
 
 // respondError replies to the request with an error message and its HTTP code
 func respondError(w http.ResponseWriter, code int, msg string) {
-	respond(w, code, errorResponse{Message: msg})
+	respond(w, code, messageResponse{Message: msg})
 }
 
 // respondDecodeError responds to a decoder error

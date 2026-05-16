@@ -64,9 +64,9 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "product not found")
 			return
 		}
-		h.logger.Error("failed to find product by id",
-			slog.Any("error", err), slog.String("id", id.String()))
-		respondError(w, http.StatusInternalServerError, "internal server error")
+		h.internalError(w, "failed to find product by id",
+			slog.Any("error", err), slog.String("id", id.String()),
+		)
 		return
 	}
 	respond(w, http.StatusOK, toProductResponse(p))
@@ -90,8 +90,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	products, err := h.processor.FindAll(ctx, limit, offset)
 	if err != nil {
-		h.logger.Error("failed to find all products", slog.Any("error", err))
-		respondError(w, http.StatusInternalServerError, "failed to fetch products")
+		h.internalError(w, "failed to find all products", slog.Any("error", err))
 		return
 	}
 	respond(w, http.StatusOK, toProductsResponse(products))
@@ -121,8 +120,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.processor.Create(ctx, p)
 	if err != nil {
-		h.logger.Error("failed to create product", slog.Any("error", err))
-		respondError(w, http.StatusInternalServerError, "error saving the product")
+		h.internalError(w, "failed to create product", slog.Any("error", err))
 		return
 	}
 	respond(w, http.StatusCreated, toProductResponse(result))
@@ -143,12 +141,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
 		}
-		h.logger.Error("failed to delete product",
-			slog.Any("error", err), slog.String("id", id.String()))
-		respondError(w, http.StatusInternalServerError, "error deleting product")
+		h.internalError(w, "failed to delete product",
+			slog.Any("error", err), slog.String("id", id.String()),
+		)
 		return
 	}
-	respond(w, http.StatusOK, map[string]string{"message": "product deleted"})
+	respond(w, http.StatusOK, messageResponse{Message: "product deleted"})
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
@@ -184,12 +182,17 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 			return
 		}
-		h.logger.Error("failed to update product",
+		h.internalError(w, "failed to update product",
 			slog.Any("error", err), slog.String("id", id.String()))
-		respondError(w, http.StatusInternalServerError, "error updating product")
 		return
 	}
 	respond(w, http.StatusOK, toProductResponse(p))
+}
+
+// internalError logs the failure with attrs and replies with a generic 500.
+func (h *Handler) internalError(w http.ResponseWriter, msg string, attrs ...any) {
+	h.logger.Error(msg, attrs...)
+	respondError(w, http.StatusInternalServerError, msgInternalError)
 }
 
 func parseLimit(raw string) (int, error) {
