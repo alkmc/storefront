@@ -27,8 +27,6 @@ type messageResponse struct {
 // respond replies to the request with the specified payload and HTTP code
 func respond(w http.ResponseWriter, httpCode int, payload any) {
 	w.Header().Set("Content-Type", MediaTypeJSON)
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-
 	w.WriteHeader(httpCode)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
 		http.Error(w, msgEncodeFailed, http.StatusInternalServerError)

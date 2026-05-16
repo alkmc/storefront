@@ -62,7 +62,14 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
 	ih := httpapi.NewInternalHandler(repo, rCache)
 
-	mw, err := httpapi.NewMiddleware(logger, cfg.HTTP.CompressMinBytes, cfg.HTTP.MaxBodyBytes)
+	mw, err := httpapi.NewMiddleware(logger, httpapi.MiddlewareCfg{
+		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
+		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
+		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
+		CORSMaxAge:         cfg.HTTP.CORSMaxAge,
+		HSTSEnabled:        cfg.HTTP.HSTSEnabled,
+		HSTSMaxAge:         cfg.HTTP.HSTSMaxAge,
+	})
 	if err != nil {
 		return err
 	}

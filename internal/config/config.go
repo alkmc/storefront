@@ -29,6 +29,11 @@ type (
 
 		MaxBodyBytes     int64 `env:"HTTP_MAX_BODY_BYTES" envDefault:"1048576"` // 1 MiB
 		CompressMinBytes int   `env:"HTTP_COMPRESS_MIN_BYTES" envDefault:"1024"`
+
+		CORSAllowedOrigins []string `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
+		CORSMaxAge         int      `env:"CORS_MAX_AGE" envDefault:"600"`
+		HSTSEnabled        bool     `env:"HSTS_ENABLED" envDefault:"false"`
+		HSTSMaxAge         int      `env:"HSTS_MAX_AGE" envDefault:"31536000"`
 	}
 	Postgres struct {
 		Host            string        `env:"PG_HOST,required"`

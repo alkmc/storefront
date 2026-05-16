@@ -6,21 +6,53 @@ import (
 	"net/http"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"time"
 
+	"github.com/jub0bs/cors"
 	"github.com/klauspost/compress/gzhttp"
 )
 
-type Middleware = func(http.Handler) http.Handler
+type (
+	// MiddlewareCfg carries the transport-level knobs the middleware chain needs.
+	MiddlewareCfg struct {
+		MaxBodyBytes       int64
+		CompressMinBytes   int
+		CORSAllowedOrigins []string
+		CORSMaxAge         int
+		HSTSEnabled        bool
+		HSTSMaxAge         int
+	}
+	Middleware = func(http.Handler) http.Handler
+)
 
-// NewMiddleware builds the standard middleware chain
-func NewMiddleware(l *slog.Logger, compressMinBytes int, maxBodyBytes int64) (Middleware, error) {
-	compression, err := compress(compressMinBytes)
+// NewMiddleware builds the standard middleware chain.
+func NewMiddleware(l *slog.Logger, cfg MiddlewareCfg) (Middleware, error) {
+	compression, err := compress(cfg.CompressMinBytes)
 	if err != nil {
 		return nil, err
 	}
+	csrfMW, err := csrf(cfg.CORSAllowedOrigins)
+	if err != nil {
+		return nil, err
+	}
+	corsMW, err := corsMiddleware(cfg.CORSAllowedOrigins, cfg.CORSMaxAge)
+	if err != nil {
+		return nil, err
+	}
+	secHeaders := secureHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge)
+
 	return func(next http.Handler) http.Handler {
-		return chain(next, recoverer(l), logging(l), bodyLimit(maxBodyBytes), compression)
+		return chain(
+			next,
+			recoverer(l),
+			logging(l),
+			secHeaders,
+			corsMW,
+			csrfMW,
+			bodyLimit(cfg.MaxBodyBytes),
+			compression,
+		)
 	}, nil
 }
 
@@ -30,6 +62,56 @@ func chain(h http.Handler, mws ...Middleware) http.Handler {
 		h = mw(h)
 	}
 	return h
+}
+
+// secureHeaders sets baseline OWASP response headers on every response.
+func secureHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
+	var hsts string
+	if hstsEnabled {
+		hsts = "max-age=" + strconv.Itoa(hstsMaxAge) + "; includeSubDomains"
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := w.Header()
+			h.Set("X-Content-Type-Options", "nosniff")
+			h.Set("Content-Security-Policy", "frame-ancestors 'none'")
+			if hsts != "" {
+				h.Set("Strict-Transport-Security", hsts)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// corsMiddleware enforces an origin allowlist. Empty list disables CORS entirely.
+func corsMiddleware(origins []string, maxAge int) (Middleware, error) {
+	if len(origins) == 0 {
+		return func(next http.Handler) http.Handler { return next }, nil
+	}
+	m, err := cors.NewMiddleware(cors.Config{
+		Origins:         origins,
+		Methods:         []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
+		RequestHeaders:  []string{"Content-Type"},
+		MaxAgeInSeconds: maxAge,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("cors: %w", err)
+	}
+	return m.Wrap, nil
+}
+
+// csrf rejects cross-origin state-changing requests.
+func csrf(trustedOrigins []string) (Middleware, error) {
+	cop := http.NewCrossOriginProtection()
+	for _, o := range trustedOrigins {
+		if err := cop.AddTrustedOrigin(o); err != nil {
+			return nil, fmt.Errorf("csrf trusted origin %q: %w", o, err)
+		}
+	}
+	cop.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		respondError(w, http.StatusForbidden, "cross-origin request rejected")
+	}))
+	return cop.Handler, nil
 }
 
 // bodyLimit caps the request body size for methods that carry one.
@@ -46,6 +128,7 @@ func bodyLimit(maxBytes int64) Middleware {
 	}
 }
 
+// compress applies zstd/gzip to JSON responses larger than minBytes
 func compress(minBytes int) (Middleware, error) {
 	wrap, err := gzhttp.NewWrapper(
 		gzhttp.MinSize(minBytes),
@@ -67,7 +150,8 @@ func logging(logger *slog.Logger) Middleware {
 			start := time.Now()
 			rec := new(statusRecorder{ResponseWriter: w, status: http.StatusOK})
 			defer func() {
-				logger.Info("http request",
+				logger.Info(
+					"http request",
 					slog.String("method", r.Method),
 					slog.String("path", r.URL.Path),
 					slog.Int("status", rec.status),
@@ -85,7 +169,8 @@ func recoverer(logger *slog.Logger) Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			defer func() {
 				if err := recover(); err != nil {
-					logger.Error("panic recovered",
+					logger.Error(
+						"panic recovered",
 						slog.Any("error", err),
 						slog.String("method", r.Method),
 						slog.String("path", r.URL.Path),

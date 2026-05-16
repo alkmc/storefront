@@ -1,4 +1,4 @@
-.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check tools docker-build up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify tools docker-build up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/server ./cmd/migrate
@@ -32,6 +32,9 @@ lint:
 
 check:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.3.0 ./...
+
+verify:
+	go mod verify
 
 tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
