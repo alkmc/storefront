@@ -16,10 +16,13 @@ linters:
     - contextcheck
     - durationcheck
     - errorlint
+    - fatcontext
     - forbidigo
     - gosec
     - gocritic
     - lll
+    - makezero
+    - modernize
     - nilnesserr
     - nilnil
     - noctx
