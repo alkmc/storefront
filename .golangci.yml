@@ -17,9 +17,11 @@ linters:
     - durationcheck
     - errorlint
     - fatcontext
+    - forcetypeassert
     - forbidigo
     - gosec
     - gocritic
+    - iface
     - lll
     - makezero
     - modernize
