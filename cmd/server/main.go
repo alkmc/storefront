@@ -22,7 +22,7 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
 
