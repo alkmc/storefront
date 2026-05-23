@@ -322,14 +322,14 @@ func TestAddProduct(t *testing.T) {
 			name:           "extra field",
 			body:           map[string]any{"name": "Car", "price": 1.23, "email": "a@a.com"},
 			setupMock:      func() {},
-			expectedStatus: http.StatusUnprocessableEntity,
+			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "unknown field \"email\"",
 		},
 		{
 			name:           "client supplied id rejected",
 			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Car", "price": 1.23},
 			setupMock:      func() {},
-			expectedStatus: http.StatusUnprocessableEntity,
+			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "unknown field \"id\"",
 		},
 		{
@@ -469,7 +469,7 @@ func TestUpdateProduct(t *testing.T) {
 			id:             uuid.Must(uuid.NewV7()).String(),
 			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Updated", "price": 99.9},
 			setupMock:      func() {},
-			expectedStatus: http.StatusUnprocessableEntity,
+			expectedStatus: http.StatusBadRequest,
 		},
 	}
 

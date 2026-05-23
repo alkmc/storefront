@@ -57,19 +57,19 @@ func mapDecodeError(err error) (msg string, status int) {
 		return fmt.Sprintf("%s: max %d bytes", msgBodyTooLarge, mbe.Limit), http.StatusRequestEntityTooLarge
 	}
 	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
-		return msgMalformedJSON, http.StatusUnprocessableEntity
+		return msgMalformedJSON, http.StatusBadRequest
 	}
 	if errors.Is(err, io.ErrUnexpectedEOF) {
-		return msgMalformedJSON, http.StatusUnprocessableEntity
+		return msgMalformedJSON, http.StatusBadRequest
 	}
 	if ute, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
-		return fmt.Sprintf("invalid value for the %q field", ute.Field), http.StatusUnprocessableEntity
+		return fmt.Sprintf("invalid value for the %q field", ute.Field), http.StatusBadRequest
 	}
 	if strings.HasPrefix(err.Error(), "json: unknown field ") {
-		return strings.TrimPrefix(err.Error(), "json: "), http.StatusUnprocessableEntity
+		return strings.TrimPrefix(err.Error(), "json: "), http.StatusBadRequest
 	}
 	if errors.Is(err, io.EOF) {
 		return msgEmptyBody, http.StatusBadRequest
 	}
-	return msgInvalidBody, http.StatusUnprocessableEntity
+	return msgInvalidBody, http.StatusBadRequest
 }
