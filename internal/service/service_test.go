@@ -3,7 +3,11 @@ package service
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
@@ -25,7 +29,7 @@ func (mockCache) Invalidate(_ context.Context, _ string) error {
 }
 
 func newTestService(repo repository) *Service {
-	return NewService(slog.New(slog.DiscardHandler), repo, mockCache{})
+	return NewService(slog.New(slog.DiscardHandler), repo, mockCache{}, time.Second)
 }
 
 type MockRepository struct {
@@ -147,6 +151,55 @@ func TestService_FindByID(t *testing.T) {
 					t.Errorf("got %v, want %v", res.ID, tt.id)
 				}
 			}
+		})
+	}
+}
+
+func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
+	tests := []struct {
+		name         string
+		callers      int
+		wantRepoHits int32
+	}{
+		{
+			name:         "all concurrent callers share one repo load",
+			callers:      100,
+			wantRepoHits: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				id := uuid.Must(uuid.NewV7())
+
+				var repoCalls atomic.Int32
+				release := make(chan struct{})
+				mockRepo := &MockRepository{
+					FindByIDFn: func(_ context.Context, id uuid.UUID) (entity.Product, error) {
+						repoCalls.Add(1)
+						<-release
+						return entity.Product{ID: id}, nil
+					},
+				}
+				srv := newTestService(mockRepo)
+
+				var wg sync.WaitGroup
+				for range tt.callers {
+					wg.Go(func() {
+						if _, err := srv.FindByID(t.Context(), id); err != nil {
+							t.Errorf("unexpected error: %v", err)
+						}
+					})
+				}
+				synctest.Wait()
+				close(release)
+				wg.Wait()
+
+				if got := repoCalls.Load(); got != tt.wantRepoHits {
+					t.Errorf("got %d repo calls, want %d", got, tt.wantRepoHits)
+				}
+			})
 		})
 	}
 }

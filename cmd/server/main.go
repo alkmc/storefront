@@ -58,7 +58,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		rCache.Close()
 		logger.Info("connection to redis closed")
 	}()
-	srv := service.NewService(logger, repo, rCache)
+	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
 	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
 	ih := httpapi.NewInternalHandler(repo, rCache)
 

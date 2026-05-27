@@ -15,7 +15,11 @@ type (
 		HTTP     HTTP
 		Postgres Postgres
 		Redis    Redis
+		Service  Service
 		Log      Log
+	}
+	Service struct {
+		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`
 	}
 	HTTP struct {
 		Host            string        `env:"HTTP_HOST"`

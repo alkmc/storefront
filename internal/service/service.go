@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/alkmc/restClean/internal/cache"
 	"github.com/alkmc/restClean/internal/entity"
 	"github.com/google/uuid"
+	"golang.org/x/sync/singleflight"
 )
 
 type (
@@ -27,15 +29,19 @@ type (
 	}
 
 	Service struct {
-		logger *slog.Logger
-		repo   repository
-		cache  cacher
+		logger      *slog.Logger
+		repo        repository
+		cache       cacher
+		loadGroup   singleflight.Group
+		loadTimeout time.Duration
 	}
 )
 
 // NewService initializes the business logic layer backed by the provided repository and cache.
-func NewService(l *slog.Logger, r repository, c cacher) *Service {
-	return new(Service{logger: l, repo: r, cache: c})
+// loadTimeout caps a single repo+cache.Set roundtrip after the caller's context is detached
+// via context.WithoutCancel inside loadProduct.
+func NewService(l *slog.Logger, r repository, c cacher, loadTimeout time.Duration) *Service {
+	return new(Service{logger: l, repo: r, cache: c, loadTimeout: loadTimeout})
 }
 
 func (s *Service) Create(ctx context.Context, p entity.Product) (entity.Product, error) {
@@ -48,8 +54,9 @@ func (s *Service) Create(ctx context.Context, p entity.Product) (entity.Product,
 	if err != nil {
 		return entity.Product{}, err
 	}
-	if err := s.cache.Set(ctx, saved.ID.String(), saved); err != nil {
-		s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", saved.ID.String()))
+	key := saved.ID.String()
+	if err := s.cache.Set(ctx, key, saved); err != nil {
+		s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
 	}
 	return saved, nil
 }
@@ -63,13 +70,31 @@ func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (entity.Product, e
 	if !errors.Is(err, cache.ErrCacheMiss) {
 		s.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", key))
 	}
+	return s.loadProduct(ctx, id)
+}
 
-	p, err := s.repo.FindByID(ctx, id)
+// loadProduct coalesces concurrent misses for id into a single DB load via singleflight.
+func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (entity.Product, error) {
+	key := id.String()
+	v, err, _ := s.loadGroup.Do(key, func() (any, error) {
+		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
+		defer cancel()
+
+		p, err := s.repo.FindByID(loadCtx, id)
+		if err != nil {
+			return entity.Product{}, err
+		}
+		if err := s.cache.Set(loadCtx, key, p); err != nil {
+			s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
+		}
+		return p, nil
+	})
 	if err != nil {
 		return entity.Product{}, err
 	}
-	if err := s.cache.Set(ctx, key, p); err != nil {
-		s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
+	p, ok := v.(entity.Product)
+	if !ok {
+		return entity.Product{}, fmt.Errorf("singleflight: unexpected result type %T", v)
 	}
 	return p, nil
 }
