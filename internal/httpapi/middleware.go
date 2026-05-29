@@ -27,7 +27,7 @@ type (
 )
 
 // NewMiddleware builds the standard middleware chain.
-func NewMiddleware(l *slog.Logger, cfg MiddlewareCfg) (Middleware, error) {
+func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
 	compression, err := compress(cfg.CompressMinBytes)
 	if err != nil {
 		return nil, err
@@ -40,14 +40,13 @@ func NewMiddleware(l *slog.Logger, cfg MiddlewareCfg) (Middleware, error) {
 	if err != nil {
 		return nil, err
 	}
-	secHeaders := secureHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge)
 
 	return func(next http.Handler) http.Handler {
 		return chain(
 			next,
-			recoverer(l),
-			logging(l),
-			secHeaders,
+			recoverer,
+			logging,
+			secureHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge),
 			corsMW,
 			csrfMW,
 			bodyLimit(cfg.MaxBodyBytes),
@@ -62,6 +61,43 @@ func chain(h http.Handler, mws ...Middleware) http.Handler {
 		h = mw(h)
 	}
 	return h
+}
+
+// logging logs method, path, status, and request duration.
+func logging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := new(statusRecorder{ResponseWriter: w, status: http.StatusOK})
+		defer func() {
+			slog.Default().Info(
+				"http request",
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.Int("status", rec.status),
+				slog.Duration("duration", time.Since(start)),
+			)
+		}()
+		next.ServeHTTP(rec, r)
+	})
+}
+
+// recoverer catches panics and prevents the server from crashing
+func recoverer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				slog.Default().Error(
+					"panic recovered",
+					slog.Any("error", err),
+					slog.String("method", r.Method),
+					slog.String("path", r.URL.Path),
+					slog.String("stack", string(debug.Stack())),
+				)
+				respondError(w, http.StatusInternalServerError, msgInternalError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // secureHeaders sets baseline OWASP response headers on every response.
@@ -141,47 +177,6 @@ func compress(minBytes int) (Middleware, error) {
 	return func(next http.Handler) http.Handler {
 		return wrap(next)
 	}, nil
-}
-
-// logging logs method, path, status, and request duration.
-func logging(logger *slog.Logger) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			start := time.Now()
-			rec := new(statusRecorder{ResponseWriter: w, status: http.StatusOK})
-			defer func() {
-				logger.Info(
-					"http request",
-					slog.String("method", r.Method),
-					slog.String("path", r.URL.Path),
-					slog.Int("status", rec.status),
-					slog.Duration("duration", time.Since(start)),
-				)
-			}()
-			next.ServeHTTP(rec, r)
-		})
-	}
-}
-
-// recoverer catches panics and prevents the server from crashing
-func recoverer(logger *slog.Logger) Middleware {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			defer func() {
-				if err := recover(); err != nil {
-					logger.Error(
-						"panic recovered",
-						slog.Any("error", err),
-						slog.String("method", r.Method),
-						slog.String("path", r.URL.Path),
-						slog.String("stack", string(debug.Stack())),
-					)
-					respondError(w, http.StatusInternalServerError, msgInternalError)
-				}
-			}()
-			next.ServeHTTP(w, r)
-		})
-	}
 }
 
 type statusRecorder struct {

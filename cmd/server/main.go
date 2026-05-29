@@ -62,7 +62,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
 	ih := httpapi.NewInternalHandler(repo, rCache)
 
-	mw, err := httpapi.NewMiddleware(logger, httpapi.MiddlewareCfg{
+	mw, err := httpapi.NewMiddleware(httpapi.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
 		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
 		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
