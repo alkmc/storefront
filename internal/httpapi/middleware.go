@@ -44,8 +44,8 @@ func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
 	return func(next http.Handler) http.Handler {
 		return chain(
 			next,
-			recoverer,
 			logging,
+			recoverer,
 			secureHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge),
 			corsMW,
 			csrfMW,
