@@ -28,7 +28,8 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	dbUser := "testuser"
 	dbPassword := "testpassword"
 
-	pgContainer, err := postgres.Run(ctx,
+	pgContainer, err := postgres.Run(
+		ctx,
 		"postgres:18",
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
@@ -36,7 +37,8 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(10*time.Second)),
+				WithStartupTimeout(10*time.Second),
+		),
 	)
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
@@ -119,13 +121,13 @@ func TestRepository_Save(t *testing.T) {
 		},
 	}
 
-	preExistingProductID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx,
-		entity.Product{ID: preExistingProductID, Name: "Boat", Price: 10.0},
+	seededID := uuid.Must(uuid.NewV7())
+	if _, err := repo.Save(
+		ctx, entity.Product{ID: seededID, Name: "Boat", Price: 10.0},
 	); err != nil {
 		t.Fatalf("failed to save setup product: %v", err)
 	}
-	tests[2].product.ID = preExistingProductID
+	tests[2].product.ID = seededID
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

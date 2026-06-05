@@ -64,7 +64,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "product not found")
 			return
 		}
-		h.internalError(w, "failed to find product by id",
+		h.internalError(
+			w, "failed to find product by id",
 			slog.Any("error", err), slog.String("id", id.String()),
 		)
 		return
@@ -141,7 +142,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
 		}
-		h.internalError(w, "failed to delete product",
+		h.internalError(
+			w, "failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()),
 		)
 		return

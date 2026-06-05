@@ -19,7 +19,7 @@ testcontainers-race:
 	go test -race -tags integration ./internal/repository
 
 fmt:
-	go fmt ./...
+	gofumpt -l -w .
 
 vet:
 	go vet ./...

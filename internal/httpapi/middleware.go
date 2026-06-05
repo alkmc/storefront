@@ -122,7 +122,9 @@ func secureHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
 // corsMiddleware enforces an origin allowlist. Empty list disables CORS entirely.
 func corsMiddleware(origins []string, maxAge int) (Middleware, error) {
 	if len(origins) == 0 {
-		return func(next http.Handler) http.Handler { return next }, nil
+		return func(next http.Handler) http.Handler {
+			return next
+		}, nil
 	}
 	m, err := cors.NewMiddleware(cors.Config{
 		Origins:         origins,
