@@ -102,13 +102,13 @@ func TestService_Create(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if res.Name != tt.product.Name {
-					t.Errorf("got %v, want %v", res.Name, tt.product.Name)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if res.Name != tt.product.Name {
+				t.Errorf("got %v, want %v", res.Name, tt.product.Name)
 			}
 		})
 	}
@@ -147,13 +147,13 @@ func TestService_FindByID(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if res.ID != tt.id {
-					t.Errorf("got %v, want %v", res.ID, tt.id)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if res.ID != tt.id {
+				t.Errorf("got %v, want %v", res.ID, tt.id)
 			}
 		})
 	}
@@ -240,13 +240,13 @@ func TestService_FindAll(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
-				if len(res) != tt.wantLen {
-					t.Errorf("got length %d, want %d", len(res), tt.wantLen)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(res) != tt.wantLen {
+				t.Errorf("got length %d, want %d", len(res), tt.wantLen)
 			}
 		})
 	}
@@ -284,10 +284,10 @@ func TestService_Update(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}
@@ -326,10 +326,10 @@ func TestService_Delete(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error")
 				}
-			} else {
-				if err != nil {
-					t.Fatalf("unexpected error: %v", err)
-				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
 			}
 		})
 	}

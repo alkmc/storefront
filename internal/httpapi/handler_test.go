@@ -145,11 +145,11 @@ func TestGetProductByID(t *testing.T) {
 				if p.Price.MinorAmount != 123 || p.Price.Currency != entity.CurrencyPLN {
 					t.Errorf("got price %+v, want 123 PLN", p.Price)
 				}
-			} else {
-				e := decodeJSON[messageResponse](t, resp.Body)
-				if e.Message != tt.expectedMsg {
-					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
-				}
+				return
+			}
+			e := decodeJSON[messageResponse](t, resp.Body)
+			if e.Message != tt.expectedMsg {
+				t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 			}
 		})
 	}
@@ -281,15 +281,15 @@ func TestGetProducts(t *testing.T) {
 				if e.Message != tt.expectedMsg {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
-			} else {
-				products := decodeJSON[[]productResponse](t, resp.Body)
-				if len(products) != len(tt.expectedNames) {
-					t.Fatalf("got len %d, want %d", len(products), len(tt.expectedNames))
-				}
-				for i, name := range tt.expectedNames {
-					if products[i].Name != name {
-						t.Errorf("got name %q, want %q", products[i].Name, name)
-					}
+				return
+			}
+			products := decodeJSON[[]productResponse](t, resp.Body)
+			if len(products) != len(tt.expectedNames) {
+				t.Fatalf("got len %d, want %d", len(products), len(tt.expectedNames))
+			}
+			for i, name := range tt.expectedNames {
+				if products[i].Name != name {
+					t.Errorf("got name %q, want %q", products[i].Name, name)
 				}
 			}
 		})
