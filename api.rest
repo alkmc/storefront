@@ -12,7 +12,10 @@ Content-Type: {{json}}
 
 {
     "name": "product",
-    "price": 0.09
+    "price": {
+        "minorAmount": 9,
+        "currency": "PLN"
+    }
 }
 
 @prodID = {{newproduct.response.body.$.id}}
@@ -32,7 +35,10 @@ Content-Type: {{json}}
 
 {   
     "name": "t-shirt2",
-    "price": 20.06
+    "price": {
+        "minorAmount": 2006,
+        "currency": "PLN"
+    }
 }
 
 ### DELETE PRODUCT
@@ -66,6 +72,9 @@ Content-Type: {{json}}
 
 {   
     "email": 234,
-    "price": 123,
+    "price": {
+        "minorAmount": 123,
+        "currency": "PLN"
+    },
     "name": "abc"
 }

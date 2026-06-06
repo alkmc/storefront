@@ -94,6 +94,10 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	return repo, cleanup
 }
 
+func testMoney(amount int64) entity.Money {
+	return entity.Money{MinorAmount: amount, Currency: entity.CurrencyPLN}
+}
+
 func TestRepository_Save(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
@@ -106,28 +110,37 @@ func TestRepository_Save(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: 10.5},
+			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: testMoney(1050)},
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: -5.0},
+			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: testMoney(-500)},
+			wantErr: true,
+		},
+		{
+			name: "invalid currency - fails check constraint",
+			product: entity.Product{
+				ID:    uuid.Must(uuid.NewV7()),
+				Name:  "Bike",
+				Price: entity.Money{MinorAmount: 500, Currency: entity.Currency("XXX")},
+			},
 			wantErr: true,
 		},
 		{
 			name:    "duplicate id",
-			product: entity.Product{ID: uuid.Nil, Name: "Plane", Price: 100.0},
+			product: entity.Product{ID: uuid.Nil, Name: "Plane", Price: testMoney(10000)},
 			wantErr: true,
 		},
 	}
 
 	seededID := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, entity.Product{ID: seededID, Name: "Boat", Price: 10.0},
+		ctx, entity.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
 	); err != nil {
 		t.Fatalf("failed to save setup product: %v", err)
 	}
-	tests[2].product.ID = seededID
+	tests[3].product.ID = seededID
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -151,7 +164,7 @@ func TestRepository_FindByID(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "Car", Price: 10.5}); err != nil {
+	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "Car", Price: testMoney(1050)}); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 
@@ -204,11 +217,11 @@ func TestRepository_FindAll(t *testing.T) {
 		t.Errorf("expected 0 products, got %d", len(res))
 	}
 
-	p1 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: 1.0}
+	p1 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
 	if _, err := repo.Save(ctx, p1); err != nil {
 		t.Fatalf("failed to save product 1: %v", err)
 	}
-	p2 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: 2.0}
+	p2 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: testMoney(200)}
 	if _, err := repo.Save(ctx, p2); err != nil {
 		t.Fatalf("failed to save product 2: %v", err)
 	}
@@ -228,7 +241,7 @@ func TestRepository_Update(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "OldName", Price: 10.0}); err != nil {
+	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "OldName", Price: testMoney(1000)}); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 
@@ -240,17 +253,17 @@ func TestRepository_Update(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: entity.Product{ID: id, Name: "NewName", Price: 20.0},
+			product: entity.Product{ID: id, Name: "NewName", Price: testMoney(2000)},
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: entity.Product{ID: id, Name: "NewName", Price: -1.0},
+			product: entity.Product{ID: id, Name: "NewName", Price: testMoney(-100)},
 			wantErr: true,
 		},
 		{
 			name:      "non-existing product returns ErrNotFound",
-			product:   entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Ghost", Price: 1.0},
+			product:   entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Ghost", Price: testMoney(100)},
 			wantErr:   true,
 			wantErrIs: entity.ErrNotFound,
 		},
@@ -288,7 +301,7 @@ func TestRepository_Delete(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "ToDelete", Price: 10.0}); err != nil {
+	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)}); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 

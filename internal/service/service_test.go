@@ -32,6 +32,10 @@ func newTestService(repo repository) *Service {
 	return NewService(slog.New(slog.DiscardHandler), repo, mockCache{}, time.Second)
 }
 
+func testMoney(amount int64) entity.Money {
+	return entity.Money{MinorAmount: amount, Currency: entity.CurrencyPLN}
+}
+
 type MockRepository struct {
 	SaveFn     func(ctx context.Context, p entity.Product) (entity.Product, error)
 	FindByIDFn func(ctx context.Context, id uuid.UUID) (entity.Product, error)
@@ -77,7 +81,7 @@ func TestService_Create(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: entity.Product{Name: "Test", Price: 10.0},
+			product: entity.Product{Name: "Test", Price: testMoney(1000)},
 			mockSetup: func(m *MockRepository) {
 				m.SaveFn = func(_ context.Context, p entity.Product) (entity.Product, error) {
 					return p, nil
@@ -179,7 +183,7 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 					FindByIDFn: func(_ context.Context, id uuid.UUID) (entity.Product, error) {
 						repoCalls.Add(1)
 						<-release
-						return entity.Product{ID: id}, nil
+						return entity.Product{ID: id, Price: testMoney(100)}, nil
 					},
 				}
 				srv := newTestService(mockRepo)
@@ -217,7 +221,7 @@ func TestService_FindAll(t *testing.T) {
 			name: "success",
 			mockSetup: func(m *MockRepository) {
 				m.FindAllFn = func(_ context.Context, _, _ int) ([]entity.Product, error) {
-					return []entity.Product{{Name: "P1"}, {Name: "P2"}}, nil
+					return []entity.Product{{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)}}, nil
 				}
 			},
 			wantLen: 2,
@@ -259,7 +263,7 @@ func TestService_Update(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: entity.Product{Name: "Update"},
+			product: entity.Product{Name: "Update", Price: testMoney(1000)},
 			mockSetup: func(m *MockRepository) {
 				m.UpdateFn = func(_ context.Context, _ entity.Product) error {
 					return nil

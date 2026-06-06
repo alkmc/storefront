@@ -22,6 +22,18 @@ var testHTTPConfig = config.HTTP{
 	CompressMinBytes: 1024,
 }
 
+func testMoney(amount int64) entity.Money {
+	return entity.Money{MinorAmount: amount, Currency: entity.CurrencyPLN}
+}
+
+func testMoneyInput(amount int64) moneyInput {
+	return moneyInput{MinorAmount: amount, Currency: entity.CurrencyPLN}
+}
+
+func testMoneyJSON(amount int64) map[string]any {
+	return map[string]any{"minorAmount": amount, "currency": string(entity.CurrencyPLN)}
+}
+
 func decodeJSON[T any](t *testing.T, r io.Reader) T {
 	t.Helper()
 	var v T
@@ -86,7 +98,7 @@ func TestGetProductByID(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
 				proc.findByID = func(_ context.Context, id uuid.UUID) (entity.Product, error) {
-					return entity.Product{ID: id, Name: "Car", Price: 1.23}, nil
+					return entity.Product{ID: id, Name: "Car", Price: testMoney(123)}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -123,12 +135,15 @@ func TestGetProductByID(t *testing.T) {
 			}
 
 			if tt.expectedStatus == http.StatusOK {
-				p := decodeJSON[entity.Product](t, resp.Body)
+				p := decodeJSON[productResponse](t, resp.Body)
 				if p.ID != uuid.MustParse(tt.id) {
 					t.Errorf("got id %v, want %v", p.ID, tt.id)
 				}
 				if p.Name != "Car" {
 					t.Errorf("got name %v, want %v", p.Name, "Car")
+				}
+				if p.Price.MinorAmount != 123 || p.Price.Currency != entity.CurrencyPLN {
+					t.Errorf("got price %+v, want 123 PLN", p.Price)
 				}
 			} else {
 				e := decodeJSON[messageResponse](t, resp.Body)
@@ -168,7 +183,7 @@ func TestGetProducts(t *testing.T) {
 					if limit != 50 || offset != 0 {
 						t.Errorf("got limit=%d offset=%d, want 50/0", limit, offset)
 					}
-					return []entity.Product{{Name: "Car", Price: 1.23}}, nil
+					return []entity.Product{{Name: "Car", Price: testMoney(123)}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -182,7 +197,7 @@ func TestGetProducts(t *testing.T) {
 					if limit != 10 || offset != 5 {
 						t.Errorf("got limit=%d offset=%d, want 10/5", limit, offset)
 					}
-					return []entity.Product{{Name: "Car", Price: 1.23}}, nil
+					return []entity.Product{{Name: "Car", Price: testMoney(123)}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -267,7 +282,7 @@ func TestGetProducts(t *testing.T) {
 					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 				}
 			} else {
-				products := decodeJSON[[]entity.Product](t, resp.Body)
+				products := decodeJSON[[]productResponse](t, resp.Body)
 				if len(products) != len(tt.expectedNames) {
 					t.Fatalf("got len %d, want %d", len(products), len(tt.expectedNames))
 				}
@@ -293,7 +308,7 @@ func TestAddProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			body: productInput{Name: "Car", Price: 1.23},
+			body: productInput{Name: "Car", Price: testMoneyInput(123)},
 			setupMock: func() {
 				proc.create = func(_ context.Context, p entity.Product) (entity.Product, error) {
 					return p, nil
@@ -303,24 +318,38 @@ func TestAddProduct(t *testing.T) {
 		},
 		{
 			name:           "extra field",
-			body:           map[string]any{"name": "Car", "price": 1.23, "email": "a@a.com"},
+			body:           map[string]any{"name": "Car", "price": testMoneyJSON(123), "email": "a@a.com"},
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "unknown field \"email\"",
 		},
 		{
-			name:           "client supplied id rejected",
-			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Car", "price": 1.23},
+			name: "client supplied id rejected",
+			body: map[string]any{
+				"id":    uuid.Must(uuid.NewV7()).String(),
+				"name":  "Car",
+				"price": testMoneyJSON(123),
+			},
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "unknown field \"id\"",
 		},
 		{
 			name:           "negative price",
-			body:           productInput{Name: "Car", Price: -1.0},
+			body:           productInput{Name: "Car", Price: testMoneyInput(-1)},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "the product price must be positive",
+		},
+		{
+			name: "invalid currency",
+			body: productInput{
+				Name:  "Car",
+				Price: moneyInput{MinorAmount: 123, Currency: entity.Currency("XXX")},
+			},
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    "the product currency is invalid",
 		},
 	}
 
@@ -356,7 +385,7 @@ func TestAddProductBodyTooLarge(t *testing.T) {
 	cfg.MaxBodyBytes = limit
 	mux, _ := setupTest(t, cfg)
 
-	body := []byte(`{"name":"a long enough name","price":1.0}`)
+	body := []byte(`{"name":"a long enough name","price":{"minorAmount":100,"currency":"PLN"}}`)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/product", bytes.NewReader(body))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
@@ -438,7 +467,7 @@ func TestUpdateProduct(t *testing.T) {
 		{
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
-			body: productInput{Name: "Updated", Price: 99.9},
+			body: productInput{Name: "Updated", Price: testMoneyInput(9990)},
 			setupMock: func() {
 				proc.update = func(_ context.Context, _ entity.Product) error {
 					return nil
@@ -448,9 +477,13 @@ func TestUpdateProduct(t *testing.T) {
 			expectedName:   "Updated",
 		},
 		{
-			name:           "client supplied id rejected",
-			id:             uuid.Must(uuid.NewV7()).String(),
-			body:           map[string]any{"id": uuid.Must(uuid.NewV7()).String(), "name": "Updated", "price": 99.9},
+			name: "client supplied id rejected",
+			id:   uuid.Must(uuid.NewV7()).String(),
+			body: map[string]any{
+				"id":    uuid.Must(uuid.NewV7()).String(),
+				"name":  "Updated",
+				"price": testMoneyJSON(9990),
+			},
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 		},
@@ -473,7 +506,7 @@ func TestUpdateProduct(t *testing.T) {
 			}
 
 			if tt.expectedStatus == http.StatusOK {
-				p := decodeJSON[entity.Product](t, resp.Body)
+				p := decodeJSON[productResponse](t, resp.Body)
 				if p.Name != tt.expectedName {
 					t.Errorf("got name %q, want %q", p.Name, tt.expectedName)
 				}

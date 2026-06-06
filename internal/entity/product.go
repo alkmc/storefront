@@ -13,7 +13,7 @@ var ErrNotFound = errors.New("entity: not found")
 type Product struct {
 	ID    uuid.UUID
 	Name  string
-	Price float64
+	Price Money
 }
 
 // Validate ensures the product meets basic business rules before processing
@@ -21,8 +21,8 @@ func (p *Product) Validate() error {
 	if p.Name == "" {
 		return errors.New("the product name is empty")
 	}
-	if p.Price <= 0 {
-		return errors.New("the product price must be positive")
+	if err := p.Price.Validate(); err != nil {
+		return err
 	}
 	return nil
 }

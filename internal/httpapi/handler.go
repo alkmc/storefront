@@ -33,9 +33,14 @@ type (
 		requestTimeout time.Duration
 	}
 
+	moneyInput struct {
+		MinorAmount int64           `json:"minorAmount"`
+		Currency    entity.Currency `json:"currency"`
+	}
+
 	productInput struct {
-		Name  string  `json:"name"`
-		Price float64 `json:"price"`
+		Name  string     `json:"name"`
+		Price moneyInput `json:"price"`
 	}
 )
 
@@ -110,7 +115,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := entity.Product{Name: in.Name, Price: in.Price}
+	p := entity.Product{Name: in.Name, Price: toMoney(in.Price)}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -170,7 +175,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := entity.Product{ID: id, Name: in.Name, Price: in.Price}
+	p := entity.Product{ID: id, Name: in.Name, Price: toMoney(in.Price)}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return

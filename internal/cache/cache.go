@@ -18,9 +18,14 @@ var ErrCacheMiss = errors.New("cache: key not found")
 
 // cacheEntry is the JSON shape stored in Redis, decoupled from entity.Product.
 type cacheEntry struct {
-	ID    string  `json:"id"`
-	Name  string  `json:"name"`
-	Price float64 `json:"price"`
+	ID    string     `json:"id"`
+	Name  string     `json:"name"`
+	Price moneyEntry `json:"price"`
+}
+
+type moneyEntry struct {
+	MinorAmount int64           `json:"minorAmount"`
+	Currency    entity.Currency `json:"currency"`
 }
 
 type RedisCache struct {
@@ -49,9 +54,12 @@ func NewRedis(ctx context.Context, cfg config.Redis) (*RedisCache, error) {
 
 func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) error {
 	data, err := json.Marshal(cacheEntry{
-		ID:    value.ID.String(),
-		Name:  value.Name,
-		Price: value.Price,
+		ID:   value.ID.String(),
+		Name: value.Name,
+		Price: moneyEntry{
+			MinorAmount: value.Price.MinorAmount,
+			Currency:    value.Price.Currency,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
@@ -82,7 +90,14 @@ func (r *RedisCache) Get(ctx context.Context, key string) (entity.Product, error
 	if err != nil {
 		return entity.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
 	}
-	return entity.Product{ID: id, Name: e.Name, Price: e.Price}, nil
+	return entity.Product{
+		ID:   id,
+		Name: e.Name,
+		Price: entity.Money{
+			MinorAmount: e.Price.MinorAmount,
+			Currency:    e.Price.Currency,
+		},
+	}, nil
 }
 
 func (r *RedisCache) Invalidate(ctx context.Context, key string) error {

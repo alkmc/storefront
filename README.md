@@ -40,7 +40,7 @@ All available variables with their defaults are documented in `.env.example`.
 # create a product
 curl -s -X POST http://localhost:7000/product \
   -H 'Content-Type: application/json' \
-  -d '{"name":"widget","price":9.99}'
+  -d '{"name":"widget","price":{"minorAmount":999,"currency":"PLN"}}'
 
 # get a product by id
 curl -s http://localhost:7000/product/{id}
