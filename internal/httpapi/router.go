@@ -6,7 +6,7 @@ import (
 )
 
 // NewMux initializes new ServeMux and registers routes.
-func NewMux(h *Handler) http.Handler {
+func NewMux(h *Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /product", h.Add)
 	mux.HandleFunc("PUT /product/{id}", h.Update)
@@ -18,7 +18,7 @@ func NewMux(h *Handler) http.Handler {
 }
 
 // NewInternalMux returns a mux for the internal-only port.
-func NewInternalMux(hh *InternalHandler) http.Handler {
+func NewInternalMux(hh *InternalHandler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", hh.Healthz)
 	mux.HandleFunc("GET /readyz", hh.Readyz)
