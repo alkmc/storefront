@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 
 	"github.com/alkmc/restClean/internal/cache"
@@ -17,6 +16,7 @@ import (
 	"github.com/alkmc/restClean/internal/migrate"
 	"github.com/alkmc/restClean/internal/repository"
 	"github.com/alkmc/restClean/internal/service"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -76,32 +76,32 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	apiServer := httpapi.NewAPIServer(cfg.HTTP, mw(httpapi.NewMux(h)))
 	internalServer := httpapi.NewInternalServer(cfg.HTTP, httpapi.NewInternalMux(ih))
 
-	var wg sync.WaitGroup
-	wg.Go(func() {
-		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
-		defer cancel()
-		logger.Info("signal closing server received")
-		if err := apiServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("api server shutdown failed", slog.Any("error", err))
-		}
-		if err := internalServer.Shutdown(shutdownCtx); err != nil {
-			logger.Error("internal server shutdown failed", slog.Any("error", err))
-		}
-	})
-	wg.Go(func() {
-		logger.Info("starting internal server", slog.String("address", cfg.HTTP.InternalAddress()))
-		if err := internalServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("internal server failed", slog.Any("error", err))
-		}
-	})
-
-	logger.Info("starting http server", slog.String("address", cfg.HTTP.Address()))
-	if err := apiServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("server listen failed: %w", err)
+	eg, ctx := errgroup.WithContext(ctx)
+	serve := func(s *http.Server) {
+		eg.Go(func() error {
+			logger.Info("starting server", slog.String("address", s.Addr))
+			if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+				return fmt.Errorf("server %s listen failed: %w", s.Addr, err)
+			}
+			return nil
+		})
+		eg.Go(func() error {
+			<-ctx.Done()
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
+			defer cancel()
+			logger.Info("shutting down server", slog.String("address", s.Addr))
+			if err := s.Shutdown(shutdownCtx); err != nil {
+				return fmt.Errorf("server %s shutdown failed: %w", s.Addr, err)
+			}
+			return nil
+		})
 	}
+	serve(apiServer)
+	serve(internalServer)
 
-	wg.Wait()
+	if err := eg.Wait(); err != nil {
+		return err
+	}
 	logger.Info("server shutdown completed")
 	return nil
 }
