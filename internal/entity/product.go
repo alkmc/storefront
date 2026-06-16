@@ -16,6 +16,12 @@ type Product struct {
 	Price Money
 }
 
+// ProductPage is a single keyset page
+type ProductPage struct {
+	Items   []Product
+	HasMore bool
+}
+
 // Validate ensures the product meets basic business rules before processing
 func (p *Product) Validate() error {
 	if p.Name == "" {

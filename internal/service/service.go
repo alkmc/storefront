@@ -17,15 +17,15 @@ type (
 	repository interface {
 		Save(context.Context, entity.Product) (entity.Product, error)
 		FindByID(context.Context, uuid.UUID) (entity.Product, error)
-		FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error)
+		FindAll(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
 		Update(context.Context, entity.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
 
 	cacher interface {
-		Set(ctx context.Context, key string, value entity.Product) error
-		Get(ctx context.Context, key string) (entity.Product, error)
-		Invalidate(ctx context.Context, key string) error
+		Set(context.Context, string, entity.Product) error
+		Get(context.Context, string) (entity.Product, error)
+		Invalidate(context.Context, string) error
 	}
 
 	Service struct {
@@ -99,8 +99,9 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (entity.Product
 	return p, nil
 }
 
-func (s *Service) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
-	return s.repo.FindAll(ctx, limit, offset)
+func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+) (entity.ProductPage, error) {
+	return s.repo.FindAll(ctx, cursor, limit)
 }
 
 func (s *Service) Update(ctx context.Context, p entity.Product) error {

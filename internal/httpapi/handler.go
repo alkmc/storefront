@@ -22,7 +22,7 @@ type (
 	processor interface {
 		Create(context.Context, entity.Product) (entity.Product, error)
 		FindByID(context.Context, uuid.UUID) (entity.Product, error)
-		FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error)
+		FindAll(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
 		Update(context.Context, entity.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
@@ -85,7 +85,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	offset, err := parseOffset(q.Get("offset"))
+	cursor, err := parseCursor(q.Get("cursor"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -94,12 +94,12 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	products, err := h.processor.FindAll(ctx, limit, offset)
+	page, err := h.processor.FindAll(ctx, cursor, limit)
 	if err != nil {
 		h.internalError(w, "failed to find all products", slog.Any("error", err))
 		return
 	}
-	respond(w, http.StatusOK, toProductsResponse(products))
+	respond(w, http.StatusOK, toProductsPage(page))
 }
 
 func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
@@ -216,13 +216,13 @@ func parseLimit(raw string) (int, error) {
 	return min(n, maxLimit), nil
 }
 
-func parseOffset(raw string) (int, error) {
+func parseCursor(raw string) (uuid.NullUUID, error) {
 	if raw == "" {
-		return 0, nil
+		return uuid.NullUUID{}, nil
 	}
-	n, err := strconv.Atoi(raw)
+	id, err := uuid.Parse(raw)
 	if err != nil {
-		return 0, fmt.Errorf("invalid offset: %q", raw)
+		return uuid.NullUUID{}, fmt.Errorf("invalid cursor: %q", raw)
 	}
-	return max(n, 0), nil
+	return uuid.NullUUID{UUID: id, Valid: true}, nil
 }

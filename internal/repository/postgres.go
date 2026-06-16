@@ -63,7 +63,9 @@ func (pg *Repository) Save(ctx context.Context, p entity.Product) (entity.Produc
 	}
 	defer stmt.Close()
 
-	if _, err := stmt.ExecContext(ctx, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency)); err != nil {
+	if _, err := stmt.ExecContext(
+		ctx, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
+	); err != nil {
 		if rollbackErr := tx.Rollback(); rollbackErr != nil {
 			return entity.Product{}, fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
 		}
@@ -91,29 +93,40 @@ func (pg *Repository) FindByID(ctx context.Context, id uuid.UUID) (entity.Produc
 	return p, nil
 }
 
-func (pg *Repository) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
-	rows, err := pg.db.QueryContext(ctx, queryGetAll, limit, offset)
+func (pg *Repository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+) (entity.ProductPage, error) {
+	var (
+		rows      *sql.Rows
+		err       error
+		pageLimit = limit + 1
+	)
+
+	if cursor.Valid {
+		rows, err = pg.db.QueryContext(ctx, queryGetAllAfterCursor, cursor.UUID, pageLimit)
+	} else {
+		rows, err = pg.db.QueryContext(ctx, queryGetAll, pageLimit)
+	}
 	if err != nil {
-		return nil, err
+		return entity.ProductPage{}, err
 	}
 	defer rows.Close()
 
-	var products []entity.Product
+	products := make([]entity.Product, 0, limit+1)
 	for rows.Next() {
 		var p entity.Product
 		var currency string
 		if err := rows.Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &currency); err != nil {
-			return nil, err
+			return entity.ProductPage{}, err
 		}
 		p.Price.Currency = entity.Currency(currency)
 		products = append(products, p)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, err
+		return entity.ProductPage{}, err
 	}
 
-	return products, nil
+	return productPage(products, limit), nil
 }
 
 func (pg *Repository) Update(ctx context.Context, p entity.Product) error {
@@ -184,4 +197,15 @@ func (pg *Repository) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 	return nil
+}
+
+func productPage(products []entity.Product, limit int) entity.ProductPage {
+	if len(products) <= limit {
+		return entity.ProductPage{Items: products}
+	}
+
+	return entity.ProductPage{
+		Items:   products[:limit],
+		HasMore: true,
+	}
 }

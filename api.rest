@@ -26,8 +26,9 @@ GET {{baseUrl}}/product/{{prodID}}
 ### LIST PRODUCTS
 GET {{baseUrl}}/product
 
-### LIST PRODUCTS (paginated)
-GET {{baseUrl}}/product?limit=10&offset=0
+### LIST PRODUCTS (keyset paginated)
+# next page: copy `nextCursor` from the response into the cursor query param
+GET {{baseUrl}}/product?limit=10&cursor=
 
 ### UPDATE PRODUCT
 PUT {{baseUrl}}/product/{{prodID}}

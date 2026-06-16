@@ -127,20 +127,7 @@ func TestRepository_Save(t *testing.T) {
 			},
 			wantErr: true,
 		},
-		{
-			name:    "duplicate id",
-			product: entity.Product{ID: uuid.Nil, Name: "Plane", Price: testMoney(10000)},
-			wantErr: true,
-		},
 	}
-
-	seededID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, entity.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
-	); err != nil {
-		t.Fatalf("failed to save setup product: %v", err)
-	}
-	tests[3].product.ID = seededID
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -156,6 +143,21 @@ func TestRepository_Save(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("duplicate id", func(t *testing.T) {
+		seededID := uuid.Must(uuid.NewV7())
+		if _, err := repo.Save(
+			ctx, entity.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
+		); err != nil {
+			t.Fatalf("failed to save setup product: %v", err)
+		}
+
+		if _, err := repo.Save(
+			ctx, entity.Product{ID: seededID, Name: "Plane", Price: testMoney(10000)},
+		); err == nil {
+			t.Fatal("expected error")
+		}
+	})
 }
 
 func TestRepository_FindByID(t *testing.T) {
@@ -164,7 +166,9 @@ func TestRepository_FindByID(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "Car", Price: testMoney(1050)}); err != nil {
+	if _, err := repo.Save(
+		ctx, entity.Product{ID: id, Name: "Car", Price: testMoney(1050)},
+	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 
@@ -210,12 +214,15 @@ func TestRepository_FindAll(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	res, err := repo.FindAll(ctx, 50, 0)
+	page, err := repo.FindAll(ctx, uuid.NullUUID{}, 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(res) != 0 {
-		t.Errorf("expected 0 products, got %d", len(res))
+	if len(page.Items) != 0 {
+		t.Errorf("expected 0 products, got %d", len(page.Items))
+	}
+	if page.HasMore {
+		t.Error("expected HasMore=false on empty table")
 	}
 
 	p1 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
@@ -227,12 +234,53 @@ func TestRepository_FindAll(t *testing.T) {
 		t.Fatalf("failed to save product 2: %v", err)
 	}
 
-	res, err = repo.FindAll(ctx, 50, 0)
+	page, err = repo.FindAll(ctx, uuid.NullUUID{}, 50)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(res) != 2 {
-		t.Errorf("expected 2 products, got %d", len(res))
+	if len(page.Items) != 2 {
+		t.Errorf("expected 2 products, got %d", len(page.Items))
+	}
+	if page.HasMore {
+		t.Error("expected HasMore=false when page is not full")
+	}
+
+	// First keyset page: limit 1 yields p1 and signals more.
+	first, err := repo.FindAll(ctx, uuid.NullUUID{}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(first.Items) != 1 || first.Items[0].ID != p1.ID {
+		t.Fatalf("expected [p1], got %+v", first.Items)
+	}
+	if !first.HasMore {
+		t.Error("expected HasMore=true on full first page")
+	}
+
+	// Second keyset page: cursor at p1 yields p2 and ends the stream.
+	cursor := uuid.NullUUID{UUID: first.Items[0].ID, Valid: true}
+	second, err := repo.FindAll(ctx, cursor, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(second.Items) != 1 || second.Items[0].ID != p2.ID {
+		t.Fatalf("expected [p2], got %+v", second.Items)
+	}
+	if second.HasMore {
+		t.Error("expected HasMore=false on last page")
+	}
+
+	// Cursor at the last product yields an empty final page.
+	cursor = uuid.NullUUID{UUID: p2.ID, Valid: true}
+	empty, err := repo.FindAll(ctx, cursor, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(empty.Items) != 0 {
+		t.Fatalf("expected empty page, got %+v", empty.Items)
+	}
+	if empty.HasMore {
+		t.Error("expected HasMore=false after last product")
 	}
 }
 
@@ -242,7 +290,9 @@ func TestRepository_Update(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "OldName", Price: testMoney(1000)}); err != nil {
+	if _, err := repo.Save(
+		ctx, entity.Product{ID: id, Name: "OldName", Price: testMoney(1000)},
+	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 
@@ -303,7 +353,9 @@ func TestRepository_Delete(t *testing.T) {
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(ctx, entity.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)}); err != nil {
+	if _, err := repo.Save(
+		ctx, entity.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)},
+	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 

@@ -22,8 +22,8 @@ var testHTTPConfig = config.HTTP{
 	CompressMinBytes: 1024,
 }
 
-func testMoney(amount int64) entity.Money {
-	return entity.Money{MinorAmount: amount, Currency: entity.CurrencyPLN}
+func testMoney() entity.Money {
+	return entity.Money{MinorAmount: 123, Currency: entity.CurrencyPLN}
 }
 
 func testMoneyInput(amount int64) moneyInput {
@@ -44,11 +44,11 @@ func decodeJSON[T any](t *testing.T, r io.Reader) T {
 }
 
 type mockProcessor struct {
-	create   func(ctx context.Context, p entity.Product) (entity.Product, error)
-	findByID func(ctx context.Context, id uuid.UUID) (entity.Product, error)
-	findAll  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
-	update   func(ctx context.Context, p entity.Product) error
-	delete   func(ctx context.Context, id uuid.UUID) error
+	create   func(context.Context, entity.Product) (entity.Product, error)
+	findByID func(context.Context, uuid.UUID) (entity.Product, error)
+	findAll  func(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
+	update   func(context.Context, entity.Product) error
+	delete   func(context.Context, uuid.UUID) error
 }
 
 func (m *mockProcessor) Create(ctx context.Context, p entity.Product) (entity.Product, error) {
@@ -62,8 +62,9 @@ func (m *mockProcessor) FindByID(ctx context.Context, id uuid.UUID) (entity.Prod
 	return m.findByID(ctx, id)
 }
 
-func (m *mockProcessor) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
-	return m.findAll(ctx, limit, offset)
+func (m *mockProcessor) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+) (entity.ProductPage, error) {
+	return m.findAll(ctx, cursor, limit)
 }
 
 func (m *mockProcessor) Update(ctx context.Context, p entity.Product) error {
@@ -98,7 +99,7 @@ func TestGetProductByID(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
 				proc.findByID = func(_ context.Context, id uuid.UUID) (entity.Product, error) {
-					return entity.Product{ID: id, Name: "Car", Price: testMoney(123)}, nil
+					return entity.Product{ID: id, Name: "Car", Price: testMoney()}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -158,6 +159,9 @@ func TestGetProductByID(t *testing.T) {
 func TestGetProducts(t *testing.T) {
 	mux, proc := setupTest(t, testHTTPConfig)
 
+	cursorID := uuid.Must(uuid.NewV7())
+	lastID := uuid.Must(uuid.NewV7())
+
 	tests := []struct {
 		name           string
 		url            string
@@ -165,12 +169,13 @@ func TestGetProducts(t *testing.T) {
 		expectedStatus int
 		expectedMsg    string
 		expectedNames  []string
+		wantNextCursor string
 	}{
 		{
 			name: "empty",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _, _ int) ([]entity.Product, error) {
-					return nil, nil
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (entity.ProductPage, error) {
+					return entity.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -179,25 +184,25 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "success with default pagination",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, limit, offset int) ([]entity.Product, error) {
-					if limit != 50 || offset != 0 {
-						t.Errorf("got limit=%d offset=%d, want 50/0", limit, offset)
+				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (entity.ProductPage, error) {
+					if limit != 50 || cursor.Valid {
+						t.Errorf("got limit=%d cursor=%v, want 50/first-page", limit, cursor)
 					}
-					return []entity.Product{{Name: "Car", Price: testMoney(123)}}, nil
+					return entity.ProductPage{Items: []entity.Product{{Name: "Car", Price: testMoney()}}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
 			expectedNames:  []string{"Car"},
 		},
 		{
-			name: "explicit limit and offset",
-			url:  "/product?limit=10&offset=5",
+			name: "explicit limit and cursor",
+			url:  "/product?limit=10&cursor=" + cursorID.String(),
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, limit, offset int) ([]entity.Product, error) {
-					if limit != 10 || offset != 5 {
-						t.Errorf("got limit=%d offset=%d, want 10/5", limit, offset)
+				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (entity.ProductPage, error) {
+					if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
+						t.Errorf("got limit=%d cursor=%v, want 10/%s", limit, cursor, cursorID)
 					}
-					return []entity.Product{{Name: "Car", Price: testMoney(123)}}, nil
+					return entity.ProductPage{Items: []entity.Product{{Name: "Car", Price: testMoney()}}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -207,11 +212,11 @@ func TestGetProducts(t *testing.T) {
 			name: "limit clamped to max",
 			url:  "/product?limit=500",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, limit, _ int) ([]entity.Product, error) {
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (entity.ProductPage, error) {
 					if limit != 200 {
 						t.Errorf("got limit=%d, want 200", limit)
 					}
-					return nil, nil
+					return entity.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -221,29 +226,29 @@ func TestGetProducts(t *testing.T) {
 			name: "negative limit falls back to default",
 			url:  "/product?limit=-5",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, limit, _ int) ([]entity.Product, error) {
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (entity.ProductPage, error) {
 					if limit != 50 {
 						t.Errorf("got limit=%d, want 50", limit)
 					}
-					return nil, nil
+					return entity.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
 			expectedNames:  []string{},
 		},
 		{
-			name: "negative offset clamped to zero",
-			url:  "/product?offset=-1",
+			name: "more pages set next cursor",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _, offset int) ([]entity.Product, error) {
-					if offset != 0 {
-						t.Errorf("got offset=%d, want 0", offset)
-					}
-					return nil, nil
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (entity.ProductPage, error) {
+					return entity.ProductPage{
+						Items:   []entity.Product{{ID: lastID, Name: "Car", Price: testMoney()}},
+						HasMore: true,
+					}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
-			expectedNames:  []string{},
+			expectedNames:  []string{"Car"},
+			wantNextCursor: lastID.String(),
 		},
 		{
 			name:           "invalid limit",
@@ -253,11 +258,11 @@ func TestGetProducts(t *testing.T) {
 			expectedMsg:    "invalid limit: \"abc\"",
 		},
 		{
-			name:           "invalid offset",
-			url:            "/product?offset=xyz",
+			name:           "invalid cursor",
+			url:            "/product?cursor=xyz",
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
-			expectedMsg:    "invalid offset: \"xyz\"",
+			expectedMsg:    "invalid cursor: \"xyz\"",
 		},
 	}
 
@@ -283,14 +288,17 @@ func TestGetProducts(t *testing.T) {
 				}
 				return
 			}
-			products := decodeJSON[[]productResponse](t, resp.Body)
-			if len(products) != len(tt.expectedNames) {
-				t.Fatalf("got len %d, want %d", len(products), len(tt.expectedNames))
+			page := decodeJSON[productsPage](t, resp.Body)
+			if len(page.Items) != len(tt.expectedNames) {
+				t.Fatalf("got len %d, want %d", len(page.Items), len(tt.expectedNames))
 			}
 			for i, name := range tt.expectedNames {
-				if products[i].Name != name {
-					t.Errorf("got name %q, want %q", products[i].Name, name)
+				if page.Items[i].Name != name {
+					t.Errorf("got name %q, want %q", page.Items[i].Name, name)
 				}
+			}
+			if page.NextCursor != tt.wantNextCursor {
+				t.Errorf("got nextCursor %q, want %q", page.NextCursor, tt.wantNextCursor)
 			}
 		})
 	}

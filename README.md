@@ -44,7 +44,14 @@ curl -s -X POST http://localhost:7000/product \
 
 # get a product by id
 curl -s http://localhost:7000/product/{id}
+
+# list products (keyset pagination)
+curl -s 'http://localhost:7000/product?limit=10'
+# next page: pass the nextCursor from the previous response
+curl -s 'http://localhost:7000/product?limit=10&cursor={nextCursor}'
 ```
+
+The list endpoint returns `{"items":[...],"nextCursor":"<id>"}`; a missing `nextCursor` means the last page.
 
 See `api.rest` for the full set of example requests.
 

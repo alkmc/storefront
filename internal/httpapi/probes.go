@@ -6,14 +6,16 @@ import (
 	"time"
 )
 
-type pinger interface {
-	Ping(context.Context) error
-}
+type (
+	pinger interface {
+		Ping(context.Context) error
+	}
 
-type InternalHandler struct {
-	db    pinger
-	cache pinger
-}
+	InternalHandler struct {
+		db    pinger
+		cache pinger
+	}
+)
 
 func NewInternalHandler(db pinger, cache pinger) *InternalHandler {
 	return &InternalHandler{db: db, cache: cache}

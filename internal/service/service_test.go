@@ -37,11 +37,11 @@ func testMoney(amount int64) entity.Money {
 }
 
 type MockRepository struct {
-	SaveFn     func(ctx context.Context, p entity.Product) (entity.Product, error)
-	FindByIDFn func(ctx context.Context, id uuid.UUID) (entity.Product, error)
-	FindAllFn  func(ctx context.Context, limit, offset int) ([]entity.Product, error)
-	UpdateFn   func(ctx context.Context, p entity.Product) error
-	DeleteFn   func(ctx context.Context, id uuid.UUID) error
+	SaveFn     func(context.Context, entity.Product) (entity.Product, error)
+	FindByIDFn func(context.Context, uuid.UUID) (entity.Product, error)
+	FindAllFn  func(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
+	UpdateFn   func(context.Context, entity.Product) error
+	DeleteFn   func(context.Context, uuid.UUID) error
 }
 
 func (m *MockRepository) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
@@ -52,8 +52,9 @@ func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (entity.Pro
 	return m.FindByIDFn(ctx, id)
 }
 
-func (m *MockRepository) FindAll(ctx context.Context, limit, offset int) ([]entity.Product, error) {
-	return m.FindAllFn(ctx, limit, offset)
+func (m *MockRepository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+) (entity.ProductPage, error) {
+	return m.FindAllFn(ctx, cursor, limit)
 }
 
 func (m *MockRepository) Update(ctx context.Context, p entity.Product) error {
@@ -220,8 +221,10 @@ func TestService_FindAll(t *testing.T) {
 		{
 			name: "success",
 			mockSetup: func(m *MockRepository) {
-				m.FindAllFn = func(_ context.Context, _, _ int) ([]entity.Product, error) {
-					return []entity.Product{{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)}}, nil
+				m.FindAllFn = func(_ context.Context, _ uuid.NullUUID, _ int) (entity.ProductPage, error) {
+					return entity.ProductPage{Items: []entity.Product{
+						{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)},
+					}}, nil
 				}
 			},
 			wantLen: 2,
@@ -235,7 +238,7 @@ func TestService_FindAll(t *testing.T) {
 			tt.mockSetup(mockRepo)
 			srv := newTestService(mockRepo)
 
-			res, err := srv.FindAll(ctx, 50, 0)
+			page, err := srv.FindAll(ctx, uuid.NullUUID{}, 50)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -245,8 +248,8 @@ func TestService_FindAll(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if len(res) != tt.wantLen {
-				t.Errorf("got length %d, want %d", len(res), tt.wantLen)
+			if len(page.Items) != tt.wantLen {
+				t.Errorf("got length %d, want %d", len(page.Items), tt.wantLen)
 			}
 		})
 	}
