@@ -9,18 +9,19 @@ import (
 // ErrNotFound signals a missing aggregate at the domain boundary.
 var ErrNotFound = errors.New("entity: not found")
 
-// Product represents a purchasable item in the system
-type Product struct {
-	ID    uuid.UUID
-	Name  string
-	Price Money
-}
-
-// ProductPage is a single keyset page
-type ProductPage struct {
-	Items   []Product
-	HasMore bool
-}
+type (
+	// Product represents a purchasable item in the system
+	Product struct {
+		ID    uuid.UUID
+		Name  string
+		Price Money
+	}
+	// ProductPage is a single keyset page
+	ProductPage struct {
+		Items   []Product
+		HasMore bool
+	}
+)
 
 // Validate ensures the product meets basic business rules before processing
 func (p *Product) Validate() error {

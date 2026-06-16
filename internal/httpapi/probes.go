@@ -10,7 +10,6 @@ type (
 	pinger interface {
 		Ping(context.Context) error
 	}
-
 	InternalHandler struct {
 		db    pinger
 		cache pinger

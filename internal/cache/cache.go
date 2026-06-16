@@ -16,22 +16,21 @@ import (
 // ErrCacheMiss is returned by Get when the key is not present in the cache.
 var ErrCacheMiss = errors.New("cache: key not found")
 
-// cacheEntry is the JSON shape stored in Redis, decoupled from entity.Product.
-type cacheEntry struct {
-	ID    string     `json:"id"`
-	Name  string     `json:"name"`
-	Price moneyEntry `json:"price"`
-}
-
-type moneyEntry struct {
-	MinorAmount int64           `json:"minorAmount"`
-	Currency    entity.Currency `json:"currency"`
-}
-
-type RedisCache struct {
-	client rueidis.Client
-	ttl    time.Duration
-}
+type (
+	cacheEntry struct {
+		ID    string     `json:"id"`
+		Name  string     `json:"name"`
+		Price moneyEntry `json:"price"`
+	}
+	moneyEntry struct {
+		MinorAmount int64           `json:"minorAmount"`
+		Currency    entity.Currency `json:"currency"`
+	}
+	RedisCache struct {
+		client rueidis.Client
+		ttl    time.Duration
+	}
+)
 
 // NewRedis returns a Redis-backed cache configured from cfg.
 func NewRedis(ctx context.Context, cfg config.Redis) (*RedisCache, error) {

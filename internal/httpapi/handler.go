@@ -26,18 +26,15 @@ type (
 		Update(context.Context, entity.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
-
 	Handler struct {
 		logger         *slog.Logger
 		processor      processor
 		requestTimeout time.Duration
 	}
-
 	moneyInput struct {
 		MinorAmount int64           `json:"minorAmount"`
 		Currency    entity.Currency `json:"currency"`
 	}
-
 	productInput struct {
 		Name  string     `json:"name"`
 		Price moneyInput `json:"price"`

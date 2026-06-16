@@ -21,13 +21,11 @@ type (
 		Update(context.Context, entity.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
-
 	cacher interface {
 		Set(context.Context, string, entity.Product) error
 		Get(context.Context, string) (entity.Product, error)
 		Invalidate(context.Context, string) error
 	}
-
 	Service struct {
 		logger      *slog.Logger
 		repo        repository
