@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/alkmc/restClean/internal/entity"
+	"github.com/alkmc/storefront/internal/entity"
 	"github.com/google/uuid"
 )
 

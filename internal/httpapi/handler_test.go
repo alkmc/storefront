@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alkmc/restClean/internal/config"
-	"github.com/alkmc/restClean/internal/entity"
+	"github.com/alkmc/storefront/internal/config"
+	"github.com/alkmc/storefront/internal/entity"
 	"github.com/google/uuid"
 )
 

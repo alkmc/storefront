@@ -10,12 +10,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alkmc/restClean/internal/cache"
-	"github.com/alkmc/restClean/internal/config"
-	"github.com/alkmc/restClean/internal/httpapi"
-	"github.com/alkmc/restClean/internal/migrate"
-	"github.com/alkmc/restClean/internal/repository"
-	"github.com/alkmc/restClean/internal/service"
+	"github.com/alkmc/storefront/internal/cache"
+	"github.com/alkmc/storefront/internal/config"
+	"github.com/alkmc/storefront/internal/httpapi"
+	"github.com/alkmc/storefront/internal/migrate"
+	"github.com/alkmc/storefront/internal/repository"
+	"github.com/alkmc/storefront/internal/service"
 	"golang.org/x/sync/errgroup"
 )
 

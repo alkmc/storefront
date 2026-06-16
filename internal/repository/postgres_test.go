@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alkmc/restClean/internal/config"
-	"github.com/alkmc/restClean/internal/entity"
-	"github.com/alkmc/restClean/internal/migrate"
+	"github.com/alkmc/storefront/internal/config"
+	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/migrate"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"

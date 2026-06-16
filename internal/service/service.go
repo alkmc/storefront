@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/alkmc/restClean/internal/cache"
-	"github.com/alkmc/restClean/internal/entity"
+	"github.com/alkmc/storefront/internal/cache"
+	"github.com/alkmc/storefront/internal/entity"
 	"github.com/google/uuid"
 	"golang.org/x/sync/singleflight"
 )

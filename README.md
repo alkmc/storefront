@@ -1,4 +1,4 @@
-# restClean
+# storefront
 
 ## Table of contents
 

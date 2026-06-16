@@ -1,4 +1,4 @@
-module github.com/alkmc/restClean
+module github.com/alkmc/storefront
 
 go 1.26
 

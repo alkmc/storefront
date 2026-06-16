@@ -3,7 +3,7 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/alkmc/restClean/internal/config"
+	"github.com/alkmc/storefront/internal/config"
 )
 
 // NewAPIServer builds the public HTTP server with timeouts from cfg.
