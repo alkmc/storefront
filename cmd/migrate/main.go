@@ -38,7 +38,7 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "load config: %v\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -71,12 +71,12 @@ func run(logger *slog.Logger, cfg config.Config, cmd string) error {
 
 func parseCommand() string {
 	if len(os.Args) != 2 {
-		fmt.Fprint(os.Stderr, usage)
+		_, _ = fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
 	cmd := os.Args[1]
 	if _, ok := validCommands[cmd]; !ok {
-		fmt.Fprint(os.Stderr, usage)
+		_, _ = fmt.Fprint(os.Stderr, usage)
 		os.Exit(2)
 	}
 	return cmd
@@ -123,13 +123,13 @@ func printStatus(ctx context.Context, w io.Writer, db *sql.DB) error {
 	}
 
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "VERSION\tSTATE\tAPPLIED AT\tSOURCE")
+	_, _ = fmt.Fprintln(tw, "VERSION\tSTATE\tAPPLIED AT\tSOURCE")
 	for _, r := range rows {
 		applied := "—"
 		if !r.AppliedAt.IsZero() {
 			applied = r.AppliedAt.UTC().Format(time.RFC3339)
 		}
-		fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", r.Source.Version, r.State, applied, r.Source.Path)
+		_, _ = fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", r.Source.Version, r.State, applied, r.Source.Path)
 	}
 	return tw.Flush()
 }
