@@ -1,4 +1,4 @@
-package repository
+package store
 
 import (
 	"context"
@@ -24,20 +24,20 @@ const (
 	classSystemError           = "58"
 )
 
-type Repository struct {
+type Postgres struct {
 	pool *pgxpool.Pool
 }
 
-// New wraps an open connection pool in a repository.
-func New(pool *pgxpool.Pool) *Repository {
-	return new(Repository{pool: pool})
+// NewPostgres wraps an open connection pool in a Postgres store.
+func NewPostgres(pool *pgxpool.Pool) *Postgres {
+	return new(Postgres{pool: pool})
 }
 
-func (pg *Repository) Ping(ctx context.Context) error {
+func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.pool.Ping(ctx)
 }
 
-func (pg *Repository) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
+func (pg *Postgres) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
 	if _, err := pg.pool.Exec(
 		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
 	); err != nil {
@@ -46,7 +46,7 @@ func (pg *Repository) Save(ctx context.Context, p domain.Product) (domain.Produc
 	return p, nil
 }
 
-func (pg *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (pg *Postgres) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	row := pg.pool.QueryRow(ctx, queryGetByID, id)
 
 	var p domain.Product
@@ -61,7 +61,7 @@ func (pg *Repository) FindByID(ctx context.Context, id uuid.UUID) (domain.Produc
 	return p, nil
 }
 
-func (pg *Repository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+func (pg *Postgres) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
 ) (domain.ProductPage, error) {
 	var (
 		rows      pgx.Rows
@@ -97,7 +97,7 @@ func (pg *Repository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit i
 	return productPage(products, limit), nil
 }
 
-func (pg *Repository) Update(ctx context.Context, p domain.Product) error {
+func (pg *Postgres) Update(ctx context.Context, p domain.Product) error {
 	res, err := pg.pool.Exec(ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency))
 	if err != nil {
 		return mapDBError(err)
@@ -108,7 +108,7 @@ func (pg *Repository) Update(ctx context.Context, p domain.Product) error {
 	return nil
 }
 
-func (pg *Repository) Delete(ctx context.Context, id uuid.UUID) error {
+func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 	res, err := pg.pool.Exec(ctx, queryDelete, id)
 	if err != nil {
 		return mapDBError(err)

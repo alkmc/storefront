@@ -14,7 +14,7 @@ import (
 )
 
 type (
-	repository interface {
+	store interface {
 		Save(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, uuid.UUID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
@@ -28,18 +28,17 @@ type (
 	}
 	Service struct {
 		logger      *slog.Logger
-		repo        repository
+		store       store
 		cache       cacher
 		loadGroup   singleflight.Group
 		loadTimeout time.Duration
 	}
 )
 
-// NewService initializes the business logic layer backed by the provided repository and cache.
-// loadTimeout caps a single repo+cache.Set roundtrip after the caller's context is detached
-// via context.WithoutCancel inside loadProduct.
-func NewService(l *slog.Logger, r repository, c cacher, loadTimeout time.Duration) *Service {
-	return new(Service{logger: l, repo: r, cache: c, loadTimeout: loadTimeout})
+// NewService initializes the service with the given store and cache.
+// loadTimeout caps a single detached store read and cache.Set.
+func NewService(l *slog.Logger, s store, c cacher, loadTimeout time.Duration) *Service {
+	return new(Service{logger: l, store: s, cache: c, loadTimeout: loadTimeout})
 }
 
 func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -48,7 +47,7 @@ func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product,
 		return domain.Product{}, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	p.ID = id
-	saved, err := s.repo.Save(ctx, p)
+	saved, err := s.store.Save(ctx, p)
 	if err != nil {
 		return domain.Product{}, err
 	}
@@ -78,7 +77,7 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
 		defer cancel()
 
-		p, err := s.repo.FindByID(loadCtx, id)
+		p, err := s.store.FindByID(loadCtx, id)
 		if err != nil {
 			return domain.Product{}, err
 		}
@@ -99,11 +98,11 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 
 func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
 ) (domain.ProductPage, error) {
-	return s.repo.FindAll(ctx, cursor, limit)
+	return s.store.FindAll(ctx, cursor, limit)
 }
 
 func (s *Service) Update(ctx context.Context, p domain.Product) error {
-	if err := s.repo.Update(ctx, p); err != nil {
+	if err := s.store.Update(ctx, p); err != nil {
 		return err
 	}
 	key := p.ID.String()
@@ -114,7 +113,7 @@ func (s *Service) Update(ctx context.Context, p domain.Product) error {
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.store.Delete(ctx, id); err != nil {
 		return err
 	}
 	key := id.String()
