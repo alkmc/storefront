@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,9 @@ import (
 	"github.com/alkmc/storefront/internal/migrate"
 	"github.com/alkmc/storefront/internal/repository"
 	"github.com/alkmc/storefront/internal/service"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/redis/rueidis"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -43,24 +47,29 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 
-	repo, err := repository.NewPG(ctx, logger, cfg.Postgres)
+	db, err := openPostgres(ctx, cfg.Postgres)
 	if err != nil {
 		return err
 	}
-	defer repo.Close()
+	logger.Info("successfully connected to db")
+	defer func() {
+		_ = db.Close()
+		logger.Info("connection to db closed")
+	}()
 
-	rCache, err := cache.NewRedis(ctx, cfg.Redis)
+	client, err := openRedis(ctx, cfg.Redis)
 	if err != nil {
 		return err
 	}
 	logger.Info("successfully connected to redis")
 	defer func() {
-		rCache.Close()
+		client.Close()
 		logger.Info("connection to redis closed")
 	}()
+
+	repo := repository.New(db)
+	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
-	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
-	ih := httpapi.NewInternalHandler(repo, rCache)
 
 	mw, err := httpapi.NewMiddleware(httpapi.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
@@ -73,8 +82,26 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	apiServer := httpapi.NewAPIServer(cfg.HTTP, mw(httpapi.NewMux(h)))
-	internalServer := httpapi.NewInternalServer(cfg.HTTP, httpapi.NewInternalMux(ih))
+
+	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
+	apiServer := httpapi.NewAPIServer(
+		mw(httpapi.NewMux(h)),
+		httpapi.ServerCfg{
+			Addr:         cfg.HTTP.Address(),
+			ReadTimeout:  cfg.HTTP.ReadTimeout,
+			WriteTimeout: cfg.HTTP.WriteTimeout,
+			IdleTimeout:  cfg.HTTP.IdleTimeout,
+		},
+	)
+
+	ih := httpapi.NewInternalHandler(repo, rCache)
+	internalServer := httpapi.NewInternalServer(
+		httpapi.NewInternalMux(ih),
+		httpapi.ServerCfg{
+			Addr:        cfg.HTTP.InternalAddress(),
+			ReadTimeout: cfg.HTTP.ReadTimeout,
+		},
+	)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	serve := func(s *http.Server) {
@@ -104,4 +131,39 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	}
 	logger.Info("server shutdown completed")
 	return nil
+}
+
+// openPostgres opens a database/sql pool over pgx and verifies it with a ping.
+func openPostgres(ctx context.Context, cfg config.Postgres) (*sql.DB, error) {
+	pgCfg, err := pgx.ParseConfig(cfg.DSN())
+	if err != nil {
+		return nil, fmt.Errorf("parse pg config: %w", err)
+	}
+	db := stdlib.OpenDB(*pgCfg)
+	db.SetMaxOpenConns(cfg.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping pg database: %w", err)
+	}
+	return db, nil
+}
+
+// openRedis creates a rueidis client and verifies it with a ping.
+func openRedis(ctx context.Context, cfg config.Redis) (rueidis.Client, error) {
+	client, err := rueidis.NewClient(rueidis.ClientOption{
+		InitAddress: []string{cfg.Address()},
+		Password:    cfg.Password.Reveal(),
+		SelectDB:    cfg.DB,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("create redis client: %w", err)
+	}
+	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
+		client.Close()
+		return nil, fmt.Errorf("ping redis: %w", err)
+	}
+	return client, nil
 }

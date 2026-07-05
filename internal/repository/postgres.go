@@ -4,50 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"log/slog"
 
-	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/entity"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 type Repository struct {
-	logger *slog.Logger
-	db     *sql.DB
+	db *sql.DB
 }
 
-// NewPG creates a new PostgreSQL repository
-func NewPG(ctx context.Context, l *slog.Logger, cfg config.Postgres) (*Repository, error) {
-	pgCfg, err := pgx.ParseConfig(cfg.DSN())
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse pg config: %w", err)
-	}
-	pdb := stdlib.OpenDB(*pgCfg)
-	pdb.SetMaxOpenConns(cfg.MaxOpenConns)
-	pdb.SetMaxIdleConns(cfg.MaxIdleConns)
-	pdb.SetConnMaxLifetime(cfg.ConnMaxLifetime)
-
-	if err := pdb.PingContext(ctx); err != nil {
-		_ = pdb.Close()
-		return nil, fmt.Errorf("failed to ping pg database: %w", err)
-	}
-	l.Info("successfully connected to db")
-
-	return new(Repository{logger: l, db: pdb}), nil
+// New wraps an open database handle in a repository.
+func New(db *sql.DB) *Repository {
+	return new(Repository{db: db})
 }
 
 func (pg *Repository) Ping(ctx context.Context) error {
 	return pg.db.PingContext(ctx)
-}
-
-func (pg *Repository) Close() {
-	if err := pg.db.Close(); err != nil {
-		pg.logger.Error("failed to close db connection", slog.Any("error", err))
-	}
-	pg.logger.Info("connection to db closed")
 }
 
 func (pg *Repository) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
