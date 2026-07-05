@@ -13,6 +13,7 @@ import (
 	"github.com/alkmc/storefront/internal/migrate"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -62,7 +63,9 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		SSLMode:  "disable",
 	}
 
-	pgxCfg, err := pgx.ParseConfig(pgConfig.DSN())
+	dsn := pgConfig.DSN()
+
+	pgxCfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		t.Fatalf("failed to parse pg config: %v", err)
 	}
@@ -74,15 +77,18 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		t.Fatalf("failed to close migration db: %v", err)
 	}
 
-	db := stdlib.OpenDB(*pgxCfg)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatalf("failed to create pg pool: %v", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		t.Fatalf("failed to ping db: %v", err)
 	}
-	repo := New(db)
+	repo := New(pool)
 
 	cleanup := func() {
-		_ = db.Close()
+		pool.Close()
 		if err := pgContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate pg container: %v", err)
 		}
