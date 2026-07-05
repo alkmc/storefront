@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/entity"
 	"github.com/google/uuid"
 	"github.com/redis/rueidis"
@@ -32,23 +31,9 @@ type (
 	}
 )
 
-// NewRedis returns a Redis-backed cache configured from cfg.
-func NewRedis(ctx context.Context, cfg config.Redis) (*RedisCache, error) {
-	client, err := rueidis.NewClient(rueidis.ClientOption{
-		InitAddress: []string{cfg.Address()},
-		Password:    cfg.Password.Reveal(),
-		SelectDB:    cfg.DB,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create redis client: %w", err)
-	}
-
-	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
-		client.Close()
-		return nil, fmt.Errorf("ping redis: %w", err)
-	}
-
-	return new(RedisCache{client: client, ttl: cfg.TTL}), nil
+// New wraps an open Redis client in a cache with the given entry TTL.
+func New(client rueidis.Client, ttl time.Duration) *RedisCache {
+	return new(RedisCache{client: client, ttl: ttl})
 }
 
 func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) error {
@@ -108,8 +93,4 @@ func (r *RedisCache) Invalidate(ctx context.Context, key string) error {
 
 func (r *RedisCache) Ping(ctx context.Context) error {
 	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
-}
-
-func (r *RedisCache) Close() {
-	r.client.Close()
 }

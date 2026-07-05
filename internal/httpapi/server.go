@@ -2,14 +2,21 @@ package httpapi
 
 import (
 	"net/http"
-
-	"github.com/alkmc/storefront/internal/config"
+	"time"
 )
 
+// ServerCfg carries the settings the HTTP servers need.
+type ServerCfg struct {
+	Addr         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
+}
+
 // NewAPIServer builds the public HTTP server with timeouts from cfg.
-func NewAPIServer(cfg config.HTTP, h http.Handler) *http.Server {
+func NewAPIServer(h http.Handler, cfg ServerCfg) *http.Server {
 	return &http.Server{
-		Addr:         cfg.Address(),
+		Addr:         cfg.Addr,
 		Handler:      h,
 		ReadTimeout:  cfg.ReadTimeout,
 		WriteTimeout: cfg.WriteTimeout,
@@ -18,9 +25,9 @@ func NewAPIServer(cfg config.HTTP, h http.Handler) *http.Server {
 }
 
 // NewInternalServer builds the internal probes server.
-func NewInternalServer(cfg config.HTTP, h http.Handler) *http.Server {
+func NewInternalServer(h http.Handler, cfg ServerCfg) *http.Server {
 	return &http.Server{
-		Addr:        cfg.InternalAddress(),
+		Addr:        cfg.Addr,
 		Handler:     h,
 		ReadTimeout: cfg.ReadTimeout,
 	}

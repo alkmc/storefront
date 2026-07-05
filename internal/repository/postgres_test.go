@@ -5,7 +5,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -55,15 +54,12 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	}
 
 	pgConfig := config.Postgres{
-		Host:            host,
-		Port:            int(port.Num()),
-		User:            dbUser,
-		Password:        config.Secret(dbPassword),
-		Database:        dbName,
-		SSLMode:         "disable",
-		MaxOpenConns:    5,
-		MaxIdleConns:    2,
-		ConnMaxLifetime: 5 * time.Minute,
+		Host:     host,
+		Port:     int(port.Num()),
+		User:     dbUser,
+		Password: config.Secret(dbPassword),
+		Database: dbName,
+		SSLMode:  "disable",
 	}
 
 	pgxCfg, err := pgx.ParseConfig(pgConfig.DSN())
@@ -78,14 +74,15 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		t.Fatalf("failed to close migration db: %v", err)
 	}
 
-	logger := slog.New(slog.DiscardHandler)
-	repo, err := NewPG(ctx, logger, pgConfig)
-	if err != nil {
-		t.Fatalf("failed to create repo: %v", err)
+	db := stdlib.OpenDB(*pgxCfg)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		t.Fatalf("failed to ping db: %v", err)
 	}
+	repo := New(db)
 
 	cleanup := func() {
-		repo.Close()
+		_ = db.Close()
 		if err := pgContainer.Terminate(context.Background()); err != nil {
 			t.Fatalf("failed to terminate pg container: %v", err)
 		}
