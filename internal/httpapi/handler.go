@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
 
@@ -20,10 +20,10 @@ const (
 
 type (
 	processor interface {
-		Create(context.Context, entity.Product) (entity.Product, error)
-		FindByID(context.Context, uuid.UUID) (entity.Product, error)
-		FindAll(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
-		Update(context.Context, entity.Product) error
+		Create(context.Context, domain.Product) (domain.Product, error)
+		FindByID(context.Context, uuid.UUID) (domain.Product, error)
+		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+		Update(context.Context, domain.Product) error
 		Delete(context.Context, uuid.UUID) error
 	}
 	Handler struct {
@@ -33,7 +33,7 @@ type (
 	}
 	moneyInput struct {
 		MinorAmount int64           `json:"minorAmount"`
-		Currency    entity.Currency `json:"currency"`
+		Currency    domain.Currency `json:"currency"`
 	}
 	productInput struct {
 		Name  string     `json:"name"`
@@ -62,7 +62,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	p, err := h.processor.FindByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, entity.ErrNotFound) {
+		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "product not found")
 			return
 		}
@@ -112,7 +112,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := entity.Product{Name: in.Name, Price: toMoney(in.Price)}
+	p := domain.Product{Name: in.Name, Price: toMoney(in.Price)}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -140,7 +140,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := h.processor.Delete(ctx, id); err != nil {
-		if errors.Is(err, entity.ErrNotFound) {
+		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
 		}
@@ -172,7 +172,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := entity.Product{ID: id, Name: in.Name, Price: toMoney(in.Price)}
+	p := domain.Product{ID: id, Name: in.Name, Price: toMoney(in.Price)}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -182,7 +182,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	if err := h.processor.Update(ctx, p); err != nil {
-		if errors.Is(err, entity.ErrNotFound) {
+		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 			return
 		}
@@ -197,7 +197,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.
 func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg string, attrs ...any) {
-	if errors.Is(err, entity.ErrUnavailable) {
+	if errors.Is(err, domain.ErrUnavailable) {
 		h.logger.Warn(logMsg, attrs...)
 		respondError(w, http.StatusServiceUnavailable, msgUnavailable)
 		return

@@ -6,7 +6,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -66,7 +66,7 @@ func TestMapDBError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := mapDBError(tt.err)
-			gotUnavail := errors.Is(got, entity.ErrUnavailable)
+			gotUnavail := errors.Is(got, domain.ErrUnavailable)
 			if gotUnavail != tt.wantUnavailable {
 				t.Fatalf("mapDBError(%v): got unavailable=%v, want %v", tt.err, gotUnavail, tt.wantUnavailable)
 			}

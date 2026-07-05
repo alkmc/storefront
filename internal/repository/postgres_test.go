@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/alkmc/storefront/internal/config"
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/migrate"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -97,8 +97,8 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 	return repo, cleanup
 }
 
-func testMoney(amount int64) entity.Money {
-	return entity.Money{MinorAmount: amount, Currency: entity.CurrencyPLN}
+func testMoney(amount int64) domain.Money {
+	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
 }
 
 func TestRepository_Save(t *testing.T) {
@@ -108,25 +108,25 @@ func TestRepository_Save(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		product entity.Product
+		product domain.Product
 		wantErr bool
 	}{
 		{
 			name:    "success",
-			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: testMoney(1050)},
+			product: domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: testMoney(1050)},
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: testMoney(-500)},
+			product: domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: testMoney(-500)},
 			wantErr: true,
 		},
 		{
 			name: "invalid currency - fails check constraint",
-			product: entity.Product{
+			product: domain.Product{
 				ID:    uuid.Must(uuid.NewV7()),
 				Name:  "Bike",
-				Price: entity.Money{MinorAmount: 500, Currency: entity.Currency("XXX")},
+				Price: domain.Money{MinorAmount: 500, Currency: domain.Currency("XXX")},
 			},
 			wantErr: true,
 		},
@@ -150,13 +150,13 @@ func TestRepository_Save(t *testing.T) {
 	t.Run("duplicate id", func(t *testing.T) {
 		seededID := uuid.Must(uuid.NewV7())
 		if _, err := repo.Save(
-			ctx, entity.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
+			ctx, domain.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
 		); err != nil {
 			t.Fatalf("failed to save setup product: %v", err)
 		}
 
 		if _, err := repo.Save(
-			ctx, entity.Product{ID: seededID, Name: "Plane", Price: testMoney(10000)},
+			ctx, domain.Product{ID: seededID, Name: "Plane", Price: testMoney(10000)},
 		); err == nil {
 			t.Fatal("expected error")
 		}
@@ -170,7 +170,7 @@ func TestRepository_FindByID(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, entity.Product{ID: id, Name: "Car", Price: testMoney(1050)},
+		ctx, domain.Product{ID: id, Name: "Car", Price: testMoney(1050)},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -196,8 +196,8 @@ func TestRepository_FindByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			p, err := repo.FindByID(ctx, tt.id)
 			if tt.wantErr {
-				if !errors.Is(err, entity.ErrNotFound) {
-					t.Fatalf("expected entity.ErrNotFound, got %v", err)
+				if !errors.Is(err, domain.ErrNotFound) {
+					t.Fatalf("expected domain.ErrNotFound, got %v", err)
 				}
 				return
 			}
@@ -228,11 +228,11 @@ func TestRepository_FindAll(t *testing.T) {
 		t.Error("expected HasMore=false on empty table")
 	}
 
-	p1 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
+	p1 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
 	if _, err := repo.Save(ctx, p1); err != nil {
 		t.Fatalf("failed to save product 1: %v", err)
 	}
-	p2 := entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: testMoney(200)}
+	p2 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: testMoney(200)}
 	if _, err := repo.Save(ctx, p2); err != nil {
 		t.Fatalf("failed to save product 2: %v", err)
 	}
@@ -294,32 +294,32 @@ func TestRepository_Update(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, entity.Product{ID: id, Name: "OldName", Price: testMoney(1000)},
+		ctx, domain.Product{ID: id, Name: "OldName", Price: testMoney(1000)},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
 
 	tests := []struct {
 		name      string
-		product   entity.Product
+		product   domain.Product
 		wantErr   bool
 		wantErrIs error
 	}{
 		{
 			name:    "success",
-			product: entity.Product{ID: id, Name: "NewName", Price: testMoney(2000)},
+			product: domain.Product{ID: id, Name: "NewName", Price: testMoney(2000)},
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: entity.Product{ID: id, Name: "NewName", Price: testMoney(-100)},
+			product: domain.Product{ID: id, Name: "NewName", Price: testMoney(-100)},
 			wantErr: true,
 		},
 		{
 			name:      "non-existing product returns ErrNotFound",
-			product:   entity.Product{ID: uuid.Must(uuid.NewV7()), Name: "Ghost", Price: testMoney(100)},
+			product:   domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Ghost", Price: testMoney(100)},
 			wantErr:   true,
-			wantErrIs: entity.ErrNotFound,
+			wantErrIs: domain.ErrNotFound,
 		},
 	}
 
@@ -357,7 +357,7 @@ func TestRepository_Delete(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, entity.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)},
+		ctx, domain.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -383,8 +383,8 @@ func TestRepository_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := repo.Delete(ctx, tt.id)
 			if tt.wantErr {
-				if !errors.Is(err, entity.ErrNotFound) {
-					t.Fatalf("expected entity.ErrNotFound, got %v", err)
+				if !errors.Is(err, domain.ErrNotFound) {
+					t.Fatalf("expected domain.ErrNotFound, got %v", err)
 				}
 				return
 			}
@@ -392,8 +392,8 @@ func TestRepository_Delete(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			_, err = repo.FindByID(ctx, tt.id)
-			if !errors.Is(err, entity.ErrNotFound) {
-				t.Fatalf("expected entity.ErrNotFound after deletion, got %v", err)
+			if !errors.Is(err, domain.ErrNotFound) {
+				t.Fatalf("expected domain.ErrNotFound after deletion, got %v", err)
 			}
 		})
 	}

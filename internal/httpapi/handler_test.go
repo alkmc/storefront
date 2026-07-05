@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/alkmc/storefront/internal/config"
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
 
@@ -23,16 +23,16 @@ var testHTTPConfig = config.HTTP{
 	CompressMinBytes: 1024,
 }
 
-func testMoney() entity.Money {
-	return entity.Money{MinorAmount: 123, Currency: entity.CurrencyPLN}
+func testMoney() domain.Money {
+	return domain.Money{MinorAmount: 123, Currency: domain.CurrencyPLN}
 }
 
 func testMoneyInput(amount int64) moneyInput {
-	return moneyInput{MinorAmount: amount, Currency: entity.CurrencyPLN}
+	return moneyInput{MinorAmount: amount, Currency: domain.CurrencyPLN}
 }
 
 func testMoneyJSON(amount int64) map[string]any {
-	return map[string]any{"minorAmount": amount, "currency": string(entity.CurrencyPLN)}
+	return map[string]any{"minorAmount": amount, "currency": string(domain.CurrencyPLN)}
 }
 
 func decodeJSON[T any](t *testing.T, r io.Reader) T {
@@ -45,30 +45,30 @@ func decodeJSON[T any](t *testing.T, r io.Reader) T {
 }
 
 type mockProcessor struct {
-	create   func(context.Context, entity.Product) (entity.Product, error)
-	findByID func(context.Context, uuid.UUID) (entity.Product, error)
-	findAll  func(context.Context, uuid.NullUUID, int) (entity.ProductPage, error)
-	update   func(context.Context, entity.Product) error
+	create   func(context.Context, domain.Product) (domain.Product, error)
+	findByID func(context.Context, uuid.UUID) (domain.Product, error)
+	findAll  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+	update   func(context.Context, domain.Product) error
 	delete   func(context.Context, uuid.UUID) error
 }
 
-func (m *mockProcessor) Create(ctx context.Context, p entity.Product) (entity.Product, error) {
+func (m *mockProcessor) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
 	return m.create(ctx, p)
 }
 
-func (m *mockProcessor) FindByID(ctx context.Context, id uuid.UUID) (entity.Product, error) {
+func (m *mockProcessor) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	if m.findByID == nil {
-		return entity.Product{}, entity.ErrNotFound
+		return domain.Product{}, domain.ErrNotFound
 	}
 	return m.findByID(ctx, id)
 }
 
 func (m *mockProcessor) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
-) (entity.ProductPage, error) {
+) (domain.ProductPage, error) {
 	return m.findAll(ctx, cursor, limit)
 }
 
-func (m *mockProcessor) Update(ctx context.Context, p entity.Product) error {
+func (m *mockProcessor) Update(ctx context.Context, p domain.Product) error {
 	return m.update(ctx, p)
 }
 
@@ -99,8 +99,8 @@ func TestGetProductByID(t *testing.T) {
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.findByID = func(_ context.Context, id uuid.UUID) (entity.Product, error) {
-					return entity.Product{ID: id, Name: "Car", Price: testMoney()}, nil
+				proc.findByID = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+					return domain.Product{ID: id, Name: "Car", Price: testMoney()}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -116,8 +116,8 @@ func TestGetProductByID(t *testing.T) {
 			name: "non-existing product",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.findByID = func(_ context.Context, _ uuid.UUID) (entity.Product, error) {
-					return entity.Product{}, entity.ErrNotFound
+				proc.findByID = func(_ context.Context, _ uuid.UUID) (domain.Product, error) {
+					return domain.Product{}, domain.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -144,7 +144,7 @@ func TestGetProductByID(t *testing.T) {
 				if p.Name != "Car" {
 					t.Errorf("got name %v, want %v", p.Name, "Car")
 				}
-				if p.Price.MinorAmount != 123 || p.Price.Currency != entity.CurrencyPLN {
+				if p.Price.MinorAmount != 123 || p.Price.Currency != domain.CurrencyPLN {
 					t.Errorf("got price %+v, want 123 PLN", p.Price)
 				}
 				return
@@ -175,8 +175,8 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "empty",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (entity.ProductPage, error) {
-					return entity.ProductPage{}, nil
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+					return domain.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -185,11 +185,11 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "success with default pagination",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (entity.ProductPage, error) {
+				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 50 || cursor.Valid {
 						t.Errorf("got limit=%d cursor=%v, want 50/first-page", limit, cursor)
 					}
-					return entity.ProductPage{Items: []entity.Product{{Name: "Car", Price: testMoney()}}}, nil
+					return domain.ProductPage{Items: []domain.Product{{Name: "Car", Price: testMoney()}}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -199,11 +199,11 @@ func TestGetProducts(t *testing.T) {
 			name: "explicit limit and cursor",
 			url:  "/product?limit=10&cursor=" + cursorID.String(),
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (entity.ProductPage, error) {
+				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
 						t.Errorf("got limit=%d cursor=%v, want 10/%s", limit, cursor, cursorID)
 					}
-					return entity.ProductPage{Items: []entity.Product{{Name: "Car", Price: testMoney()}}}, nil
+					return domain.ProductPage{Items: []domain.Product{{Name: "Car", Price: testMoney()}}}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -213,11 +213,11 @@ func TestGetProducts(t *testing.T) {
 			name: "limit clamped to max",
 			url:  "/product?limit=500",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (entity.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 200 {
 						t.Errorf("got limit=%d, want 200", limit)
 					}
-					return entity.ProductPage{}, nil
+					return domain.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -227,11 +227,11 @@ func TestGetProducts(t *testing.T) {
 			name: "negative limit falls back to default",
 			url:  "/product?limit=-5",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (entity.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 50 {
 						t.Errorf("got limit=%d, want 50", limit)
 					}
-					return entity.ProductPage{}, nil
+					return domain.ProductPage{}, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -240,9 +240,9 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "more pages set next cursor",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (entity.ProductPage, error) {
-					return entity.ProductPage{
-						Items:   []entity.Product{{ID: lastID, Name: "Car", Price: testMoney()}},
+				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+					return domain.ProductPage{
+						Items:   []domain.Product{{ID: lastID, Name: "Car", Price: testMoney()}},
 						HasMore: true,
 					}, nil
 				}
@@ -319,7 +319,7 @@ func TestAddProduct(t *testing.T) {
 			name: "success",
 			body: productInput{Name: "Car", Price: testMoneyInput(123)},
 			setupMock: func() {
-				proc.create = func(_ context.Context, p entity.Product) (entity.Product, error) {
+				proc.create = func(_ context.Context, p domain.Product) (domain.Product, error) {
 					return p, nil
 				}
 			},
@@ -354,7 +354,7 @@ func TestAddProduct(t *testing.T) {
 			name: "invalid currency",
 			body: productInput{
 				Name:  "Car",
-				Price: moneyInput{MinorAmount: 123, Currency: entity.Currency("XXX")},
+				Price: moneyInput{MinorAmount: 123, Currency: domain.Currency("XXX")},
 			},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
@@ -390,8 +390,8 @@ func TestAddProduct(t *testing.T) {
 
 func TestServiceUnavailable(t *testing.T) {
 	mux, proc := setupTest(t, testHTTPConfig)
-	proc.findByID = func(_ context.Context, _ uuid.UUID) (entity.Product, error) {
-		return entity.Product{}, fmt.Errorf("query failed: %w", entity.ErrUnavailable)
+	proc.findByID = func(_ context.Context, _ uuid.UUID) (domain.Product, error) {
+		return domain.Product{}, fmt.Errorf("query failed: %w", domain.ErrUnavailable)
 	}
 
 	id := uuid.Must(uuid.NewV7()).String()
@@ -442,7 +442,7 @@ func TestDeleteProduct(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
 				proc.delete = func(_ context.Context, _ uuid.UUID) error {
-					return entity.ErrNotFound
+					return domain.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -497,7 +497,7 @@ func TestUpdateProduct(t *testing.T) {
 			id:   uuid.Must(uuid.NewV7()).String(),
 			body: productInput{Name: "Updated", Price: testMoneyInput(9990)},
 			setupMock: func() {
-				proc.update = func(_ context.Context, _ entity.Product) error {
+				proc.update = func(_ context.Context, _ domain.Product) error {
 					return nil
 				}
 			},
