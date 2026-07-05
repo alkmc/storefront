@@ -28,15 +28,15 @@ func (mockCache) Invalidate(_ context.Context, _ string) error {
 	return nil
 }
 
-func newTestService(repo repository) *Service {
-	return NewService(slog.New(slog.DiscardHandler), repo, mockCache{}, time.Second)
+func newTestService(s store) *Service {
+	return NewService(slog.New(slog.DiscardHandler), s, mockCache{}, time.Second)
 }
 
 func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
 }
 
-type MockRepository struct {
+type MockStore struct {
 	SaveFn     func(context.Context, domain.Product) (domain.Product, error)
 	FindByIDFn func(context.Context, uuid.UUID) (domain.Product, error)
 	FindAllFn  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
@@ -44,27 +44,27 @@ type MockRepository struct {
 	DeleteFn   func(context.Context, uuid.UUID) error
 }
 
-func (m *MockRepository) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
+func (m *MockStore) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
 	return m.SaveFn(ctx, p)
 }
 
-func (m *MockRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (m *MockStore) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	return m.FindByIDFn(ctx, id)
 }
 
-func (m *MockRepository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+func (m *MockStore) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
 ) (domain.ProductPage, error) {
 	return m.FindAllFn(ctx, cursor, limit)
 }
 
-func (m *MockRepository) Update(ctx context.Context, p domain.Product) error {
+func (m *MockStore) Update(ctx context.Context, p domain.Product) error {
 	if m.UpdateFn != nil {
 		return m.UpdateFn(ctx, p)
 	}
 	return nil
 }
 
-func (m *MockRepository) Delete(ctx context.Context, id uuid.UUID) error {
+func (m *MockStore) Delete(ctx context.Context, id uuid.UUID) error {
 	if m.DeleteFn != nil {
 		return m.DeleteFn(ctx, id)
 	}
@@ -77,13 +77,13 @@ func TestService_Create(t *testing.T) {
 	tests := []struct {
 		name      string
 		product   domain.Product
-		mockSetup func(*MockRepository)
+		mockSetup func(*MockStore)
 		wantErr   bool
 	}{
 		{
 			name:    "success",
 			product: domain.Product{Name: "Test", Price: testMoney(1000)},
-			mockSetup: func(m *MockRepository) {
+			mockSetup: func(m *MockStore) {
 				m.SaveFn = func(_ context.Context, p domain.Product) (domain.Product, error) {
 					return p, nil
 				}
@@ -94,9 +94,9 @@ func TestService_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockRepository{})
-			tt.mockSetup(mockRepo)
-			srv := newTestService(mockRepo)
+			mockStore := new(MockStore{})
+			tt.mockSetup(mockStore)
+			srv := newTestService(mockStore)
 
 			res, err := srv.Create(ctx, tt.product)
 			if tt.wantErr {
@@ -122,13 +122,13 @@ func TestService_FindByID(t *testing.T) {
 	tests := []struct {
 		name      string
 		id        uuid.UUID
-		mockSetup func(*MockRepository)
+		mockSetup func(*MockStore)
 		wantErr   bool
 	}{
 		{
 			name: "success",
 			id:   id,
-			mockSetup: func(m *MockRepository) {
+			mockSetup: func(m *MockStore) {
 				m.FindByIDFn = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
 					return domain.Product{ID: id, Name: "Test"}, nil
 				}
@@ -139,9 +139,9 @@ func TestService_FindByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockRepository{})
-			tt.mockSetup(mockRepo)
-			srv := newTestService(mockRepo)
+			mockStore := new(MockStore{})
+			tt.mockSetup(mockStore)
+			srv := newTestService(mockStore)
 
 			res, err := srv.FindByID(ctx, tt.id)
 			if tt.wantErr {
@@ -162,14 +162,14 @@ func TestService_FindByID(t *testing.T) {
 
 func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 	tests := []struct {
-		name         string
-		callers      int
-		wantRepoHits int32
+		name          string
+		callers       int
+		wantStoreHits int32
 	}{
 		{
-			name:         "all concurrent callers share one repo load",
-			callers:      100,
-			wantRepoHits: 1,
+			name:          "all concurrent callers share one store load",
+			callers:       100,
+			wantStoreHits: 1,
 		},
 	}
 
@@ -178,16 +178,16 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				id := uuid.Must(uuid.NewV7())
 
-				var repoCalls atomic.Int32
+				var storeCalls atomic.Int32
 				release := make(chan struct{})
-				mockRepo := &MockRepository{
+				mockStore := &MockStore{
 					FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
-						repoCalls.Add(1)
+						storeCalls.Add(1)
 						<-release
 						return domain.Product{ID: id, Price: testMoney(100)}, nil
 					},
 				}
-				srv := newTestService(mockRepo)
+				srv := newTestService(mockStore)
 
 				var wg sync.WaitGroup
 				for range tt.callers {
@@ -201,8 +201,8 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 				close(release)
 				wg.Wait()
 
-				if got := repoCalls.Load(); got != tt.wantRepoHits {
-					t.Errorf("got %d repo calls, want %d", got, tt.wantRepoHits)
+				if got := storeCalls.Load(); got != tt.wantStoreHits {
+					t.Errorf("got %d store calls, want %d", got, tt.wantStoreHits)
 				}
 			})
 		})
@@ -214,13 +214,13 @@ func TestService_FindAll(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		mockSetup func(*MockRepository)
+		mockSetup func(*MockStore)
 		wantLen   int
 		wantErr   bool
 	}{
 		{
 			name: "success",
-			mockSetup: func(m *MockRepository) {
+			mockSetup: func(m *MockStore) {
 				m.FindAllFn = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{Items: []domain.Product{
 						{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)},
@@ -234,9 +234,9 @@ func TestService_FindAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockRepository{})
-			tt.mockSetup(mockRepo)
-			srv := newTestService(mockRepo)
+			mockStore := new(MockStore{})
+			tt.mockSetup(mockStore)
+			srv := newTestService(mockStore)
 
 			page, err := srv.FindAll(ctx, uuid.NullUUID{}, 50)
 			if tt.wantErr {
@@ -261,13 +261,13 @@ func TestService_Update(t *testing.T) {
 	tests := []struct {
 		name      string
 		product   domain.Product
-		mockSetup func(*MockRepository)
+		mockSetup func(*MockStore)
 		wantErr   bool
 	}{
 		{
 			name:    "success",
 			product: domain.Product{Name: "Update", Price: testMoney(1000)},
-			mockSetup: func(m *MockRepository) {
+			mockSetup: func(m *MockStore) {
 				m.UpdateFn = func(_ context.Context, _ domain.Product) error {
 					return nil
 				}
@@ -278,9 +278,9 @@ func TestService_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockRepository{})
-			tt.mockSetup(mockRepo)
-			srv := newTestService(mockRepo)
+			mockStore := new(MockStore{})
+			tt.mockSetup(mockStore)
+			srv := newTestService(mockStore)
 
 			err := srv.Update(ctx, tt.product)
 			if tt.wantErr {
@@ -303,13 +303,13 @@ func TestService_Delete(t *testing.T) {
 	tests := []struct {
 		name      string
 		id        uuid.UUID
-		mockSetup func(*MockRepository)
+		mockSetup func(*MockStore)
 		wantErr   bool
 	}{
 		{
 			name: "success",
 			id:   id,
-			mockSetup: func(m *MockRepository) {
+			mockSetup: func(m *MockStore) {
 				m.DeleteFn = func(_ context.Context, _ uuid.UUID) error {
 					return nil
 				}
@@ -320,9 +320,9 @@ func TestService_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockRepository{})
-			tt.mockSetup(mockRepo)
-			srv := newTestService(mockRepo)
+			mockStore := new(MockStore{})
+			tt.mockSetup(mockStore)
+			srv := newTestService(mockStore)
 
 			err := srv.Delete(ctx, tt.id)
 			if tt.wantErr {

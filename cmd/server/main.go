@@ -13,8 +13,8 @@ import (
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/httpapi"
-	"github.com/alkmc/storefront/internal/repository"
 	"github.com/alkmc/storefront/internal/service"
+	"github.com/alkmc/storefront/internal/store"
 	"github.com/alkmc/storefront/migrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/rueidis"
@@ -65,7 +65,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		logger.Info("connection to redis closed")
 	}()
 
-	repo := repository.New(pool)
+	repo := store.NewPostgres(pool)
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
 

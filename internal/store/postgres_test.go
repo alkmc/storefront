@@ -1,6 +1,6 @@
 //go:build integration
 
-package repository
+package store
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestContainerDB(t *testing.T) (*Repository, func()) {
+func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 	t.Helper()
 	ctx := t.Context()
 
@@ -85,7 +85,7 @@ func setupTestContainerDB(t *testing.T) (*Repository, func()) {
 		pool.Close()
 		t.Fatalf("failed to ping db: %v", err)
 	}
-	repo := New(pool)
+	repo := NewPostgres(pool)
 
 	cleanup := func() {
 		pool.Close()
@@ -101,7 +101,7 @@ func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
 }
 
-func TestRepository_Save(t *testing.T) {
+func TestPostgres_Save(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -163,7 +163,7 @@ func TestRepository_Save(t *testing.T) {
 	})
 }
 
-func TestRepository_FindByID(t *testing.T) {
+func TestPostgres_FindByID(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -212,7 +212,7 @@ func TestRepository_FindByID(t *testing.T) {
 	}
 }
 
-func TestRepository_FindAll(t *testing.T) {
+func TestPostgres_FindAll(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -287,7 +287,7 @@ func TestRepository_FindAll(t *testing.T) {
 	}
 }
 
-func TestRepository_Update(t *testing.T) {
+func TestPostgres_Update(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -350,7 +350,7 @@ func TestRepository_Update(t *testing.T) {
 	}
 }
 
-func TestRepository_Delete(t *testing.T) {
+func TestPostgres_Delete(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
