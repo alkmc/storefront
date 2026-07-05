@@ -65,17 +65,17 @@ func (h *Handler) GetProduct(
 func (h *Handler) ListProducts(
 	ctx context.Context, req *catalogv1.ListProductsRequest,
 ) (*catalogv1.ListProductsResponse, error) {
-	cursor, err := parseCursor(req.GetCursor())
+	cursor, err := domain.ParseCursor(req.GetCursor())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	page, err := h.processor.FindAll(ctx, cursor, normalizeLimit(int(req.GetLimit())))
+	page, err := h.processor.FindAll(ctx, cursor, domain.ClampPageSize(int(req.GetLimit())))
 	if err != nil {
 		return nil, h.toStatus(err, "list products")
 	}
 	return catalogv1.ListProductsResponse_builder{
 		Products:   toProtos(page.Items),
-		NextCursor: nextCursor(page),
+		NextCursor: page.NextCursor(),
 	}.Build(), nil
 }
 
