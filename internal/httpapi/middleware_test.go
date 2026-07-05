@@ -91,7 +91,7 @@ func TestCSRF(t *testing.T) {
 			next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 				called = true
 			})
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/product", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product", nil)
 			req.Header.Set("Sec-Fetch-Site", "cross-site")
 			req.Header.Set("Origin", tt.origin)
 			rec := httptest.NewRecorder()

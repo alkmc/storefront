@@ -8,11 +8,11 @@ import (
 // NewMux initializes new ServeMux and registers routes.
 func NewMux(h *Handler) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /product", h.Add)
-	mux.HandleFunc("PUT /product/{id}", h.Update)
-	mux.HandleFunc("GET /product", h.Get)
-	mux.HandleFunc("GET /product/{id}", h.GetByID)
-	mux.HandleFunc("DELETE /product/{id}", h.Delete)
+	mux.HandleFunc("POST /v1/product", h.Add)
+	mux.HandleFunc("PUT /v1/product/{id}", h.Update)
+	mux.HandleFunc("GET /v1/product", h.Get)
+	mux.HandleFunc("GET /v1/product/{id}", h.GetByID)
+	mux.HandleFunc("DELETE /v1/product/{id}", h.Delete)
 
 	return mux
 }
