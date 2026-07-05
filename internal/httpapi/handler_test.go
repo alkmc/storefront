@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -384,6 +385,25 @@ func TestAddProduct(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestServiceUnavailable(t *testing.T) {
+	mux, proc := setupTest(t, testHTTPConfig)
+	proc.findByID = func(_ context.Context, _ uuid.UUID) (entity.Product, error) {
+		return entity.Product{}, fmt.Errorf("query failed: %w", entity.ErrUnavailable)
+	}
+
+	id := uuid.Must(uuid.NewV7()).String()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/product/"+id, nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Errorf("got status %d, want %d", resp.Code, http.StatusServiceUnavailable)
+	}
+	if e := decodeJSON[messageResponse](t, resp.Body); e.Message != msgUnavailable {
+		t.Errorf("got msg %q, want %q", e.Message, msgUnavailable)
 	}
 }
 

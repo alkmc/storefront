@@ -66,8 +66,8 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "product not found")
 			return
 		}
-		h.internalError(
-			w, "failed to find product by id",
+		h.respondServerError(
+			w, err, "failed to find product by id",
 			slog.Any("error", err), slog.String("id", id.String()),
 		)
 		return
@@ -93,7 +93,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	page, err := h.processor.FindAll(ctx, cursor, limit)
 	if err != nil {
-		h.internalError(w, "failed to find all products", slog.Any("error", err))
+		h.respondServerError(w, err, "failed to find all products", slog.Any("error", err))
 		return
 	}
 	respond(w, http.StatusOK, toProductsPage(page))
@@ -123,7 +123,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.processor.Create(ctx, p)
 	if err != nil {
-		h.internalError(w, "failed to create product", slog.Any("error", err))
+		h.respondServerError(w, err, "failed to create product", slog.Any("error", err))
 		return
 	}
 	respond(w, http.StatusCreated, toProductResponse(result))
@@ -144,8 +144,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
 		}
-		h.internalError(
-			w, "failed to delete product",
+		h.respondServerError(
+			w, err, "failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()),
 		)
 		return
@@ -186,11 +186,23 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 			return
 		}
-		h.internalError(w, "failed to update product",
-			slog.Any("error", err), slog.String("id", id.String()))
+		h.respondServerError(
+			w, err, "failed to update product",
+			slog.Any("error", err), slog.String("id", id.String()),
+		)
 		return
 	}
 	respond(w, http.StatusOK, toProductResponse(p))
+}
+
+// respondServerError maps infrastructure failures to 503 or 500 and logs them.
+func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg string, attrs ...any) {
+	if errors.Is(err, entity.ErrUnavailable) {
+		h.logger.Warn(logMsg, attrs...)
+		respondError(w, http.StatusServiceUnavailable, msgUnavailable)
+		return
+	}
+	h.internalError(w, logMsg, attrs...)
 }
 
 // internalError logs the failure with attrs and replies with a generic 500.
