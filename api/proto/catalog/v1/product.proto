@@ -1,0 +1,75 @@
+edition = "2024";
+
+package catalog.v1;
+
+option features.field_presence = IMPLICIT;
+
+// ProductService mirrors the HTTP product surface over gRPC.
+service ProductService {
+  // CreateProduct stores a new product and returns it with its generated id.
+  rpc CreateProduct(CreateProductRequest) returns (CreateProductResponse);
+  // GetProduct returns a single product by id.
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+  // ListProducts returns a keyset page of products.
+  rpc ListProducts(ListProductsRequest) returns (ListProductsResponse);
+  // UpdateProduct overwrites an existing product.
+  rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
+  // DeleteProduct removes a product by id.
+  rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse);
+}
+
+// Money is an amount in the smallest unit of an ISO 4217 currency.
+message Money {
+  int64 minor_amount = 1;
+  string currency = 2;
+}
+
+// Product is a purchasable item.
+message Product {
+  string id = 1;
+  string name = 2;
+  Money price = 3;
+}
+
+message CreateProductRequest {
+  string name = 1;
+  Money price = 2;
+}
+
+message CreateProductResponse {
+  Product product = 1;
+}
+
+message GetProductRequest {
+  string id = 1;
+}
+
+message GetProductResponse {
+  Product product = 1;
+}
+
+message ListProductsRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message ListProductsResponse {
+  repeated Product products = 1;
+  string next_cursor = 2;
+}
+
+message UpdateProductRequest {
+  string id = 1;
+  string name = 2;
+  Money price = 3;
+}
+
+message UpdateProductResponse {
+  Product product = 1;
+}
+
+message DeleteProductRequest {
+  string id = 1;
+}
+
+message DeleteProductResponse {}
