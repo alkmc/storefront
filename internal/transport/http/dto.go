@@ -1,4 +1,4 @@
-package httpapi
+package http
 
 import (
 	"github.com/alkmc/storefront/internal/domain"

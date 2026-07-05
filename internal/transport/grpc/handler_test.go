@@ -1,0 +1,226 @@
+package grpc
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net"
+	"testing"
+
+	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
+	"github.com/alkmc/storefront/internal/domain"
+	"github.com/google/uuid"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+)
+
+func TestHandler_CreateProduct(t *testing.T) {
+	client := newTestClient(t, mockProcessor{
+		CreateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
+			p.ID = uuid.Must(uuid.NewV7())
+			return p, nil
+		},
+	})
+
+	resp, err := client.CreateProduct(t.Context(), catalogv1.CreateProductRequest_builder{
+		Name: "Test", Price: testMoney(1000),
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.GetProduct().GetId() == "" {
+		t.Error("expected generated id")
+	}
+	if got := resp.GetProduct().GetName(); got != "Test" {
+		t.Errorf("got name %q, want %q", got, "Test")
+	}
+}
+
+func TestHandler_GetProduct(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	client := newTestClient(t, mockProcessor{
+		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+			return domain.Product{ID: id, Name: "Test"}, nil
+		},
+	})
+
+	resp, err := client.GetProduct(t.Context(), catalogv1.GetProductRequest_builder{
+		Id: id.String(),
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := resp.GetProduct().GetId(); got != id.String() {
+		t.Errorf("got id %q, want %q", got, id.String())
+	}
+}
+
+func TestHandler_ListProducts(t *testing.T) {
+	p1 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1"}
+	p2 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2"}
+	client := newTestClient(t, mockProcessor{
+		FindAllFn: func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+			return domain.ProductPage{Items: []domain.Product{p1, p2}, HasMore: true}, nil
+		},
+	})
+
+	resp, err := client.ListProducts(t.Context(), catalogv1.ListProductsRequest_builder{
+		Limit: 2,
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := len(resp.GetProducts()); got != 2 {
+		t.Errorf("got %d products, want 2", got)
+	}
+	if got := resp.GetNextCursor(); got != p2.ID.String() {
+		t.Errorf("got next cursor %q, want %q", got, p2.ID.String())
+	}
+}
+
+func TestHandler_UpdateProduct(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	client := newTestClient(t, mockProcessor{
+		UpdateFn: func(context.Context, domain.Product) error { return nil },
+	})
+
+	resp, err := client.UpdateProduct(t.Context(), catalogv1.UpdateProductRequest_builder{
+		Id: id.String(), Name: "Updated", Price: testMoney(2000),
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := resp.GetProduct().GetName(); got != "Updated" {
+		t.Errorf("got name %q, want %q", got, "Updated")
+	}
+}
+
+func TestHandler_DeleteProduct(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	client := newTestClient(t, mockProcessor{
+		DeleteFn: func(context.Context, uuid.UUID) error { return nil },
+	})
+
+	if _, err := client.DeleteProduct(t.Context(), catalogv1.DeleteProductRequest_builder{
+		Id: id.String(),
+	}.Build()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestHandler_ErrorMapping(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+
+	tests := []struct {
+		name string
+		proc mockProcessor
+		call func(context.Context, catalogv1.ProductServiceClient) error
+		want codes.Code
+	}{
+		{
+			name: "invalid uuid",
+			proc: mockProcessor{},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.GetProduct(ctx, catalogv1.GetProductRequest_builder{Id: "not-a-uuid"}.Build())
+				return err
+			},
+			want: codes.InvalidArgument,
+		},
+		{
+			name: "validation - empty name",
+			proc: mockProcessor{},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
+					Name: "", Price: testMoney(1000),
+				}.Build())
+				return err
+			},
+			want: codes.InvalidArgument,
+		},
+		{
+			name: "not found",
+			proc: mockProcessor{
+				FindByIDFn: func(context.Context, uuid.UUID) (domain.Product, error) {
+					return domain.Product{}, domain.ErrNotFound
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.GetProduct(ctx, catalogv1.GetProductRequest_builder{Id: id.String()}.Build())
+				return err
+			},
+			want: codes.NotFound,
+		},
+		{
+			name: "unavailable",
+			proc: mockProcessor{
+				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
+					return domain.Product{}, domain.ErrUnavailable
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
+					Name: "Test", Price: testMoney(1000),
+				}.Build())
+				return err
+			},
+			want: codes.Unavailable,
+		},
+		{
+			name: "internal",
+			proc: mockProcessor{
+				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
+					return domain.Product{}, errors.New("boom")
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
+					Name: "Test", Price: testMoney(1000),
+				}.Build())
+				return err
+			},
+			want: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newTestClient(t, tt.proc)
+			if got := status.Code(tt.call(t.Context(), client)); got != tt.want {
+				t.Errorf("got code %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func testMoney(amount int64) *catalogv1.Money {
+	return catalogv1.Money_builder{MinorAmount: amount, Currency: string(domain.CurrencyPLN)}.Build()
+}
+
+// newTestClient wires the handler behind an in-memory gRPC server over bufconn.
+func newTestClient(t *testing.T, p processor) catalogv1.ProductServiceClient {
+	t.Helper()
+	log := slog.New(slog.DiscardHandler)
+	lis := bufconn.Listen(1 << 20)
+	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(logging(log), recovery(log)))
+	catalogv1.RegisterProductServiceServer(srv, NewHandler(log, p))
+	go func() {
+		_ = srv.Serve(lis)
+	}()
+	t.Cleanup(srv.Stop)
+
+	conn, err := grpc.NewClient(
+		"passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return lis.DialContext(ctx)
+		}),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		t.Fatalf("failed to dial bufconn: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return catalogv1.NewProductServiceClient(conn)
+}
