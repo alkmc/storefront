@@ -12,24 +12,31 @@ import (
 
 type (
 	Config struct {
-		HTTP     HTTP
-		Postgres Postgres
-		Redis    Redis
-		Service  Service
-		Log      Log
+		HTTP            HTTP
+		GRPC            GRPC
+		Postgres        Postgres
+		Redis           Redis
+		Service         Service
+		Log             Log
+		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
+	}
+	GRPC struct {
+		Host           string        `env:"GRPC_HOST"`
+		Port           int           `env:"GRPC_PORT" envDefault:"9090"`
+		MaxRecvBytes   int64         `env:"GRPC_MAX_RECV_BYTES" envDefault:"1048576"` // 1 MiB
+		RequestTimeout time.Duration `env:"GRPC_REQUEST_TIMEOUT" envDefault:"2s"`
 	}
 	Service struct {
 		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`
 	}
 	HTTP struct {
-		Host            string        `env:"HTTP_HOST"`
-		Port            int           `env:"HTTP_PORT" envDefault:"7000"`
-		InternalPort    int           `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
-		ReadTimeout     time.Duration `env:"HTTP_READ_TIMEOUT" envDefault:"5s"`
-		WriteTimeout    time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"10s"`
-		IdleTimeout     time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"120s"`
-		ShutdownTimeout time.Duration `env:"HTTP_SHUTDOWN_TIMEOUT" envDefault:"10s"`
-		RequestTimeout  time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"2s"`
+		Host           string        `env:"HTTP_HOST"`
+		Port           int           `env:"HTTP_PORT" envDefault:"7000"`
+		InternalPort   int           `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
+		ReadTimeout    time.Duration `env:"HTTP_READ_TIMEOUT" envDefault:"5s"`
+		WriteTimeout   time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"10s"`
+		IdleTimeout    time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"120s"`
+		RequestTimeout time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"2s"`
 
 		MaxBodyBytes     int64 `env:"HTTP_MAX_BODY_BYTES" envDefault:"1048576"` // 1 MiB
 		CompressMinBytes int   `env:"HTTP_COMPRESS_MIN_BYTES" envDefault:"1024"`
@@ -68,6 +75,10 @@ func (h HTTP) Address() string {
 
 func (h HTTP) InternalAddress() string {
 	return net.JoinHostPort(h.Host, strconv.Itoa(h.InternalPort))
+}
+
+func (g GRPC) Address() string {
+	return net.JoinHostPort(g.Host, strconv.Itoa(g.Port))
 }
 
 func (r Redis) Address() string {

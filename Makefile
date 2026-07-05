@@ -1,4 +1,4 @@
-.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/server ./cmd/migrate
@@ -35,6 +35,12 @@ check:
 
 verify:
 	go mod verify
+
+proto:
+	buf generate
+
+proto-lint:
+	buf lint
 
 up:
 	docker compose up --build -d

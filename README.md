@@ -7,6 +7,7 @@
 * [Quickstart](#quickstart)
 * [Setup](#setup)
 * [API](#api)
+* [gRPC API](#grpc-api)
 * [Architecture](#architecture)
 * [Migrations](#migrations)
 
@@ -54,6 +55,30 @@ curl -s 'http://localhost:7000/v1/product?limit=10&cursor={nextCursor}'
 The list endpoint returns `{"items":[...],"nextCursor":"<id>"}`; a missing `nextCursor` means the last page.
 
 See `api.rest` for the full set of example requests.
+
+## gRPC API
+
+A gRPC transport mirrors the HTTP surface over the same service, on `GRPC_PORT` (default `9090`),
+with a registered gRPC health service. The contract lives in
+`api/proto/catalog/v1/product.proto` (Protobuf edition 2024); code is generated with
+[buf](https://buf.build) into `api/gen` (`make proto`). Reflection is disabled, so
+[grpcurl](https://github.com/fullstorydev/grpcurl) needs the proto:
+
+```bash
+PROTO="-import-path api/proto -proto catalog/v1/product.proto"
+
+# create a product
+grpcurl -plaintext $PROTO -d '{"name":"widget","price":{"minorAmount":999,"currency":"PLN"}}' \
+  localhost:9090 catalog.v1.ProductService/CreateProduct
+
+# get a product by id
+grpcurl -plaintext $PROTO -d '{"id":"<id>"}' \
+  localhost:9090 catalog.v1.ProductService/GetProduct
+
+# list products (keyset pagination)
+grpcurl -plaintext $PROTO -d '{"limit":10}' \
+  localhost:9090 catalog.v1.ProductService/ListProducts
+```
 
 ## Architecture
 
