@@ -36,15 +36,8 @@ func toProductsResponse(ps []domain.Product) []productResponse {
 func toProductsPage(page domain.ProductPage) productsPage {
 	return productsPage{
 		Items:      toProductsResponse(page.Items),
-		NextCursor: nextCursor(page),
+		NextCursor: page.NextCursor(),
 	}
-}
-
-func nextCursor(page domain.ProductPage) string {
-	if !page.HasMore || len(page.Items) == 0 {
-		return ""
-	}
-	return page.Items[len(page.Items)-1].ID.String()
 }
 
 func toMoney(in moneyInput) domain.Money {
