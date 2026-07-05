@@ -18,6 +18,7 @@ const (
 	msgMalformedJSON = "request body contains malformed JSON"
 	msgInvalidBody   = "invalid request body"
 	msgInternalError = "internal server error"
+	msgUnavailable   = "service temporarily unavailable"
 )
 
 type messageResponse struct {
