@@ -12,9 +12,10 @@ import (
 
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
-	"github.com/alkmc/storefront/internal/httpapi"
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
+	grpcsrv "github.com/alkmc/storefront/internal/transport/grpc"
+	httpsrv "github.com/alkmc/storefront/internal/transport/http"
 	"github.com/alkmc/storefront/migrate"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/rueidis"
@@ -69,7 +70,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
 
-	mw, err := httpapi.NewMiddleware(httpapi.MiddlewareCfg{
+	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
 		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
 		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
@@ -81,10 +82,10 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 
-	h := httpapi.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
-	apiServer := httpapi.NewAPIServer(
-		mw(httpapi.NewMux(h)),
-		httpapi.ServerCfg{
+	h := httpsrv.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
+	apiServer := httpsrv.NewAPIServer(
+		mw(httpsrv.NewMux(h)),
+		httpsrv.ServerCfg{
 			Addr:         cfg.HTTP.Address(),
 			ReadTimeout:  cfg.HTTP.ReadTimeout,
 			WriteTimeout: cfg.HTTP.WriteTimeout,
@@ -92,10 +93,10 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		},
 	)
 
-	ih := httpapi.NewInternalHandler(repo, rCache)
-	internalServer := httpapi.NewInternalServer(
-		httpapi.NewInternalMux(ih),
-		httpapi.ServerCfg{
+	ih := httpsrv.NewInternalHandler(repo, rCache)
+	internalServer := httpsrv.NewInternalServer(
+		httpsrv.NewInternalMux(ih),
+		httpsrv.ServerCfg{
 			Addr:        cfg.HTTP.InternalAddress(),
 			ReadTimeout: cfg.HTTP.ReadTimeout,
 		},
@@ -112,7 +113,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		})
 		eg.Go(func() error {
 			<-ctx.Done()
-			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.HTTP.ShutdownTimeout)
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
 			defer cancel()
 			logger.Info("shutting down server", slog.String("address", s.Addr))
 			if err := s.Shutdown(shutdownCtx); err != nil {
@@ -123,6 +124,13 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	}
 	serve(apiServer)
 	serve(internalServer)
+
+	eg.Go(func() error {
+		return grpcsrv.Run(
+			ctx, cfg.GRPC.Address(), cfg.ShutdownTimeout,
+			int(cfg.GRPC.MaxRecvBytes), cfg.GRPC.RequestTimeout, srv, logger,
+		)
+	})
 
 	if err := eg.Wait(); err != nil {
 		return err
