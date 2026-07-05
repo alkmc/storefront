@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 	"github.com/redis/rueidis"
 )
@@ -23,7 +23,7 @@ type (
 	}
 	moneyEntry struct {
 		MinorAmount int64           `json:"minorAmount"`
-		Currency    entity.Currency `json:"currency"`
+		Currency    domain.Currency `json:"currency"`
 	}
 	RedisCache struct {
 		client rueidis.Client
@@ -36,7 +36,7 @@ func New(client rueidis.Client, ttl time.Duration) *RedisCache {
 	return new(RedisCache{client: client, ttl: ttl})
 }
 
-func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) error {
+func (r *RedisCache) Set(ctx context.Context, key string, value domain.Product) error {
 	data, err := json.Marshal(cacheEntry{
 		ID:   value.ID.String(),
 		Name: value.Name,
@@ -58,26 +58,26 @@ func (r *RedisCache) Set(ctx context.Context, key string, value entity.Product) 
 	return nil
 }
 
-func (r *RedisCache) Get(ctx context.Context, key string) (entity.Product, error) {
+func (r *RedisCache) Get(ctx context.Context, key string) (domain.Product, error) {
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
 		if rueidis.IsRedisNil(err) {
-			return entity.Product{}, ErrCacheMiss
+			return domain.Product{}, ErrCacheMiss
 		}
-		return entity.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
+		return domain.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
 	}
 	var e cacheEntry
 	if err := json.Unmarshal(data, &e); err != nil {
-		return entity.Product{}, fmt.Errorf("unmarshal cache value for key %q: %w", key, err)
+		return domain.Product{}, fmt.Errorf("unmarshal cache value for key %q: %w", key, err)
 	}
 	id, err := uuid.Parse(e.ID)
 	if err != nil {
-		return entity.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
+		return domain.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
 	}
-	return entity.Product{
+	return domain.Product{
 		ID:   id,
 		Name: e.Name,
-		Price: entity.Money{
+		Price: domain.Money{
 			MinorAmount: e.Price.MinorAmount,
 			Currency:    e.Price.Currency,
 		},

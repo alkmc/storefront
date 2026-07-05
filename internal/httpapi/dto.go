@@ -1,7 +1,7 @@
 package httpapi
 
 import (
-	"github.com/alkmc/storefront/internal/entity"
+	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
 
@@ -13,7 +13,7 @@ type (
 	}
 	moneyDTO struct {
 		MinorAmount int64           `json:"minorAmount"`
-		Currency    entity.Currency `json:"currency"`
+		Currency    domain.Currency `json:"currency"`
 	}
 	productsPage struct {
 		Items      []productResponse `json:"items"`
@@ -21,11 +21,11 @@ type (
 	}
 )
 
-func toProductResponse(p entity.Product) productResponse {
+func toProductResponse(p domain.Product) productResponse {
 	return productResponse{ID: p.ID, Name: p.Name, Price: toMoneyDTO(p.Price)}
 }
 
-func toProductsResponse(ps []entity.Product) []productResponse {
+func toProductsResponse(ps []domain.Product) []productResponse {
 	out := make([]productResponse, len(ps))
 	for i, p := range ps {
 		out[i] = toProductResponse(p)
@@ -33,24 +33,24 @@ func toProductsResponse(ps []entity.Product) []productResponse {
 	return out
 }
 
-func toProductsPage(page entity.ProductPage) productsPage {
+func toProductsPage(page domain.ProductPage) productsPage {
 	return productsPage{
 		Items:      toProductsResponse(page.Items),
 		NextCursor: nextCursor(page),
 	}
 }
 
-func nextCursor(page entity.ProductPage) string {
+func nextCursor(page domain.ProductPage) string {
 	if !page.HasMore || len(page.Items) == 0 {
 		return ""
 	}
 	return page.Items[len(page.Items)-1].ID.String()
 }
 
-func toMoney(in moneyInput) entity.Money {
-	return entity.Money{MinorAmount: in.MinorAmount, Currency: in.Currency}
+func toMoney(in moneyInput) domain.Money {
+	return domain.Money{MinorAmount: in.MinorAmount, Currency: in.Currency}
 }
 
-func toMoneyDTO(m entity.Money) moneyDTO {
+func toMoneyDTO(m domain.Money) moneyDTO {
 	return moneyDTO{MinorAmount: m.MinorAmount, Currency: m.Currency}
 }

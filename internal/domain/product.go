@@ -1,4 +1,4 @@
-package entity
+package domain
 
 import (
 	"errors"
@@ -8,9 +8,9 @@ import (
 
 var (
 	// ErrNotFound signals a missing aggregate at the domain boundary.
-	ErrNotFound = errors.New("entity: not found")
+	ErrNotFound = errors.New("domain: not found")
 	// ErrUnavailable signals that a backing dependency is temporarily unavailable.
-	ErrUnavailable = errors.New("entity: dependency unavailable")
+	ErrUnavailable = errors.New("domain: dependency unavailable")
 )
 
 type (
