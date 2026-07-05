@@ -6,8 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// ErrNotFound signals a missing aggregate at the domain boundary.
-var ErrNotFound = errors.New("entity: not found")
+var (
+	// ErrNotFound signals a missing aggregate at the domain boundary.
+	ErrNotFound = errors.New("entity: not found")
+	// ErrUnavailable signals that a backing dependency is temporarily unavailable.
+	ErrUnavailable = errors.New("entity: dependency unavailable")
+)
 
 type (
 	// Product represents a purchasable item in the system
