@@ -10,7 +10,7 @@ import (
 
 	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/alkmc/storefront/internal/migrate"
+	"github.com/alkmc/storefront/migrate"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"

@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/alkmc/storefront/internal/config"
-	"github.com/alkmc/storefront/internal/migrate"
+	"github.com/alkmc/storefront/migrate"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 )
