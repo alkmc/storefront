@@ -25,18 +25,18 @@ type (
 		MinorAmount int64           `json:"minorAmount"`
 		Currency    domain.Currency `json:"currency"`
 	}
-	RedisCache struct {
+	Redis struct {
 		client rueidis.Client
 		ttl    time.Duration
 	}
 )
 
 // New wraps an open Redis client in a cache with the given entry TTL.
-func New(client rueidis.Client, ttl time.Duration) *RedisCache {
-	return new(RedisCache{client: client, ttl: ttl})
+func New(client rueidis.Client, ttl time.Duration) *Redis {
+	return new(Redis{client: client, ttl: ttl})
 }
 
-func (r *RedisCache) Set(ctx context.Context, key string, value domain.Product) error {
+func (r *Redis) Set(ctx context.Context, key string, value domain.Product) error {
 	data, err := json.Marshal(cacheEntry{
 		ID:   value.ID.String(),
 		Name: value.Name,
@@ -48,6 +48,7 @@ func (r *RedisCache) Set(ctx context.Context, key string, value domain.Product) 
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
+
 	cmd := r.client.B().Set().Key(key).
 		Value(rueidis.BinaryString(data)).
 		PxMilliseconds(r.ttl.Milliseconds()).
@@ -55,10 +56,11 @@ func (r *RedisCache) Set(ctx context.Context, key string, value domain.Product) 
 	if err := r.client.Do(ctx, cmd).Error(); err != nil {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
+
 	return nil
 }
 
-func (r *RedisCache) Get(ctx context.Context, key string) (domain.Product, error) {
+func (r *Redis) Get(ctx context.Context, key string) (domain.Product, error) {
 	data, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
 		if rueidis.IsRedisNil(err) {
@@ -66,6 +68,7 @@ func (r *RedisCache) Get(ctx context.Context, key string) (domain.Product, error
 		}
 		return domain.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
 	}
+
 	var e cacheEntry
 	if err := json.Unmarshal(data, &e); err != nil {
 		return domain.Product{}, fmt.Errorf("unmarshal cache value for key %q: %w", key, err)
@@ -84,13 +87,13 @@ func (r *RedisCache) Get(ctx context.Context, key string) (domain.Product, error
 	}, nil
 }
 
-func (r *RedisCache) Invalidate(ctx context.Context, key string) error {
+func (r *Redis) Invalidate(ctx context.Context, key string) error {
 	if err := r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error(); err != nil {
 		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
 	return nil
 }
 
-func (r *RedisCache) Ping(ctx context.Context) error {
+func (r *Redis) Ping(ctx context.Context) error {
 	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
 }
