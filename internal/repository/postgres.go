@@ -51,28 +51,9 @@ func (pg *Repository) Close() {
 }
 
 func (pg *Repository) Save(ctx context.Context, p entity.Product) (entity.Product, error) {
-	tx, err := pg.db.BeginTx(ctx, nil)
-	if err != nil {
-		return entity.Product{}, err
-	}
-
-	stmt, err := tx.PrepareContext(ctx, queryInsert)
-	if err != nil {
-		_ = tx.Rollback()
-		return entity.Product{}, err
-	}
-	defer stmt.Close()
-
-	if _, err := stmt.ExecContext(
-		ctx, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
+	if _, err := pg.db.ExecContext(
+		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
 	); err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return entity.Product{}, fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
-		}
-		return entity.Product{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return entity.Product{}, err
 	}
 	return p, nil
@@ -130,71 +111,31 @@ func (pg *Repository) FindAll(ctx context.Context, cursor uuid.NullUUID, limit i
 }
 
 func (pg *Repository) Update(ctx context.Context, p entity.Product) error {
-	tx, err := pg.db.BeginTx(ctx, nil)
+	res, err := pg.db.ExecContext(ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency))
 	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.PrepareContext(ctx, queryUpdate)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
-	res, err := stmt.ExecContext(ctx, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency))
-	if err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
-		}
 		return err
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 	if rows == 0 {
-		_ = tx.Rollback()
 		return entity.ErrNotFound
-	}
-	if err := tx.Commit(); err != nil {
-		return err
 	}
 	return nil
 }
 
 func (pg *Repository) Delete(ctx context.Context, id uuid.UUID) error {
-	tx, err := pg.db.BeginTx(ctx, nil)
+	res, err := pg.db.ExecContext(ctx, queryDelete, id)
 	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.PrepareContext(ctx, queryDelete)
-	if err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	defer stmt.Close()
-
-	res, err := stmt.ExecContext(ctx, id)
-	if err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return fmt.Errorf("failed to rollback transaction: %w", rollbackErr)
-		}
 		return err
 	}
 	rows, err := res.RowsAffected()
 	if err != nil {
-		_ = tx.Rollback()
 		return err
 	}
 	if rows == 0 {
-		_ = tx.Rollback()
 		return entity.ErrNotFound
-	}
-	if err := tx.Commit(); err != nil {
-		return err
 	}
 	return nil
 }
