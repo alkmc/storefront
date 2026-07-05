@@ -46,8 +46,8 @@ type (
 		Password        Secret        `env:"PG_PASSWORD,required,unset"`
 		Database        string        `env:"PG_DB,required"`
 		SSLMode         string        `env:"PG_SSLMODE" envDefault:"disable"`
-		MaxOpenConns    int           `env:"PG_MAX_OPEN_CONNS" envDefault:"25"`
-		MaxIdleConns    int           `env:"PG_MAX_IDLE_CONNS" envDefault:"5"`
+		MaxOpenConns    int32         `env:"PG_MAX_OPEN_CONNS" envDefault:"25"`
+		MaxIdleConns    int32         `env:"PG_MAX_IDLE_CONNS" envDefault:"5"`
 		ConnMaxLifetime time.Duration `env:"PG_CONN_MAX_LIFETIME" envDefault:"30m"`
 	}
 	Redis struct {
