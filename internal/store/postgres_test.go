@@ -97,10 +97,6 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 	return repo, cleanup
 }
 
-func testMoney(amount int64) domain.Money {
-	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
-}
-
 func TestPostgres_Save(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
@@ -397,4 +393,8 @@ func TestPostgres_Delete(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testMoney(amount int64) domain.Money {
+	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
 }

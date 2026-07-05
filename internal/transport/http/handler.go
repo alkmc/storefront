@@ -13,11 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	defaultLimit = 50
-	maxLimit     = 200
-)
-
 type (
 	processor interface {
 		Create(context.Context, domain.Product) (domain.Product, error)
@@ -82,7 +77,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	cursor, err := parseCursor(q.Get("cursor"))
+	cursor, err := domain.ParseCursor(q.Get("cursor"))
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -213,25 +208,11 @@ func (h *Handler) internalError(w http.ResponseWriter, msg string, attrs ...any)
 
 func parseLimit(raw string) (int, error) {
 	if raw == "" {
-		return defaultLimit, nil
+		return domain.DefaultPageSize, nil
 	}
 	n, err := strconv.Atoi(raw)
 	if err != nil {
 		return 0, fmt.Errorf("invalid limit: %q", raw)
 	}
-	if n <= 0 {
-		return defaultLimit, nil
-	}
-	return min(n, maxLimit), nil
-}
-
-func parseCursor(raw string) (uuid.NullUUID, error) {
-	if raw == "" {
-		return uuid.NullUUID{}, nil
-	}
-	id, err := uuid.Parse(raw)
-	if err != nil {
-		return uuid.NullUUID{}, fmt.Errorf("invalid cursor: %q", raw)
-	}
-	return uuid.NullUUID{UUID: id, Valid: true}, nil
+	return domain.NormalizePageSize(n), nil
 }
