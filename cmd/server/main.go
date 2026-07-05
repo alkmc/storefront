@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,8 +16,7 @@ import (
 	"github.com/alkmc/storefront/internal/migrate"
 	"github.com/alkmc/storefront/internal/repository"
 	"github.com/alkmc/storefront/internal/service"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/rueidis"
 	"golang.org/x/sync/errgroup"
 )
@@ -47,13 +45,13 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 
-	db, err := openPostgres(ctx, cfg.Postgres)
+	pool, err := openPostgres(ctx, cfg.Postgres)
 	if err != nil {
 		return err
 	}
 	logger.Info("successfully connected to db")
 	defer func() {
-		_ = db.Close()
+		pool.Close()
 		logger.Info("connection to db closed")
 	}()
 
@@ -67,7 +65,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		logger.Info("connection to redis closed")
 	}()
 
-	repo := repository.New(db)
+	repo := repository.New(pool)
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
 
@@ -133,22 +131,25 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	return nil
 }
 
-// openPostgres opens a database/sql pool over pgx and verifies it with a ping.
-func openPostgres(ctx context.Context, cfg config.Postgres) (*sql.DB, error) {
-	pgCfg, err := pgx.ParseConfig(cfg.DSN())
+// openPostgres opens a pgx connection pool and verifies it with a ping.
+func openPostgres(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, error) {
+	poolCfg, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("parse pg config: %w", err)
 	}
-	db := stdlib.OpenDB(*pgCfg)
-	db.SetMaxOpenConns(cfg.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+	poolCfg.MaxConns = cfg.MaxOpenConns
+	poolCfg.MinConns = cfg.MaxIdleConns
+	poolCfg.MaxConnLifetime = cfg.ConnMaxLifetime
 
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create pg pool: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, fmt.Errorf("ping pg database: %w", err)
 	}
-	return db, nil
+	return pool, nil
 }
 
 // openRedis creates a rueidis client and verifies it with a ping.
