@@ -38,17 +38,17 @@ All available variables with their defaults are documented in `.env.example`.
 
 ```bash
 # create a product
-curl -s -X POST http://localhost:7000/product \
+curl -s -X POST http://localhost:7000/v1/product \
   -H 'Content-Type: application/json' \
   -d '{"name":"widget","price":{"minorAmount":999,"currency":"PLN"}}'
 
 # get a product by id
-curl -s http://localhost:7000/product/{id}
+curl -s http://localhost:7000/v1/product/{id}
 
 # list products (keyset pagination)
-curl -s 'http://localhost:7000/product?limit=10'
+curl -s 'http://localhost:7000/v1/product?limit=10'
 # next page: pass the nextCursor from the previous response
-curl -s 'http://localhost:7000/product?limit=10&cursor={nextCursor}'
+curl -s 'http://localhost:7000/v1/product?limit=10&cursor={nextCursor}'
 ```
 
 The list endpoint returns `{"items":[...],"nextCursor":"<id>"}`; a missing `nextCursor` means the last page.

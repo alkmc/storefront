@@ -3,11 +3,12 @@
 @port = 8080
 @host = {{hostname}}:{{port}}
 @baseUrl = {{scheme}}://{{host}}
+@apiBase = {{baseUrl}}/v1
 @json = application/json
 
 ### CREATE PRODUCT 
 # @name newproduct
-POST {{baseUrl}}/product
+POST {{apiBase}}/product
 Content-Type: {{json}}
 
 {
@@ -21,17 +22,17 @@ Content-Type: {{json}}
 @prodID = {{newproduct.response.body.$.id}}
 
 ### LIST PRODUCT
-GET {{baseUrl}}/product/{{prodID}}
+GET {{apiBase}}/product/{{prodID}}
 
 ### LIST PRODUCTS
-GET {{baseUrl}}/product
+GET {{apiBase}}/product
 
 ### LIST PRODUCTS (keyset paginated)
 # next page: copy `nextCursor` from the response into the cursor query param
-GET {{baseUrl}}/product?limit=10&cursor=
+GET {{apiBase}}/product?limit=10&cursor=
 
 ### UPDATE PRODUCT
-PUT {{baseUrl}}/product/{{prodID}}
+PUT {{apiBase}}/product/{{prodID}}
 Content-Type: {{json}}
 
 {   
@@ -43,10 +44,10 @@ Content-Type: {{json}}
 }
 
 ### DELETE PRODUCT
-DELETE {{baseUrl}}/product/{{prodID}}
+DELETE {{apiBase}}/product/{{prodID}}
 
 ### UPDATE PRODUCT WITH INCORRECT BODY
-PUT {{baseUrl}}/product/{{prodID}}
+PUT {{apiBase}}/product/{{prodID}}
 Content-Type: {{json}}
 
 {   
@@ -56,7 +57,7 @@ Content-Type: {{json}}
 }
 
 ### CREATE PRODUCT WITH INCORRECT BODY
-POST {{baseUrl}}/product
+POST {{apiBase}}/product
 Content-Type: {{json}}
 
 {   
@@ -68,7 +69,7 @@ Content-Type: {{json}}
 
 
 ### CREATE PRODUCT WITH EXTRA FIELD BODY
-POST {{baseUrl}}/product
+POST {{apiBase}}/product
 Content-Type: {{json}}
 
 {   
