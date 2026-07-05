@@ -1,4 +1,4 @@
-.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify docker-build up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/server ./cmd/migrate
@@ -35,10 +35,6 @@ check:
 
 verify:
 	go mod verify
-
-
-docker-build:
-	docker build -t restclean:dev .
 
 up:
 	docker compose up --build -d
