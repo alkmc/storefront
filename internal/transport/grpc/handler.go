@@ -69,7 +69,7 @@ func (h *Handler) ListProducts(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	page, err := h.processor.FindAll(ctx, cursor, domain.ClampPageSize(int(req.GetLimit())))
+	page, err := h.processor.FindAll(ctx, cursor, domain.NormalizePageSize(int(req.GetLimit())))
 	if err != nil {
 		return nil, h.toStatus(err, "list products")
 	}

@@ -214,5 +214,5 @@ func parseLimit(raw string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid limit: %q", raw)
 	}
-	return domain.ClampPageSize(n), nil
+	return domain.NormalizePageSize(n), nil
 }

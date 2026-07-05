@@ -13,8 +13,8 @@ const (
 	MaxPageSize = 200
 )
 
-// ClampPageSize bounds n into (0, MaxPageSize], defaulting non-positive values.
-func ClampPageSize(n int) int {
+// NormalizePageSize bounds n into (0, MaxPageSize], defaulting non-positive values.
+func NormalizePageSize(n int) int {
 	if n <= 0 {
 		return DefaultPageSize
 	}
