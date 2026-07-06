@@ -205,7 +205,7 @@ func newTestClient(t *testing.T, p processor) catalogv1.ProductServiceClient {
 	log := slog.New(slog.DiscardHandler)
 	lis := bufconn.Listen(1 << 20)
 	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(logging(log), recovery(log)))
-	catalogv1.RegisterProductServiceServer(srv, NewHandler(log, p))
+	catalogv1.RegisterProductServiceServer(srv, NewHandler(p, log))
 	go func() {
 		_ = srv.Serve(lis)
 	}()

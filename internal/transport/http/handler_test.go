@@ -13,27 +13,23 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
 
-var testHTTPConfig = config.HTTP{
-	MaxBodyBytes:     1 << 20, // 1 MiB
-	CompressMinBytes: 1024,
-}
+const testMaxBodyBytes = 1 << 20 // 1 MiB
 
-func setupTest(t *testing.T, cfg config.HTTP) (http.Handler, *mockProcessor) {
+func setupTest(t *testing.T) (http.Handler, *mockProcessor) {
 	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
 	proc := new(mockProcessor{})
 
-	h := NewHandler(logger, proc, 2*time.Second)
-	return bodyLimit(cfg.MaxBodyBytes)(NewMux(h)), proc
+	h := NewHandler(proc, 2*time.Second, logger)
+	return bodyLimit(testMaxBodyBytes)(NewMux(h)), proc
 }
 
 func TestGetProductByID(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 
 	tests := []struct {
 		name           string
@@ -105,7 +101,7 @@ func TestGetProductByID(t *testing.T) {
 }
 
 func TestGetProducts(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 
 	cursorID := uuid.Must(uuid.NewV7())
 	lastID := uuid.Must(uuid.NewV7())
@@ -253,7 +249,7 @@ func TestGetProducts(t *testing.T) {
 }
 
 func TestAddProduct(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 
 	tests := []struct {
 		name           string
@@ -336,7 +332,7 @@ func TestAddProduct(t *testing.T) {
 }
 
 func TestServiceUnavailable(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 	proc.findByID = func(_ context.Context, _ uuid.UUID) (domain.Product, error) {
 		return domain.Product{}, fmt.Errorf("query failed: %w", domain.ErrUnavailable)
 	}
@@ -356,9 +352,8 @@ func TestServiceUnavailable(t *testing.T) {
 
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
-	cfg := testHTTPConfig
-	cfg.MaxBodyBytes = limit
-	mux, _ := setupTest(t, cfg)
+	h := NewHandler(new(mockProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))
+	mux := bodyLimit(limit)(NewMux(h))
 
 	body := []byte(`{"name":"a long enough name","price":{"minorAmount":100,"currency":"PLN"}}`)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product", bytes.NewReader(body))
@@ -375,7 +370,7 @@ func TestAddProductBodyTooLarge(t *testing.T) {
 }
 
 func TestDeleteProduct(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 
 	tests := []struct {
 		name           string
@@ -429,7 +424,7 @@ func TestDeleteProduct(t *testing.T) {
 }
 
 func TestUpdateProduct(t *testing.T) {
-	mux, proc := setupTest(t, testHTTPConfig)
+	mux, proc := setupTest(t)
 
 	tests := []struct {
 		name           string
