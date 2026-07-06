@@ -14,32 +14,53 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 )
 
-// Run serves the gRPC API until ctx is cancelled, then stops gracefully.
-func Run(
-	ctx context.Context,
+// Server serves the gRPC API over the product service.
+type Server struct {
+	addr            string
+	requestTimeout  time.Duration
+	maxRequestBytes int
+	shutdownTimeout time.Duration
+	svc             processor
+	log             *slog.Logger
+}
+
+// NewServer configures a gRPC server for svc.
+func NewServer(
 	addr string,
-	shutdownTimeout time.Duration,
-	maxRecvBytes int,
 	requestTimeout time.Duration,
+	maxRequestBytes int,
+	shutdownTimeout time.Duration,
 	svc processor,
 	log *slog.Logger,
-) error {
+) *Server {
+	return new(Server{
+		addr:            addr,
+		requestTimeout:  requestTimeout,
+		maxRequestBytes: maxRequestBytes,
+		shutdownTimeout: shutdownTimeout,
+		svc:             svc,
+		log:             log,
+	})
+}
+
+// Run serves until ctx is cancelled, then stops gracefully.
+func (s *Server) Run(ctx context.Context) error {
 	var lc net.ListenConfig
-	lis, err := lc.Listen(ctx, "tcp", addr)
+	lis, err := lc.Listen(ctx, "tcp", s.addr)
 	if err != nil {
 		return fmt.Errorf("grpc listen: %w", err)
 	}
 
 	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(logging(log), recovery(log), timeout(requestTimeout)),
-		grpc.MaxRecvMsgSize(maxRecvBytes),
+		grpc.ChainUnaryInterceptor(logging(s.log), recovery(s.log), timeout(s.requestTimeout)),
+		grpc.MaxRecvMsgSize(s.maxRequestBytes),
 	)
-	catalogv1.RegisterProductServiceServer(srv, NewHandler(log, svc))
+	catalogv1.RegisterProductServiceServer(srv, NewHandler(s.svc, s.log))
 	healthgrpc.RegisterHealthServer(srv, health.NewServer())
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		log.Info("starting grpc server", slog.String("address", addr))
+		s.log.Info("starting grpc server", slog.String("address", s.addr))
 		if err := srv.Serve(lis); err != nil {
 			return fmt.Errorf("grpc serve failed: %w", err)
 		}
@@ -47,8 +68,8 @@ func Run(
 	})
 	eg.Go(func() error {
 		<-ctx.Done()
-		log.Info("shutting down grpc server", slog.String("address", addr))
-		force := time.AfterFunc(shutdownTimeout, srv.Stop)
+		s.log.Info("shutting down grpc server", slog.String("address", s.addr))
+		force := time.AfterFunc(s.shutdownTimeout, srv.Stop)
 		defer force.Stop()
 		srv.GracefulStop()
 		return nil
