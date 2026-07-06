@@ -21,10 +21,10 @@ type (
 		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	}
 	GRPC struct {
-		Host           string        `env:"GRPC_HOST"`
-		Port           int           `env:"GRPC_PORT" envDefault:"9090"`
-		MaxRecvBytes   int64         `env:"GRPC_MAX_RECV_BYTES" envDefault:"1048576"` // 1 MiB
-		RequestTimeout time.Duration `env:"GRPC_REQUEST_TIMEOUT" envDefault:"2s"`
+		Host            string        `env:"GRPC_HOST"`
+		Port            int           `env:"GRPC_PORT" envDefault:"9090"`
+		RequestTimeout  time.Duration `env:"GRPC_REQUEST_TIMEOUT" envDefault:"2s"`
+		MaxRequestBytes int64         `env:"GRPC_MAX_REQUEST_BYTES" envDefault:"1048576"` // 1 MiB
 	}
 	Service struct {
 		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`

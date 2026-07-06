@@ -29,7 +29,7 @@ func (mockCache) Invalidate(_ context.Context, _ string) error {
 }
 
 func newTestService(s store) *Service {
-	return NewService(slog.New(slog.DiscardHandler), s, mockCache{}, time.Second)
+	return NewService(s, mockCache{}, time.Second, slog.New(slog.DiscardHandler))
 }
 
 func testMoney(amount int64) domain.Money {

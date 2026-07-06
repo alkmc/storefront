@@ -37,7 +37,7 @@ type (
 
 // NewService initializes the service with the given store and cache.
 // loadTimeout caps a single detached store read and cache.Set.
-func NewService(l *slog.Logger, s store, c cacher, loadTimeout time.Duration) *Service {
+func NewService(s store, c cacher, loadTimeout time.Duration, l *slog.Logger) *Service {
 	return new(Service{logger: l, store: s, cache: c, loadTimeout: loadTimeout})
 }
 

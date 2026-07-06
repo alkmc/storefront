@@ -30,7 +30,7 @@ type (
 )
 
 // NewHandler initializes a gRPC product handler backed by the given processor.
-func NewHandler(l *slog.Logger, p processor) *Handler {
+func NewHandler(p processor, l *slog.Logger) *Handler {
 	return new(Handler{logger: l, processor: p})
 }
 

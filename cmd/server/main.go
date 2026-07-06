@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -68,7 +66,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 
 	repo := store.NewPostgres(pool)
 	rCache := cache.New(client, cfg.Redis.TTL)
-	srv := service.NewService(logger, repo, rCache, cfg.Service.LoadTimeout)
+	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
 
 	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
@@ -82,55 +80,39 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 
-	h := httpsrv.NewHandler(logger, srv, cfg.HTTP.RequestTimeout)
-	apiServer := httpsrv.NewAPIServer(
+	h := httpsrv.NewHandler(srv, cfg.HTTP.RequestTimeout, logger)
+	apiSrv := httpsrv.NewAPIServer(
 		mw(httpsrv.NewMux(h)),
 		httpsrv.ServerCfg{
-			Addr:         cfg.HTTP.Address(),
-			ReadTimeout:  cfg.HTTP.ReadTimeout,
-			WriteTimeout: cfg.HTTP.WriteTimeout,
-			IdleTimeout:  cfg.HTTP.IdleTimeout,
+			Addr:            cfg.HTTP.Address(),
+			ReadTimeout:     cfg.HTTP.ReadTimeout,
+			WriteTimeout:    cfg.HTTP.WriteTimeout,
+			IdleTimeout:     cfg.HTTP.IdleTimeout,
+			ShutdownTimeout: cfg.ShutdownTimeout,
 		},
+		logger,
 	)
 
 	ih := httpsrv.NewInternalHandler(repo, rCache)
-	internalServer := httpsrv.NewInternalServer(
+	internalSrv := httpsrv.NewInternalServer(
 		httpsrv.NewInternalMux(ih),
 		httpsrv.ServerCfg{
-			Addr:        cfg.HTTP.InternalAddress(),
-			ReadTimeout: cfg.HTTP.ReadTimeout,
+			Addr:            cfg.HTTP.InternalAddress(),
+			ReadTimeout:     cfg.HTTP.ReadTimeout,
+			ShutdownTimeout: cfg.ShutdownTimeout,
 		},
+		logger,
+	)
+
+	grpcSrv := grpcsrv.NewServer(
+		cfg.GRPC.Address(), cfg.GRPC.RequestTimeout,
+		int(cfg.GRPC.MaxRequestBytes), cfg.ShutdownTimeout, srv, logger,
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)
-	serve := func(s *http.Server) {
-		eg.Go(func() error {
-			logger.Info("starting server", slog.String("address", s.Addr))
-			if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-				return fmt.Errorf("server %s listen failed: %w", s.Addr, err)
-			}
-			return nil
-		})
-		eg.Go(func() error {
-			<-ctx.Done()
-			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cfg.ShutdownTimeout)
-			defer cancel()
-			logger.Info("shutting down server", slog.String("address", s.Addr))
-			if err := s.Shutdown(shutdownCtx); err != nil {
-				return fmt.Errorf("server %s shutdown failed: %w", s.Addr, err)
-			}
-			return nil
-		})
-	}
-	serve(apiServer)
-	serve(internalServer)
-
-	eg.Go(func() error {
-		return grpcsrv.Run(
-			ctx, cfg.GRPC.Address(), cfg.ShutdownTimeout,
-			int(cfg.GRPC.MaxRecvBytes), cfg.GRPC.RequestTimeout, srv, logger,
-		)
-	})
+	eg.Go(func() error { return apiSrv.Run(ctx) })
+	eg.Go(func() error { return internalSrv.Run(ctx) })
+	eg.Go(func() error { return grpcSrv.Run(ctx) })
 
 	if err := eg.Wait(); err != nil {
 		return err

@@ -37,7 +37,7 @@ type (
 )
 
 // NewHandler initializes a product API handler with its required dependencies
-func NewHandler(l *slog.Logger, p processor, requestTimeout time.Duration) *Handler {
+func NewHandler(p processor, requestTimeout time.Duration, l *slog.Logger) *Handler {
 	return &Handler{
 		logger:         l,
 		processor:      p,
