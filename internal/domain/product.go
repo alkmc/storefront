@@ -11,14 +11,18 @@ var (
 	ErrNotFound = errors.New("domain: not found")
 	// ErrUnavailable signals that a backing dependency is temporarily unavailable.
 	ErrUnavailable = errors.New("domain: dependency unavailable")
+	// ErrInsufficientStock signals a purchase for more units than are in stock.
+	ErrInsufficientStock = errors.New("domain: insufficient stock")
 )
 
 type (
 	// Product represents a purchasable item in the system
 	Product struct {
-		ID    uuid.UUID
-		Name  string
-		Price Money
+		ID      uuid.UUID
+		Name    string
+		Price   Money
+		Stock   int64
+		Version int64
 	}
 	// ProductPage is a single keyset page
 	ProductPage struct {
@@ -27,6 +31,18 @@ type (
 	}
 )
 
+const (
+	minPurchaseQuantity = 1
+	// maxPurchaseQuantity is an arbitrary per-request sanity cap.
+	// It rejects absurd quantities as invalid input rather than as insufficient stock.
+	maxPurchaseQuantity = 10000
+)
+
+// ValidPurchaseQuantity reports whether qty falls within the purchasable range.
+func ValidPurchaseQuantity(qty int64) bool {
+	return qty >= minPurchaseQuantity && qty <= maxPurchaseQuantity
+}
+
 // Validate ensures the product meets basic business rules before processing
 func (p *Product) Validate() error {
 	if p.Name == "" {
@@ -34,6 +50,9 @@ func (p *Product) Validate() error {
 	}
 	if err := p.Price.Validate(); err != nil {
 		return err
+	}
+	if p.Stock < 0 {
+		return errors.New("the product stock must not be negative")
 	}
 	return nil
 }

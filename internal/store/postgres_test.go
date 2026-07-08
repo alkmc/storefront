@@ -5,6 +5,8 @@ package store
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -290,7 +292,7 @@ func TestPostgres_Update(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "OldName", Price: testMoney(1000)},
+		ctx, domain.Product{ID: id, Name: "OldName", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -321,7 +323,7 @@ func TestPostgres_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := repo.Update(ctx, tt.product)
+			updated, err := repo.Update(ctx, tt.product)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -335,12 +337,14 @@ func TestPostgres_Update(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			p, err := repo.FindByID(ctx, tt.product.ID)
-			if err != nil {
-				t.Fatalf("failed to fetch updated product: %v", err)
+			if updated.Name != tt.product.Name || updated.Price != tt.product.Price {
+				t.Errorf("update failed: got %+v", updated)
 			}
-			if p.Name != tt.product.Name || p.Price != tt.product.Price {
-				t.Errorf("update failed: got %+v", p)
+			if updated.Stock != 5 {
+				t.Errorf("stock not preserved by update: got %d, want 5", updated.Stock)
+			}
+			if updated.Version != 2 {
+				t.Errorf("version not bumped: got %d, want 2", updated.Version)
 			}
 		})
 	}
@@ -392,6 +396,138 @@ func TestPostgres_Delete(t *testing.T) {
 				t.Fatalf("expected domain.ErrNotFound after deletion, got %v", err)
 			}
 		})
+	}
+}
+
+func TestPostgres_Purchase(t *testing.T) {
+	repo, cleanup := setupTestContainerDB(t)
+	defer cleanup()
+	ctx := t.Context()
+
+	tests := []struct {
+		name          string
+		seedStock     int64
+		qty           int64
+		wantErrIs     error
+		wantRemaining int64
+		wantVersion   int64
+	}{
+		{
+			name:          "success decrements stock and bumps version",
+			seedStock:     5,
+			qty:           2,
+			wantRemaining: 3,
+			wantVersion:   2,
+		},
+		{
+			name:      "insufficient stock",
+			seedStock: 1,
+			qty:       2,
+			wantErrIs: domain.ErrInsufficientStock,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id := uuid.Must(uuid.NewV7())
+			if _, err := repo.Save(
+				ctx, domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: tt.seedStock},
+			); err != nil {
+				t.Fatalf("failed to seed product: %v", err)
+			}
+
+			p, err := repo.Purchase(ctx, id, tt.qty)
+			if tt.wantErrIs != nil {
+				if !errors.Is(err, tt.wantErrIs) {
+					t.Fatalf("got %v, want %v", err, tt.wantErrIs)
+				}
+				got, err := repo.FindByID(ctx, id)
+				if err != nil {
+					t.Fatalf("failed to reload product: %v", err)
+				}
+				if got.Stock != tt.seedStock {
+					t.Errorf("stock changed on failed purchase: got %d, want %d", got.Stock, tt.seedStock)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if p.Stock != tt.wantRemaining {
+				t.Errorf("got remaining stock %d, want %d", p.Stock, tt.wantRemaining)
+			}
+			if p.Version != tt.wantVersion {
+				t.Errorf("got version %d, want %d", p.Version, tt.wantVersion)
+			}
+		})
+	}
+
+	t.Run("non-existing product", func(t *testing.T) {
+		_, err := repo.Purchase(ctx, uuid.Must(uuid.NewV7()), 1)
+		if !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("got %v, want domain.ErrNotFound", err)
+		}
+	})
+}
+
+func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
+	repo, cleanup := setupTestContainerDB(t)
+	defer cleanup()
+	ctx := t.Context()
+
+	const (
+		initialStock = 3
+		goroutines   = 50
+	)
+
+	id := uuid.Must(uuid.NewV7())
+	if _, err := repo.Save(
+		ctx, domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: initialStock},
+	); err != nil {
+		t.Fatalf("failed to seed product: %v", err)
+	}
+
+	var (
+		wg           sync.WaitGroup
+		successes    atomic.Int64
+		insufficient atomic.Int64
+	)
+	start := make(chan struct{})
+	for range goroutines {
+		wg.Go(func() {
+			<-start
+			_, err := repo.Purchase(ctx, id, 1)
+			switch {
+			case err == nil:
+				successes.Add(1)
+			case errors.Is(err, domain.ErrInsufficientStock):
+				insufficient.Add(1)
+			default:
+				t.Errorf("unexpected purchase error: %v", err)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	if got := successes.Load(); got != initialStock {
+		t.Errorf("got %d successful purchases, want %d", got, initialStock)
+	}
+	if got := insufficient.Load(); got != goroutines-initialStock {
+		t.Errorf("got %d insufficient-stock errors, want %d", got, goroutines-initialStock)
+	}
+
+	final, err := repo.FindByID(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to reload product: %v", err)
+	}
+	if final.Stock != 0 {
+		t.Errorf("got final stock %d, want 0", final.Stock)
+	}
+	// version starts at 1 (DEFAULT) and increments once per successful purchase.
+	if want := int64(1 + initialStock); final.Version != want {
+		t.Errorf("got version %d, want %d", final.Version, want)
 	}
 }
 

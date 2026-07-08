@@ -26,7 +26,7 @@ func TestHandler_CreateProduct(t *testing.T) {
 	})
 
 	resp, err := client.CreateProduct(t.Context(), catalogv1.CreateProductRequest_builder{
-		Name: "Test", Price: testMoney(1000),
+		Name: "Test", Price: testMoney(1000), Stock: 5,
 	}.Build())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -36,6 +36,9 @@ func TestHandler_CreateProduct(t *testing.T) {
 	}
 	if got := resp.GetProduct().GetName(); got != "Test" {
 		t.Errorf("got name %q, want %q", got, "Test")
+	}
+	if got := resp.GetProduct().GetStock(); got != 5 {
+		t.Errorf("got stock %d, want 5", got)
 	}
 }
 
@@ -84,7 +87,10 @@ func TestHandler_ListProducts(t *testing.T) {
 func TestHandler_UpdateProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 	client := newTestClient(t, stubProcessor{
-		UpdateFn: func(context.Context, domain.Product) error { return nil },
+		UpdateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
+			p.Stock = 7 // stock comes from the store, not the request
+			return p, nil
+		},
 	})
 
 	resp, err := client.UpdateProduct(t.Context(), catalogv1.UpdateProductRequest_builder{
@@ -95,6 +101,9 @@ func TestHandler_UpdateProduct(t *testing.T) {
 	}
 	if got := resp.GetProduct().GetName(); got != "Updated" {
 		t.Errorf("got name %q, want %q", got, "Updated")
+	}
+	if got := resp.GetProduct().GetStock(); got != 7 {
+		t.Errorf("got stock %d, want 7 (from store, not request)", got)
 	}
 }
 
@@ -108,6 +117,31 @@ func TestHandler_DeleteProduct(t *testing.T) {
 		Id: id.String(),
 	}.Build()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestHandler_PurchaseProduct(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	client := newTestClient(t, stubProcessor{
+		PurchaseFn: func(_ context.Context, pid uuid.UUID, _ int64) (domain.Product, error) {
+			return domain.Product{ID: pid, Stock: 8}, nil
+		},
+	})
+
+	resp, err := client.PurchaseProduct(t.Context(), catalogv1.PurchaseProductRequest_builder{
+		Id: id.String(), Quantity: 2,
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := resp.GetProductId(); got != id.String() {
+		t.Errorf("got productId %q, want %q", got, id.String())
+	}
+	if got := resp.GetQuantity(); got != 2 {
+		t.Errorf("got quantity %d, want 2", got)
+	}
+	if got := resp.GetRemainingStock(); got != 8 {
+		t.Errorf("got remainingStock %d, want 8", got)
 	}
 }
 
@@ -152,6 +186,32 @@ func TestHandler_ErrorMapping(t *testing.T) {
 				return err
 			},
 			want: codes.NotFound,
+		},
+		{
+			name: "insufficient stock",
+			proc: stubProcessor{
+				PurchaseFn: func(context.Context, uuid.UUID, int64) (domain.Product, error) {
+					return domain.Product{}, domain.ErrInsufficientStock
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.PurchaseProduct(ctx, catalogv1.PurchaseProductRequest_builder{
+					Id: id.String(), Quantity: 2,
+				}.Build())
+				return err
+			},
+			want: codes.FailedPrecondition,
+		},
+		{
+			name: "invalid quantity",
+			proc: stubProcessor{},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.PurchaseProduct(ctx, catalogv1.PurchaseProductRequest_builder{
+					Id: id.String(), Quantity: 0,
+				}.Build())
+				return err
+			},
+			want: codes.InvalidArgument,
 		},
 		{
 			name: "unavailable",

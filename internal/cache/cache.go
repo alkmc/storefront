@@ -17,9 +17,11 @@ var ErrCacheMiss = errors.New("cache: key not found")
 
 type (
 	cacheEntry struct {
-		ID    string     `json:"id"`
-		Name  string     `json:"name"`
-		Price moneyEntry `json:"price"`
+		ID      string     `json:"id"`
+		Name    string     `json:"name"`
+		Stock   int64      `json:"stock"`
+		Version int64      `json:"version"`
+		Price   moneyEntry `json:"price"`
 	}
 	moneyEntry struct {
 		MinorAmount int64           `json:"minorAmount"`
@@ -38,8 +40,10 @@ func New(client rueidis.Client, ttl time.Duration) *Redis {
 
 func (r *Redis) Set(ctx context.Context, key string, value domain.Product) error {
 	data, err := json.Marshal(cacheEntry{
-		ID:   value.ID.String(),
-		Name: value.Name,
+		ID:      value.ID.String(),
+		Name:    value.Name,
+		Stock:   value.Stock,
+		Version: value.Version,
 		Price: moneyEntry{
 			MinorAmount: value.Price.MinorAmount,
 			Currency:    value.Price.Currency,
@@ -78,8 +82,10 @@ func (r *Redis) Get(ctx context.Context, key string) (domain.Product, error) {
 		return domain.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
 	}
 	return domain.Product{
-		ID:   id,
-		Name: e.Name,
+		ID:      id,
+		Name:    e.Name,
+		Stock:   e.Stock,
+		Version: e.Version,
 		Price: domain.Money{
 			MinorAmount: e.Price.MinorAmount,
 			Currency:    e.Price.Currency,

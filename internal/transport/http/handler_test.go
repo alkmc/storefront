@@ -260,7 +260,7 @@ func TestAddProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			body: productInput{Name: "Car", Price: testMoneyInput(123)},
+			body: addInput{Name: "Car", Stock: 7, Price: testMoneyInput(123)},
 			setupMock: func() {
 				proc.create = func(_ context.Context, p domain.Product) (domain.Product, error) {
 					return p, nil
@@ -288,14 +288,14 @@ func TestAddProduct(t *testing.T) {
 		},
 		{
 			name:           "negative price",
-			body:           productInput{Name: "Car", Price: testMoneyInput(-1)},
+			body:           addInput{Name: "Car", Price: testMoneyInput(-1)},
 			setupMock:      func() {},
 			expectedStatus: http.StatusUnprocessableEntity,
 			expectedMsg:    "the product price must be positive",
 		},
 		{
 			name: "invalid currency",
-			body: productInput{
+			body: addInput{
 				Name:  "Car",
 				Price: moneyInput{MinorAmount: 123, Currency: domain.Currency("XXX")},
 			},
@@ -321,6 +321,12 @@ func TestAddProduct(t *testing.T) {
 				t.Errorf("got status %d, want %d", resp.Code, tt.expectedStatus)
 			}
 
+			if tt.expectedStatus == http.StatusCreated {
+				if p := decodeJSON[productResponse](t, resp.Body); p.Stock != 7 {
+					t.Errorf("got stock %d, want 7", p.Stock)
+				}
+				return
+			}
 			if tt.expectedMsg != "" {
 				e := decodeJSON[messageResponse](t, resp.Body)
 				if e.Message != tt.expectedMsg {
@@ -437,10 +443,11 @@ func TestUpdateProduct(t *testing.T) {
 		{
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
-			body: productInput{Name: "Updated", Price: testMoneyInput(9990)},
+			body: updateInput{Name: "Updated", Price: testMoneyInput(9990)},
 			setupMock: func() {
-				proc.update = func(_ context.Context, _ domain.Product) error {
-					return nil
+				proc.update = func(_ context.Context, p domain.Product) (domain.Product, error) {
+					p.Stock = 7 // stock comes from the store, not the request body
+					return p, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -482,6 +489,102 @@ func TestUpdateProduct(t *testing.T) {
 				if p.Name != tt.expectedName {
 					t.Errorf("got name %q, want %q", p.Name, tt.expectedName)
 				}
+				if p.Stock != 7 {
+					t.Errorf("got stock %d, want 7 (from store, not request)", p.Stock)
+				}
+			}
+		})
+	}
+}
+
+func TestPurchaseProduct(t *testing.T) {
+	mux, proc := setupTest(t)
+
+	id := uuid.Must(uuid.NewV7())
+
+	tests := []struct {
+		name           string
+		quantity       int64
+		setupMock      func()
+		expectedStatus int
+		expectedMsg    string
+	}{
+		{
+			name:     "success",
+			quantity: 2,
+			setupMock: func() {
+				proc.purchase = func(_ context.Context, pid uuid.UUID, _ int64) (domain.Product, error) {
+					return domain.Product{ID: pid, Name: "Car", Price: testMoney(), Stock: 5}, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "quantity below min",
+			quantity:       0,
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    msgInvalidQuantity,
+		},
+		{
+			name:           "quantity above max",
+			quantity:       10001,
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnprocessableEntity,
+			expectedMsg:    msgInvalidQuantity,
+		},
+		{
+			name:     "product not found",
+			quantity: 2,
+			setupMock: func() {
+				proc.purchase = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
+					return domain.Product{}, domain.ErrNotFound
+				}
+			},
+			expectedStatus: http.StatusNotFound,
+			expectedMsg:    "product not found",
+		},
+		{
+			name:     "insufficient stock",
+			quantity: 2,
+			setupMock: func() {
+				proc.purchase = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
+					return domain.Product{}, domain.ErrInsufficientStock
+				}
+			},
+			expectedStatus: http.StatusConflict,
+			expectedMsg:    "insufficient stock",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			b, err := json.Marshal(purchaseInput{Quantity: tt.quantity})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			req := httptest.NewRequestWithContext(
+				t.Context(), http.MethodPost, "/v1/product/"+id.String()+"/purchase", bytes.NewReader(b),
+			)
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != tt.expectedStatus {
+				t.Errorf("got status %d, want %d", resp.Code, tt.expectedStatus)
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				pr := decodeJSON[purchaseResponse](t, resp.Body)
+				if pr.ProductID != id || pr.Quantity != 2 || pr.RemainingStock != 5 {
+					t.Errorf("got %+v, want productId=%v quantity=2 remainingStock=5", pr, id)
+				}
+				return
+			}
+			e := decodeJSON[messageResponse](t, resp.Body)
+			if e.Message != tt.expectedMsg {
+				t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
 			}
 		})
 	}

@@ -7,8 +7,9 @@ import (
 
 func toProto(p domain.Product) *catalogv1.Product {
 	return catalogv1.Product_builder{
-		Id:   p.ID.String(),
-		Name: p.Name,
+		Id:    p.ID.String(),
+		Name:  p.Name,
+		Stock: p.Stock,
 		Price: catalogv1.Money_builder{
 			MinorAmount: p.Price.MinorAmount,
 			Currency:    string(p.Price.Currency),

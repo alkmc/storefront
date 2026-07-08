@@ -18,8 +18,9 @@ type (
 		Save(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, uuid.UUID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
-		Update(context.Context, domain.Product) error
+		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
+		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
 	}
 	cacher interface {
 		Set(context.Context, string, domain.Product) error
@@ -101,15 +102,16 @@ func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
 	return s.store.FindAll(ctx, cursor, limit)
 }
 
-func (s *Service) Update(ctx context.Context, p domain.Product) error {
-	if err := s.store.Update(ctx, p); err != nil {
-		return err
+func (s *Service) Update(ctx context.Context, p domain.Product) (domain.Product, error) {
+	updated, err := s.store.Update(ctx, p)
+	if err != nil {
+		return domain.Product{}, err
 	}
 	key := p.ID.String()
 	if err := s.cache.Invalidate(ctx, key); err != nil {
 		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
 	}
-	return nil
+	return updated, nil
 }
 
 func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
@@ -121,4 +123,16 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
 	}
 	return nil
+}
+
+func (s *Service) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain.Product, error) {
+	p, err := s.store.Purchase(ctx, id, qty)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	key := id.String()
+	if err := s.cache.Invalidate(ctx, key); err != nil {
+		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
+	}
+	return p, nil
 }
