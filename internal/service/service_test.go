@@ -17,16 +17,16 @@ func TestService_Create(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
-		name      string
-		product   domain.Product
-		mockSetup func(*MockStore)
-		wantErr   bool
+		name     string
+		product  domain.Product
+		spySetup func(*SpyStore)
+		wantErr  bool
 	}{
 		{
 			name:    "success",
 			product: domain.Product{Name: "Test", Price: testMoney(1000)},
-			mockSetup: func(m *MockStore) {
-				m.SaveFn = func(_ context.Context, p domain.Product) (domain.Product, error) {
+			spySetup: func(s *SpyStore) {
+				s.SaveFn = func(_ context.Context, p domain.Product) (domain.Product, error) {
 					return p, nil
 				}
 			},
@@ -36,9 +36,9 @@ func TestService_Create(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := new(MockStore{})
-			tt.mockSetup(mockStore)
-			srv := newTestService(mockStore)
+			spyStore := new(SpyStore{})
+			tt.spySetup(spyStore)
+			srv := newTestService(spyStore)
 
 			res, err := srv.Create(ctx, tt.product)
 			if tt.wantErr {
@@ -62,16 +62,16 @@ func TestService_FindByID(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
-		name      string
-		id        uuid.UUID
-		mockSetup func(*MockStore)
-		wantErr   bool
+		name     string
+		id       uuid.UUID
+		spySetup func(*SpyStore)
+		wantErr  bool
 	}{
 		{
 			name: "success",
 			id:   id,
-			mockSetup: func(m *MockStore) {
-				m.FindByIDFn = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+			spySetup: func(s *SpyStore) {
+				s.FindByIDFn = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
 					return domain.Product{ID: id, Name: "Test"}, nil
 				}
 			},
@@ -81,9 +81,9 @@ func TestService_FindByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := new(MockStore{})
-			tt.mockSetup(mockStore)
-			srv := newTestService(mockStore)
+			spyStore := new(SpyStore{})
+			tt.spySetup(spyStore)
+			srv := newTestService(spyStore)
 
 			res, err := srv.FindByID(ctx, tt.id)
 			if tt.wantErr {
@@ -122,14 +122,14 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 
 				var storeCalls atomic.Int32
 				release := make(chan struct{})
-				mockStore := &MockStore{
+				spyStore := &SpyStore{
 					FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
 						storeCalls.Add(1)
 						<-release
 						return domain.Product{ID: id, Price: testMoney(100)}, nil
 					},
 				}
-				srv := newTestService(mockStore)
+				srv := newTestService(spyStore)
 
 				var wg sync.WaitGroup
 				for range tt.callers {
@@ -155,15 +155,15 @@ func TestService_FindAll(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
-		name      string
-		mockSetup func(*MockStore)
-		wantLen   int
-		wantErr   bool
+		name     string
+		spySetup func(*SpyStore)
+		wantLen  int
+		wantErr  bool
 	}{
 		{
 			name: "success",
-			mockSetup: func(m *MockStore) {
-				m.FindAllFn = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+			spySetup: func(s *SpyStore) {
+				s.FindAllFn = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{Items: []domain.Product{
 						{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)},
 					}}, nil
@@ -176,9 +176,9 @@ func TestService_FindAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := new(MockStore{})
-			tt.mockSetup(mockStore)
-			srv := newTestService(mockStore)
+			spyStore := new(SpyStore{})
+			tt.spySetup(spyStore)
+			srv := newTestService(spyStore)
 
 			page, err := srv.FindAll(ctx, uuid.NullUUID{}, 50)
 			if tt.wantErr {
@@ -201,16 +201,16 @@ func TestService_Update(t *testing.T) {
 	ctx := t.Context()
 
 	tests := []struct {
-		name      string
-		product   domain.Product
-		mockSetup func(*MockStore)
-		wantErr   bool
+		name     string
+		product  domain.Product
+		spySetup func(*SpyStore)
+		wantErr  bool
 	}{
 		{
 			name:    "success",
 			product: domain.Product{Name: "Update", Price: testMoney(1000)},
-			mockSetup: func(m *MockStore) {
-				m.UpdateFn = func(_ context.Context, _ domain.Product) error {
+			spySetup: func(s *SpyStore) {
+				s.UpdateFn = func(_ context.Context, _ domain.Product) error {
 					return nil
 				}
 			},
@@ -220,9 +220,9 @@ func TestService_Update(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := new(MockStore{})
-			tt.mockSetup(mockStore)
-			srv := newTestService(mockStore)
+			spyStore := new(SpyStore{})
+			tt.spySetup(spyStore)
+			srv := newTestService(spyStore)
 
 			err := srv.Update(ctx, tt.product)
 			if tt.wantErr {
@@ -243,16 +243,16 @@ func TestService_Delete(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
-		name      string
-		id        uuid.UUID
-		mockSetup func(*MockStore)
-		wantErr   bool
+		name     string
+		id       uuid.UUID
+		spySetup func(*SpyStore)
+		wantErr  bool
 	}{
 		{
 			name: "success",
 			id:   id,
-			mockSetup: func(m *MockStore) {
-				m.DeleteFn = func(_ context.Context, _ uuid.UUID) error {
+			spySetup: func(s *SpyStore) {
+				s.DeleteFn = func(_ context.Context, _ uuid.UUID) error {
 					return nil
 				}
 			},
@@ -262,9 +262,9 @@ func TestService_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockStore := new(MockStore{})
-			tt.mockSetup(mockStore)
-			srv := newTestService(mockStore)
+			spyStore := new(SpyStore{})
+			tt.spySetup(spyStore)
+			srv := newTestService(spyStore)
 
 			err := srv.Delete(ctx, tt.id)
 			if tt.wantErr {
@@ -281,7 +281,7 @@ func TestService_Delete(t *testing.T) {
 }
 
 func newTestService(s store) *Service {
-	return NewService(s, mockCache{}, time.Second, slog.New(slog.DiscardHandler))
+	return NewService(s, stubCache{}, time.Second, slog.New(slog.DiscardHandler))
 }
 
 func testMoney(amount int64) domain.Money {
