@@ -19,10 +19,10 @@ import (
 
 const testMaxBodyBytes = 1 << 20 // 1 MiB
 
-func setupTest(t *testing.T) (http.Handler, *mockProcessor) {
+func setupTest(t *testing.T) (http.Handler, *stubProcessor) {
 	t.Helper()
 	logger := slog.New(slog.DiscardHandler)
-	proc := new(mockProcessor{})
+	proc := new(stubProcessor{})
 
 	h := NewHandler(proc, 2*time.Second, logger)
 	return bodyLimit(testMaxBodyBytes)(NewMux(h)), proc
@@ -352,7 +352,7 @@ func TestServiceUnavailable(t *testing.T) {
 
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
-	h := NewHandler(new(mockProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))
+	h := NewHandler(new(stubProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))
 	mux := bodyLimit(limit)(NewMux(h))
 
 	body := []byte(`{"name":"a long enough name","price":{"minorAmount":100,"currency":"PLN"}}`)

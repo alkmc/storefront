@@ -18,7 +18,7 @@ import (
 )
 
 func TestHandler_CreateProduct(t *testing.T) {
-	client := newTestClient(t, mockProcessor{
+	client := newTestClient(t, stubProcessor{
 		CreateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
 			p.ID = uuid.Must(uuid.NewV7())
 			return p, nil
@@ -41,7 +41,7 @@ func TestHandler_CreateProduct(t *testing.T) {
 
 func TestHandler_GetProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
-	client := newTestClient(t, mockProcessor{
+	client := newTestClient(t, stubProcessor{
 		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
 			return domain.Product{ID: id, Name: "Test"}, nil
 		},
@@ -61,7 +61,7 @@ func TestHandler_GetProduct(t *testing.T) {
 func TestHandler_ListProducts(t *testing.T) {
 	p1 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1"}
 	p2 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2"}
-	client := newTestClient(t, mockProcessor{
+	client := newTestClient(t, stubProcessor{
 		FindAllFn: func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
 			return domain.ProductPage{Items: []domain.Product{p1, p2}, HasMore: true}, nil
 		},
@@ -83,7 +83,7 @@ func TestHandler_ListProducts(t *testing.T) {
 
 func TestHandler_UpdateProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
-	client := newTestClient(t, mockProcessor{
+	client := newTestClient(t, stubProcessor{
 		UpdateFn: func(context.Context, domain.Product) error { return nil },
 	})
 
@@ -100,7 +100,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 
 func TestHandler_DeleteProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
-	client := newTestClient(t, mockProcessor{
+	client := newTestClient(t, stubProcessor{
 		DeleteFn: func(context.Context, uuid.UUID) error { return nil },
 	})
 
@@ -116,13 +116,13 @@ func TestHandler_ErrorMapping(t *testing.T) {
 
 	tests := []struct {
 		name string
-		proc mockProcessor
+		proc stubProcessor
 		call func(context.Context, catalogv1.ProductServiceClient) error
 		want codes.Code
 	}{
 		{
 			name: "invalid uuid",
-			proc: mockProcessor{},
+			proc: stubProcessor{},
 			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
 				_, err := c.GetProduct(ctx, catalogv1.GetProductRequest_builder{Id: "not-a-uuid"}.Build())
 				return err
@@ -131,7 +131,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		},
 		{
 			name: "validation - empty name",
-			proc: mockProcessor{},
+			proc: stubProcessor{},
 			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
 				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
 					Name: "", Price: testMoney(1000),
@@ -142,7 +142,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		},
 		{
 			name: "not found",
-			proc: mockProcessor{
+			proc: stubProcessor{
 				FindByIDFn: func(context.Context, uuid.UUID) (domain.Product, error) {
 					return domain.Product{}, domain.ErrNotFound
 				},
@@ -155,7 +155,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		},
 		{
 			name: "unavailable",
-			proc: mockProcessor{
+			proc: stubProcessor{
 				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
 					return domain.Product{}, domain.ErrUnavailable
 				},
@@ -170,7 +170,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		},
 		{
 			name: "internal",
-			proc: mockProcessor{
+			proc: stubProcessor{
 				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
 					return domain.Product{}, errors.New("boom")
 				},
