@@ -18,8 +18,9 @@ type (
 		Create(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, uuid.UUID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
-		Update(context.Context, domain.Product) error
+		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
+		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
 	}
 	// Handler adapts the product service to the generated ProductServiceServer.
 	Handler struct {
@@ -37,7 +38,7 @@ func NewHandler(p processor, l *slog.Logger) *Handler {
 func (h *Handler) CreateProduct(
 	ctx context.Context, req *catalogv1.CreateProductRequest,
 ) (*catalogv1.CreateProductResponse, error) {
-	p := domain.Product{Name: req.GetName(), Price: toDomainMoney(req.GetPrice())}
+	p := domain.Product{Name: req.GetName(), Price: toDomainMoney(req.GetPrice()), Stock: req.GetStock()}
 	if err := p.Validate(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -90,10 +91,11 @@ func (h *Handler) UpdateProduct(
 	if err := p.Validate(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := h.processor.Update(ctx, p); err != nil {
+	updated, err := h.processor.Update(ctx, p)
+	if err != nil {
 		return nil, h.toStatus(err, "update product")
 	}
-	return catalogv1.UpdateProductResponse_builder{Product: toProto(p)}.Build(), nil
+	return catalogv1.UpdateProductResponse_builder{Product: toProto(updated)}.Build(), nil
 }
 
 func (h *Handler) DeleteProduct(
@@ -109,6 +111,28 @@ func (h *Handler) DeleteProduct(
 	return catalogv1.DeleteProductResponse_builder{}.Build(), nil
 }
 
+func (h *Handler) PurchaseProduct(
+	ctx context.Context, req *catalogv1.PurchaseProductRequest,
+) (*catalogv1.PurchaseProductResponse, error) {
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	qty := req.GetQuantity()
+	if !domain.ValidPurchaseQuantity(qty) {
+		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
+	}
+	p, err := h.processor.Purchase(ctx, id, qty)
+	if err != nil {
+		return nil, h.toStatus(err, "purchase product")
+	}
+	return catalogv1.PurchaseProductResponse_builder{
+		ProductId:      p.ID.String(),
+		Quantity:       qty,
+		RemainingStock: p.Stock,
+	}.Build(), nil
+}
+
 // toStatus maps domain errors to gRPC codes; unknown errors become Internal.
 func (h *Handler) toStatus(err error, op string) error {
 	switch {
@@ -118,6 +142,8 @@ func (h *Handler) toStatus(err error, op string) error {
 		return status.Error(codes.DeadlineExceeded, "deadline exceeded")
 	case errors.Is(err, domain.ErrNotFound):
 		return status.Error(codes.NotFound, "product not found")
+	case errors.Is(err, domain.ErrInsufficientStock):
+		return status.Error(codes.FailedPrecondition, "insufficient stock")
 	case errors.Is(err, domain.ErrUnavailable):
 		return status.Error(codes.Unavailable, "service temporarily unavailable")
 	default:

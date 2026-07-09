@@ -13,6 +13,7 @@ func NewMux(h *Handler) *http.ServeMux {
 	mux.HandleFunc("GET /v1/product", h.Get)
 	mux.HandleFunc("GET /v1/product/{id}", h.GetByID)
 	mux.HandleFunc("DELETE /v1/product/{id}", h.Delete)
+	mux.HandleFunc("POST /v1/product/{id}/purchase", h.Purchase)
 
 	return mux
 }

@@ -16,6 +16,8 @@ service ProductService {
   rpc UpdateProduct(UpdateProductRequest) returns (UpdateProductResponse);
   // DeleteProduct removes a product by id.
   rpc DeleteProduct(DeleteProductRequest) returns (DeleteProductResponse);
+  // PurchaseProduct decrements stock and returns the remaining amount.
+  rpc PurchaseProduct(PurchaseProductRequest) returns (PurchaseProductResponse);
 }
 
 // Money is an amount in the smallest unit of an ISO 4217 currency.
@@ -29,11 +31,13 @@ message Product {
   string id = 1;
   string name = 2;
   Money price = 3;
+  int64 stock = 4;
 }
 
 message CreateProductRequest {
   string name = 1;
   Money price = 2;
+  int64 stock = 3;
 }
 
 message CreateProductResponse {
@@ -73,3 +77,14 @@ message DeleteProductRequest {
 }
 
 message DeleteProductResponse {}
+
+message PurchaseProductRequest {
+  string id = 1;
+  int64 quantity = 2;
+}
+
+message PurchaseProductResponse {
+  string product_id = 1;
+  int64 quantity = 2;
+  int64 remaining_stock = 3;
+}

@@ -18,8 +18,9 @@ type (
 		Create(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, uuid.UUID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
-		Update(context.Context, domain.Product) error
+		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
+		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
 	}
 	Handler struct {
 		logger         *slog.Logger
@@ -30,9 +31,17 @@ type (
 		MinorAmount int64           `json:"minorAmount"`
 		Currency    domain.Currency `json:"currency"`
 	}
-	productInput struct {
+	addInput struct {
+		Name  string     `json:"name"`
+		Stock int64      `json:"stock"`
+		Price moneyInput `json:"price"`
+	}
+	updateInput struct {
 		Name  string     `json:"name"`
 		Price moneyInput `json:"price"`
+	}
+	purchaseInput struct {
+		Quantity int64 `json:"quantity"`
 	}
 )
 
@@ -100,14 +109,14 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var in productInput
+	var in addInput
 	if err := decodeBody(r.Body, &in); err != nil {
 		h.logger.Warn("decode body failed", slog.Any("error", err))
 		respondDecodeError(w, err)
 		return
 	}
 
-	p := domain.Product{Name: in.Name, Price: toMoney(in.Price)}
+	p := domain.Product{Name: in.Name, Price: toMoney(in.Price), Stock: in.Stock}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return
@@ -160,7 +169,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var in productInput
+	var in updateInput
 	if err := decodeBody(r.Body, &in); err != nil {
 		h.logger.Warn("decode body failed", slog.Any("error", err))
 		respondDecodeError(w, err)
@@ -176,7 +185,8 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	if err := h.processor.Update(ctx, p); err != nil {
+	updated, err := h.processor.Update(ctx, p)
+	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "unable to update product, which does not exist")
 			return
@@ -187,7 +197,51 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		)
 		return
 	}
-	respond(w, http.StatusOK, toProductResponse(p))
+	respond(w, http.StatusOK, toProductResponse(updated))
+}
+
+func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if r.ContentLength == 0 {
+		respondError(w, http.StatusBadRequest, msgEmptyBody)
+		return
+	}
+
+	var in purchaseInput
+	if err := decodeBody(r.Body, &in); err != nil {
+		h.logger.Warn("decode body failed", slog.Any("error", err))
+		respondDecodeError(w, err)
+		return
+	}
+	if !domain.ValidPurchaseQuantity(in.Quantity) {
+		respondError(w, http.StatusUnprocessableEntity, msgInvalidQuantity)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
+	defer cancel()
+
+	p, err := h.processor.Purchase(ctx, id, in.Quantity)
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrNotFound):
+			respondError(w, http.StatusNotFound, "product not found")
+		case errors.Is(err, domain.ErrInsufficientStock):
+			respondError(w, http.StatusConflict, "insufficient stock")
+		default:
+			h.respondServerError(
+				w, err, "failed to purchase product",
+				slog.Any("error", err), slog.String("id", id.String()),
+			)
+		}
+		return
+	}
+	respond(w, http.StatusOK, toPurchaseResponse(p, in.Quantity))
 }
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.

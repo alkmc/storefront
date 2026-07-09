@@ -38,10 +38,10 @@ All available variables with their defaults are documented in `.env.example`.
 ## API
 
 ```bash
-# create a product
+# create a product (stock is optional, defaults to 0)
 curl -s -X POST http://localhost:7000/v1/product \
   -H 'Content-Type: application/json' \
-  -d '{"name":"widget","price":{"minorAmount":999,"currency":"PLN"}}'
+  -d '{"name":"widget","stock":10,"price":{"minorAmount":999,"currency":"PLN"}}'
 
 # get a product by id
 curl -s http://localhost:7000/v1/product/{id}
@@ -50,9 +50,17 @@ curl -s http://localhost:7000/v1/product/{id}
 curl -s 'http://localhost:7000/v1/product?limit=10'
 # next page: pass the nextCursor from the previous response
 curl -s 'http://localhost:7000/v1/product?limit=10&cursor={nextCursor}'
+
+# purchase units, decrementing stock atomically
+curl -s -X POST http://localhost:7000/v1/product/{id}/purchase \
+  -H 'Content-Type: application/json' \
+  -d '{"quantity":2}'
 ```
 
 The list endpoint returns `{"items":[...],"nextCursor":"<id>"}`; a missing `nextCursor` means the last page.
+
+Stock is set at creation and changed only through purchase; `PUT` does not accept a `stock` field.
+Purchase returns `{"productId":"<id>","quantity":2,"remainingStock":8}`; `409` signals insufficient stock.
 
 See `api.rest` for the full set of example requests.
 
@@ -67,8 +75,8 @@ with a registered gRPC health service. The contract lives in
 ```bash
 PROTO="-import-path api/proto -proto catalog/v1/product.proto"
 
-# create a product
-grpcurl -plaintext $PROTO -d '{"name":"widget","price":{"minorAmount":999,"currency":"PLN"}}' \
+# create a product (stock is optional, defaults to 0)
+grpcurl -plaintext $PROTO -d '{"name":"widget","stock":10,"price":{"minorAmount":999,"currency":"PLN"}}' \
   localhost:9090 catalog.v1.ProductService/CreateProduct
 
 # get a product by id
@@ -78,6 +86,10 @@ grpcurl -plaintext $PROTO -d '{"id":"<id>"}' \
 # list products (keyset pagination)
 grpcurl -plaintext $PROTO -d '{"limit":10}' \
   localhost:9090 catalog.v1.ProductService/ListProducts
+
+# purchase units (FAILED_PRECONDITION on insufficient stock)
+grpcurl -plaintext $PROTO -d '{"id":"<id>","quantity":2}' \
+  localhost:9090 catalog.v1.ProductService/PurchaseProduct
 ```
 
 ## Architecture
