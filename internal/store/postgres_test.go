@@ -477,8 +477,8 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 	ctx := t.Context()
 
 	const (
-		initialStock = 3
-		goroutines   = 50
+		initialStock     = 3
+		concurrentBuyers = 50
 	)
 
 	id := uuid.Must(uuid.NewV7())
@@ -494,7 +494,7 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 		insufficient atomic.Int64
 	)
 	start := make(chan struct{})
-	for range goroutines {
+	for range concurrentBuyers {
 		wg.Go(func() {
 			<-start
 			_, err := repo.Purchase(ctx, id, 1)
@@ -514,8 +514,8 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 	if got := successes.Load(); got != initialStock {
 		t.Errorf("got %d successful purchases, want %d", got, initialStock)
 	}
-	if got := insufficient.Load(); got != goroutines-initialStock {
-		t.Errorf("got %d insufficient-stock errors, want %d", got, goroutines-initialStock)
+	if got := insufficient.Load(); got != concurrentBuyers-initialStock {
+		t.Errorf("got %d insufficient-stock errors, want %d", got, concurrentBuyers-initialStock)
 	}
 
 	final, err := repo.FindByID(ctx, id)

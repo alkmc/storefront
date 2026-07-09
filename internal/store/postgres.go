@@ -55,16 +55,15 @@ func (pg *Postgres) FindByID(
 	row := pg.pool.QueryRow(ctx, queryGetByID, id)
 
 	var p domain.Product
-	var currency string
 	if err := row.Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &currency, &p.Stock, &p.Version,
+		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, domain.ErrNotFound
 		}
 		return domain.Product{}, mapDBError(err)
 	}
-	p.Price.Currency = domain.Currency(currency)
+
 	return p, nil
 }
 
@@ -90,13 +89,11 @@ func (pg *Postgres) FindAll(
 	products := make([]domain.Product, 0, limit+1)
 	for rows.Next() {
 		var p domain.Product
-		var currency string
 		if err := rows.Scan(
-			&p.ID, &p.Name, &p.Price.MinorAmount, &currency, &p.Stock, &p.Version,
+			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
 		); err != nil {
 			return domain.ProductPage{}, mapDBError(err)
 		}
-		p.Price.Currency = domain.Currency(currency)
 		products = append(products, p)
 	}
 
@@ -110,17 +107,16 @@ func (pg *Postgres) FindAll(
 func (pg *Postgres) Update(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
-	var currency string
 	err := pg.pool.QueryRow(
 		ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
-	).Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &currency, &p.Stock, &p.Version)
+	).Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, domain.ErrNotFound
 		}
 		return domain.Product{}, mapDBError(err)
 	}
-	p.Price.Currency = domain.Currency(currency)
+
 	return p, nil
 }
 
@@ -132,6 +128,7 @@ func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 	if res.RowsAffected() == 0 {
 		return domain.ErrNotFound
 	}
+
 	return nil
 }
 
@@ -148,9 +145,8 @@ func (pg *Postgres) Purchase(
 	}()
 
 	var p domain.Product
-	var currency string
 	if err := tx.QueryRow(ctx, queryPurchase, id, qty).Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &currency, &p.Stock, &p.Version,
+		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, purchaseNoRowError(ctx, tx, id)
@@ -158,11 +154,10 @@ func (pg *Postgres) Purchase(
 		return domain.Product{}, mapDBError(err)
 	}
 
-	p.Price.Currency = domain.Currency(currency)
-
 	if err := tx.Commit(ctx); err != nil {
 		return domain.Product{}, mapDBError(err)
 	}
+
 	return p, nil
 }
 
@@ -175,6 +170,7 @@ func purchaseNoRowError(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	if !exists {
 		return domain.ErrNotFound
 	}
+
 	return domain.ErrInsufficientStock
 }
 
