@@ -9,6 +9,7 @@ type (
 	productResponse struct {
 		ID    uuid.UUID `json:"id"`
 		Name  string    `json:"name"`
+		Stock int64     `json:"stock"`
 		Price moneyDTO  `json:"price"`
 	}
 	moneyDTO struct {
@@ -19,10 +20,19 @@ type (
 		Items      []productResponse `json:"items"`
 		NextCursor string            `json:"nextCursor,omitempty"`
 	}
+	purchaseResponse struct {
+		ProductID      uuid.UUID `json:"productId"`
+		Quantity       int64     `json:"quantity"`
+		RemainingStock int64     `json:"remainingStock"`
+	}
 )
 
 func toProductResponse(p domain.Product) productResponse {
-	return productResponse{ID: p.ID, Name: p.Name, Price: toMoneyDTO(p.Price)}
+	return productResponse{ID: p.ID, Name: p.Name, Stock: p.Stock, Price: toMoneyDTO(p.Price)}
+}
+
+func toPurchaseResponse(p domain.Product, qty int64) purchaseResponse {
+	return purchaseResponse{ProductID: p.ID, Quantity: qty, RemainingStock: p.Stock}
 }
 
 func toProductsResponse(ps []domain.Product) []productResponse {

@@ -37,31 +37,38 @@ func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.pool.Ping(ctx)
 }
 
-func (pg *Postgres) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
-	if _, err := pg.pool.Exec(
-		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
-	); err != nil {
+func (pg *Postgres) Save(
+	ctx context.Context, p domain.Product,
+) (domain.Product, error) {
+	row := pg.pool.QueryRow(
+		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
+	)
+	if err := row.Scan(&p.Version); err != nil {
 		return domain.Product{}, mapDBError(err)
 	}
 	return p, nil
 }
 
-func (pg *Postgres) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (pg *Postgres) FindByID(
+	ctx context.Context, id uuid.UUID,
+) (domain.Product, error) {
 	row := pg.pool.QueryRow(ctx, queryGetByID, id)
 
 	var p domain.Product
-	var currency string
-	if err := row.Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &currency); err != nil {
+	if err := row.Scan(
+		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, domain.ErrNotFound
 		}
 		return domain.Product{}, mapDBError(err)
 	}
-	p.Price.Currency = domain.Currency(currency)
+
 	return p, nil
 }
 
-func (pg *Postgres) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+func (pg *Postgres) FindAll(
+	ctx context.Context, cursor uuid.NullUUID, limit int,
 ) (domain.ProductPage, error) {
 	var (
 		rows      pgx.Rows
@@ -82,11 +89,11 @@ func (pg *Postgres) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int
 	products := make([]domain.Product, 0, limit+1)
 	for rows.Next() {
 		var p domain.Product
-		var currency string
-		if err := rows.Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &currency); err != nil {
+		if err := rows.Scan(
+			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+		); err != nil {
 			return domain.ProductPage{}, mapDBError(err)
 		}
-		p.Price.Currency = domain.Currency(currency)
 		products = append(products, p)
 	}
 
@@ -97,15 +104,20 @@ func (pg *Postgres) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int
 	return productPage(products, limit), nil
 }
 
-func (pg *Postgres) Update(ctx context.Context, p domain.Product) error {
-	res, err := pg.pool.Exec(ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency))
+func (pg *Postgres) Update(
+	ctx context.Context, p domain.Product,
+) (domain.Product, error) {
+	err := pg.pool.QueryRow(
+		ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
+	).Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version)
 	if err != nil {
-		return mapDBError(err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Product{}, domain.ErrNotFound
+		}
+		return domain.Product{}, mapDBError(err)
 	}
-	if res.RowsAffected() == 0 {
-		return domain.ErrNotFound
-	}
-	return nil
+
+	return p, nil
 }
 
 func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
@@ -116,7 +128,50 @@ func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 	if res.RowsAffected() == 0 {
 		return domain.ErrNotFound
 	}
+
 	return nil
+}
+
+// Purchase atomically decrements stock in an explicit tx.
+func (pg *Postgres) Purchase(
+	ctx context.Context, id uuid.UUID, qty int64,
+) (domain.Product, error) {
+	tx, err := pg.pool.Begin(ctx)
+	if err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	var p domain.Product
+	if err := tx.QueryRow(ctx, queryPurchase, id, qty).Scan(
+		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Product{}, purchaseNoRowError(ctx, tx, id)
+		}
+		return domain.Product{}, mapDBError(err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+
+	return p, nil
+}
+
+// purchaseNoRowError tells a missing product apart from insufficient stock.
+func purchaseNoRowError(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
+	var exists bool
+	if err := tx.QueryRow(ctx, queryProductExists, id).Scan(&exists); err != nil {
+		return mapDBError(err)
+	}
+	if !exists {
+		return domain.ErrNotFound
+	}
+
+	return domain.ErrInsufficientStock
 }
 
 // mapDBError tags connection-class failures as domain.ErrUnavailable.

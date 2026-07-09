@@ -6,13 +6,14 @@
 @apiBase = {{baseUrl}}/v1
 @json = application/json
 
-### CREATE PRODUCT 
+### CREATE PRODUCT
 # @name newproduct
 POST {{apiBase}}/product
 Content-Type: {{json}}
 
 {
     "name": "product",
+    "stock": 10,
     "price": {
         "minorAmount": 9,
         "currency": "PLN"
@@ -41,6 +42,14 @@ Content-Type: {{json}}
         "minorAmount": 2006,
         "currency": "PLN"
     }
+}
+
+### PURCHASE PRODUCT
+POST {{apiBase}}/product/{{prodID}}/purchase
+Content-Type: {{json}}
+
+{
+    "quantity": 2
 }
 
 ### DELETE PRODUCT

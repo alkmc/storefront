@@ -210,8 +210,8 @@ func TestService_Update(t *testing.T) {
 			name:    "success",
 			product: domain.Product{Name: "Update", Price: testMoney(1000)},
 			spySetup: func(s *SpyStore) {
-				s.UpdateFn = func(_ context.Context, _ domain.Product) error {
-					return nil
+				s.UpdateFn = func(_ context.Context, p domain.Product) (domain.Product, error) {
+					return p, nil
 				}
 			},
 			wantErr: false,
@@ -224,7 +224,7 @@ func TestService_Update(t *testing.T) {
 			tt.spySetup(spyStore)
 			srv := newTestService(spyStore)
 
-			err := srv.Update(ctx, tt.product)
+			_, err := srv.Update(ctx, tt.product)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -277,6 +277,25 @@ func TestService_Delete(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
+	}
+}
+
+func TestService_Purchase(t *testing.T) {
+	ctx := t.Context()
+	id := uuid.Must(uuid.NewV7())
+
+	spyStore := new(SpyStore{})
+	spyStore.PurchaseFn = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
+		return domain.Product{ID: id, Stock: 3}, nil
+	}
+	srv := newTestService(spyStore)
+
+	p, err := srv.Purchase(ctx, id, 2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if p.Stock != 3 {
+		t.Errorf("got remaining stock %d, want 3", p.Stock)
 	}
 }
 

@@ -98,6 +98,7 @@ type Product struct {
 	xxx_hidden_Id    string                 `protobuf:"bytes,1,opt,name=id"`
 	xxx_hidden_Name  string                 `protobuf:"bytes,2,opt,name=name"`
 	xxx_hidden_Price *Money                 `protobuf:"bytes,3,opt,name=price"`
+	xxx_hidden_Stock int64                  `protobuf:"varint,4,opt,name=stock"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -148,6 +149,13 @@ func (x *Product) GetPrice() *Money {
 	return nil
 }
 
+func (x *Product) GetStock() int64 {
+	if x != nil {
+		return x.xxx_hidden_Stock
+	}
+	return 0
+}
+
 func (x *Product) SetId(v string) {
 	x.xxx_hidden_Id = v
 }
@@ -158,6 +166,10 @@ func (x *Product) SetName(v string) {
 
 func (x *Product) SetPrice(v *Money) {
 	x.xxx_hidden_Price = v
+}
+
+func (x *Product) SetStock(v int64) {
+	x.xxx_hidden_Stock = v
 }
 
 func (x *Product) HasPrice() bool {
@@ -177,6 +189,7 @@ type Product_builder struct {
 	Id    string
 	Name  string
 	Price *Money
+	Stock int64
 }
 
 func (b0 Product_builder) Build() *Product {
@@ -186,6 +199,7 @@ func (b0 Product_builder) Build() *Product {
 	x.xxx_hidden_Id = b.Id
 	x.xxx_hidden_Name = b.Name
 	x.xxx_hidden_Price = b.Price
+	x.xxx_hidden_Stock = b.Stock
 	return m0
 }
 
@@ -193,6 +207,7 @@ type CreateProductRequest struct {
 	state            protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Name  string                 `protobuf:"bytes,1,opt,name=name"`
 	xxx_hidden_Price *Money                 `protobuf:"bytes,2,opt,name=price"`
+	xxx_hidden_Stock int64                  `protobuf:"varint,3,opt,name=stock"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -236,12 +251,23 @@ func (x *CreateProductRequest) GetPrice() *Money {
 	return nil
 }
 
+func (x *CreateProductRequest) GetStock() int64 {
+	if x != nil {
+		return x.xxx_hidden_Stock
+	}
+	return 0
+}
+
 func (x *CreateProductRequest) SetName(v string) {
 	x.xxx_hidden_Name = v
 }
 
 func (x *CreateProductRequest) SetPrice(v *Money) {
 	x.xxx_hidden_Price = v
+}
+
+func (x *CreateProductRequest) SetStock(v int64) {
+	x.xxx_hidden_Stock = v
 }
 
 func (x *CreateProductRequest) HasPrice() bool {
@@ -260,6 +286,7 @@ type CreateProductRequest_builder struct {
 
 	Name  string
 	Price *Money
+	Stock int64
 }
 
 func (b0 CreateProductRequest_builder) Build() *CreateProductRequest {
@@ -268,6 +295,7 @@ func (b0 CreateProductRequest_builder) Build() *CreateProductRequest {
 	_, _ = b, x
 	x.xxx_hidden_Name = b.Name
 	x.xxx_hidden_Price = b.Price
+	x.xxx_hidden_Stock = b.Stock
 	return m0
 }
 
@@ -872,6 +900,162 @@ func (b0 DeleteProductResponse_builder) Build() *DeleteProductResponse {
 	return m0
 }
 
+type PurchaseProductRequest struct {
+	state               protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Id       string                 `protobuf:"bytes,1,opt,name=id"`
+	xxx_hidden_Quantity int64                  `protobuf:"varint,2,opt,name=quantity"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *PurchaseProductRequest) Reset() {
+	*x = PurchaseProductRequest{}
+	mi := &file_catalog_v1_product_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PurchaseProductRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PurchaseProductRequest) ProtoMessage() {}
+
+func (x *PurchaseProductRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_catalog_v1_product_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *PurchaseProductRequest) GetId() string {
+	if x != nil {
+		return x.xxx_hidden_Id
+	}
+	return ""
+}
+
+func (x *PurchaseProductRequest) GetQuantity() int64 {
+	if x != nil {
+		return x.xxx_hidden_Quantity
+	}
+	return 0
+}
+
+func (x *PurchaseProductRequest) SetId(v string) {
+	x.xxx_hidden_Id = v
+}
+
+func (x *PurchaseProductRequest) SetQuantity(v int64) {
+	x.xxx_hidden_Quantity = v
+}
+
+type PurchaseProductRequest_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Id       string
+	Quantity int64
+}
+
+func (b0 PurchaseProductRequest_builder) Build() *PurchaseProductRequest {
+	m0 := &PurchaseProductRequest{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Id = b.Id
+	x.xxx_hidden_Quantity = b.Quantity
+	return m0
+}
+
+type PurchaseProductResponse struct {
+	state                     protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_ProductId      string                 `protobuf:"bytes,1,opt,name=product_id,json=productId"`
+	xxx_hidden_Quantity       int64                  `protobuf:"varint,2,opt,name=quantity"`
+	xxx_hidden_RemainingStock int64                  `protobuf:"varint,3,opt,name=remaining_stock,json=remainingStock"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
+}
+
+func (x *PurchaseProductResponse) Reset() {
+	*x = PurchaseProductResponse{}
+	mi := &file_catalog_v1_product_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PurchaseProductResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PurchaseProductResponse) ProtoMessage() {}
+
+func (x *PurchaseProductResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_catalog_v1_product_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *PurchaseProductResponse) GetProductId() string {
+	if x != nil {
+		return x.xxx_hidden_ProductId
+	}
+	return ""
+}
+
+func (x *PurchaseProductResponse) GetQuantity() int64 {
+	if x != nil {
+		return x.xxx_hidden_Quantity
+	}
+	return 0
+}
+
+func (x *PurchaseProductResponse) GetRemainingStock() int64 {
+	if x != nil {
+		return x.xxx_hidden_RemainingStock
+	}
+	return 0
+}
+
+func (x *PurchaseProductResponse) SetProductId(v string) {
+	x.xxx_hidden_ProductId = v
+}
+
+func (x *PurchaseProductResponse) SetQuantity(v int64) {
+	x.xxx_hidden_Quantity = v
+}
+
+func (x *PurchaseProductResponse) SetRemainingStock(v int64) {
+	x.xxx_hidden_RemainingStock = v
+}
+
+type PurchaseProductResponse_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	ProductId      string
+	Quantity       int64
+	RemainingStock int64
+}
+
+func (b0 PurchaseProductResponse_builder) Build() *PurchaseProductResponse {
+	m0 := &PurchaseProductResponse{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_ProductId = b.ProductId
+	x.xxx_hidden_Quantity = b.Quantity
+	x.xxx_hidden_RemainingStock = b.RemainingStock
+	return m0
+}
+
 var File_catalog_v1_product_proto protoreflect.FileDescriptor
 
 const file_catalog_v1_product_proto_rawDesc = "" +
@@ -880,14 +1064,16 @@ const file_catalog_v1_product_proto_rawDesc = "" +
 	"catalog.v1\"F\n" +
 	"\x05Money\x12!\n" +
 	"\fminor_amount\x18\x01 \x01(\x03R\vminorAmount\x12\x1a\n" +
-	"\bcurrency\x18\x02 \x01(\tR\bcurrency\"V\n" +
+	"\bcurrency\x18\x02 \x01(\tR\bcurrency\"l\n" +
 	"\aProduct\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12'\n" +
-	"\x05price\x18\x03 \x01(\v2\x11.catalog.v1.MoneyR\x05price\"S\n" +
+	"\x05price\x18\x03 \x01(\v2\x11.catalog.v1.MoneyR\x05price\x12\x14\n" +
+	"\x05stock\x18\x04 \x01(\x03R\x05stock\"i\n" +
 	"\x14CreateProductRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12'\n" +
-	"\x05price\x18\x02 \x01(\v2\x11.catalog.v1.MoneyR\x05price\"F\n" +
+	"\x05price\x18\x02 \x01(\v2\x11.catalog.v1.MoneyR\x05price\x12\x14\n" +
+	"\x05stock\x18\x03 \x01(\x03R\x05stock\"F\n" +
 	"\x15CreateProductResponse\x12-\n" +
 	"\aproduct\x18\x01 \x01(\v2\x13.catalog.v1.ProductR\aproduct\"#\n" +
 	"\x11GetProductRequest\x12\x0e\n" +
@@ -909,32 +1095,43 @@ const file_catalog_v1_product_proto_rawDesc = "" +
 	"\aproduct\x18\x01 \x01(\v2\x13.catalog.v1.ProductR\aproduct\"&\n" +
 	"\x14DeleteProductRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x17\n" +
-	"\x15DeleteProductResponse2\xb2\x03\n" +
+	"\x15DeleteProductResponse\"D\n" +
+	"\x16PurchaseProductRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity\"}\n" +
+	"\x17PurchaseProductResponse\x12\x1d\n" +
+	"\n" +
+	"product_id\x18\x01 \x01(\tR\tproductId\x12\x1a\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity\x12'\n" +
+	"\x0fremaining_stock\x18\x03 \x01(\x03R\x0eremainingStock2\x8e\x04\n" +
 	"\x0eProductService\x12T\n" +
 	"\rCreateProduct\x12 .catalog.v1.CreateProductRequest\x1a!.catalog.v1.CreateProductResponse\x12K\n" +
 	"\n" +
 	"GetProduct\x12\x1d.catalog.v1.GetProductRequest\x1a\x1e.catalog.v1.GetProductResponse\x12Q\n" +
 	"\fListProducts\x12\x1f.catalog.v1.ListProductsRequest\x1a .catalog.v1.ListProductsResponse\x12T\n" +
 	"\rUpdateProduct\x12 .catalog.v1.UpdateProductRequest\x1a!.catalog.v1.UpdateProductResponse\x12T\n" +
-	"\rDeleteProduct\x12 .catalog.v1.DeleteProductRequest\x1a!.catalog.v1.DeleteProductResponseB\xa6\x01\n" +
+	"\rDeleteProduct\x12 .catalog.v1.DeleteProductRequest\x1a!.catalog.v1.DeleteProductResponse\x12Z\n" +
+	"\x0fPurchaseProduct\x12\".catalog.v1.PurchaseProductRequest\x1a#.catalog.v1.PurchaseProductResponseB\xa6\x01\n" +
 	"\x0ecom.catalog.v1B\fProductProtoP\x01Z8github.com/alkmc/storefront/api/gen/catalog/v1;catalogv1\xa2\x02\x03CXX\xaa\x02\n" +
 	"Catalog.V1\xca\x02\n" +
 	"Catalog\\V1\xe2\x02\x16Catalog\\V1\\GPBMetadata\xea\x02\vCatalog::V1\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
-var file_catalog_v1_product_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_catalog_v1_product_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_catalog_v1_product_proto_goTypes = []any{
-	(*Money)(nil),                 // 0: catalog.v1.Money
-	(*Product)(nil),               // 1: catalog.v1.Product
-	(*CreateProductRequest)(nil),  // 2: catalog.v1.CreateProductRequest
-	(*CreateProductResponse)(nil), // 3: catalog.v1.CreateProductResponse
-	(*GetProductRequest)(nil),     // 4: catalog.v1.GetProductRequest
-	(*GetProductResponse)(nil),    // 5: catalog.v1.GetProductResponse
-	(*ListProductsRequest)(nil),   // 6: catalog.v1.ListProductsRequest
-	(*ListProductsResponse)(nil),  // 7: catalog.v1.ListProductsResponse
-	(*UpdateProductRequest)(nil),  // 8: catalog.v1.UpdateProductRequest
-	(*UpdateProductResponse)(nil), // 9: catalog.v1.UpdateProductResponse
-	(*DeleteProductRequest)(nil),  // 10: catalog.v1.DeleteProductRequest
-	(*DeleteProductResponse)(nil), // 11: catalog.v1.DeleteProductResponse
+	(*Money)(nil),                   // 0: catalog.v1.Money
+	(*Product)(nil),                 // 1: catalog.v1.Product
+	(*CreateProductRequest)(nil),    // 2: catalog.v1.CreateProductRequest
+	(*CreateProductResponse)(nil),   // 3: catalog.v1.CreateProductResponse
+	(*GetProductRequest)(nil),       // 4: catalog.v1.GetProductRequest
+	(*GetProductResponse)(nil),      // 5: catalog.v1.GetProductResponse
+	(*ListProductsRequest)(nil),     // 6: catalog.v1.ListProductsRequest
+	(*ListProductsResponse)(nil),    // 7: catalog.v1.ListProductsResponse
+	(*UpdateProductRequest)(nil),    // 8: catalog.v1.UpdateProductRequest
+	(*UpdateProductResponse)(nil),   // 9: catalog.v1.UpdateProductResponse
+	(*DeleteProductRequest)(nil),    // 10: catalog.v1.DeleteProductRequest
+	(*DeleteProductResponse)(nil),   // 11: catalog.v1.DeleteProductResponse
+	(*PurchaseProductRequest)(nil),  // 12: catalog.v1.PurchaseProductRequest
+	(*PurchaseProductResponse)(nil), // 13: catalog.v1.PurchaseProductResponse
 }
 var file_catalog_v1_product_proto_depIdxs = []int32{
 	0,  // 0: catalog.v1.Product.price:type_name -> catalog.v1.Money
@@ -949,13 +1146,15 @@ var file_catalog_v1_product_proto_depIdxs = []int32{
 	6,  // 9: catalog.v1.ProductService.ListProducts:input_type -> catalog.v1.ListProductsRequest
 	8,  // 10: catalog.v1.ProductService.UpdateProduct:input_type -> catalog.v1.UpdateProductRequest
 	10, // 11: catalog.v1.ProductService.DeleteProduct:input_type -> catalog.v1.DeleteProductRequest
-	3,  // 12: catalog.v1.ProductService.CreateProduct:output_type -> catalog.v1.CreateProductResponse
-	5,  // 13: catalog.v1.ProductService.GetProduct:output_type -> catalog.v1.GetProductResponse
-	7,  // 14: catalog.v1.ProductService.ListProducts:output_type -> catalog.v1.ListProductsResponse
-	9,  // 15: catalog.v1.ProductService.UpdateProduct:output_type -> catalog.v1.UpdateProductResponse
-	11, // 16: catalog.v1.ProductService.DeleteProduct:output_type -> catalog.v1.DeleteProductResponse
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
+	12, // 12: catalog.v1.ProductService.PurchaseProduct:input_type -> catalog.v1.PurchaseProductRequest
+	3,  // 13: catalog.v1.ProductService.CreateProduct:output_type -> catalog.v1.CreateProductResponse
+	5,  // 14: catalog.v1.ProductService.GetProduct:output_type -> catalog.v1.GetProductResponse
+	7,  // 15: catalog.v1.ProductService.ListProducts:output_type -> catalog.v1.ListProductsResponse
+	9,  // 16: catalog.v1.ProductService.UpdateProduct:output_type -> catalog.v1.UpdateProductResponse
+	11, // 17: catalog.v1.ProductService.DeleteProduct:output_type -> catalog.v1.DeleteProductResponse
+	13, // 18: catalog.v1.ProductService.PurchaseProduct:output_type -> catalog.v1.PurchaseProductResponse
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
 	7,  // [7:7] is the sub-list for extension extendee
 	0,  // [0:7] is the sub-list for field type_name
@@ -972,7 +1171,7 @@ func file_catalog_v1_product_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_catalog_v1_product_proto_rawDesc), len(file_catalog_v1_product_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
