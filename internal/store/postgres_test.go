@@ -479,6 +479,7 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 	const (
 		initialStock     = 3
 		concurrentBuyers = 50
+		deniedBuyers     = concurrentBuyers - initialStock
 	)
 
 	id := uuid.Must(uuid.NewV7())
@@ -514,8 +515,8 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 	if got := successes.Load(); got != initialStock {
 		t.Errorf("got %d successful purchases, want %d", got, initialStock)
 	}
-	if got := insufficient.Load(); got != concurrentBuyers-initialStock {
-		t.Errorf("got %d insufficient-stock errors, want %d", got, concurrentBuyers-initialStock)
+	if got := insufficient.Load(); got != deniedBuyers {
+		t.Errorf("got %d insufficient-stock errors, want %d", got, deniedBuyers)
 	}
 
 	final, err := repo.FindByID(ctx, id)
