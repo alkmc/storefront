@@ -22,7 +22,7 @@ type (
 		RequestTimeout  time.Duration
 		MaxRequestBytes int
 		ShutdownTimeout time.Duration
-		// Reflection enables server reflection for CLI tooling; dev only.
+		// Reflection enables server reflection for CLI tooling in dev, keep off in prod.
 		Reflection bool
 	}
 	// Server serves the gRPC API over the product service.
