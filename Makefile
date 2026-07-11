@@ -31,7 +31,7 @@ lint:
 	golangci-lint run
 
 check:
-	go run golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./...
+	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 verify:
 	go mod verify
