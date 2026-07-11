@@ -105,8 +105,14 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	)
 
 	grpcSrv := grpcsrv.NewServer(
-		cfg.GRPC.Address(), cfg.GRPC.RequestTimeout,
-		int(cfg.GRPC.MaxRequestBytes), cfg.ShutdownTimeout, srv, logger,
+		grpcsrv.ServerCfg{
+			Addr:            cfg.GRPC.Address(),
+			RequestTimeout:  cfg.GRPC.RequestTimeout,
+			MaxRequestBytes: int(cfg.GRPC.MaxRequestBytes),
+			ShutdownTimeout: cfg.ShutdownTimeout,
+			Reflection:      cfg.GRPC.Reflection,
+		},
+		srv, logger,
 	)
 
 	eg, ctx := errgroup.WithContext(ctx)

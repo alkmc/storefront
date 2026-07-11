@@ -25,6 +25,7 @@ type (
 		Port            int           `env:"GRPC_PORT" envDefault:"9090"`
 		RequestTimeout  time.Duration `env:"GRPC_REQUEST_TIMEOUT" envDefault:"2s"`
 		MaxRequestBytes int64         `env:"GRPC_MAX_REQUEST_BYTES" envDefault:"1048576"` // 1 MiB
+		Reflection      bool          `env:"GRPC_REFLECTION" envDefault:"false"`
 	}
 	Service struct {
 		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`
