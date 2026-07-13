@@ -13,10 +13,10 @@ test-race:
 	go test -race ./...
 
 testcontainers:
-	go test -tags integration ./internal/store
+	go test -tags integration ./...
 
 testcontainers-race:
-	go test -race -tags integration ./internal/store
+	go test -race -tags integration ./...
 
 fmt:
 	gofumpt -l -w .
