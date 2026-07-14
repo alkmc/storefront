@@ -7,15 +7,19 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/alkmc/storefront/internal/bus"
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
+	"github.com/alkmc/storefront/internal/outbox"
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
 	grpcsrv "github.com/alkmc/storefront/internal/transport/grpc"
 	httpsrv "github.com/alkmc/storefront/internal/transport/http"
 	"github.com/alkmc/storefront/migrate"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 	"github.com/redis/rueidis"
 	"golang.org/x/sync/errgroup"
 )
@@ -64,9 +68,29 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		logger.Info("connection to redis closed")
 	}()
 
+	amqp, err := openRabbitMQ(ctx, cfg.RabbitMQ.URL())
+	if err != nil {
+		return err
+	}
+	logger.Info("successfully connected to rabbitmq")
+	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "rabbitmq connection", amqp.Close, logger)
+
+	pub, err := bus.NewPublisher(ctx, amqp)
+	if err != nil {
+		return err
+	}
+	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "event publisher", pub.Close, logger)
+
 	repo := store.NewPostgres(pool)
+	defer repo.Close()
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
+	relay := outbox.New(repo, pub, outbox.Config{
+		BatchSize:      cfg.Outbox.BatchSize,
+		PollInterval:   cfg.Outbox.PollInterval,
+		PublishTimeout: cfg.Outbox.PublishTimeout,
+		MaxAttempts:    cfg.Outbox.MaxAttempts,
+	}, logger)
 
 	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
@@ -119,6 +143,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	eg.Go(func() error { return apiSrv.Run(ctx) })
 	eg.Go(func() error { return internalSrv.Run(ctx) })
 	eg.Go(func() error { return grpcSrv.Run(ctx) })
+	eg.Go(func() error { return relay.Run(ctx) })
 
 	if err := eg.Wait(); err != nil {
 		return err
@@ -146,6 +171,29 @@ func openPostgres(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, erro
 		return nil, fmt.Errorf("ping pg database: %w", err)
 	}
 	return pool, nil
+}
+
+// openRabbitMQ connects to the broker through the client's auto-recovering environment.
+func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection, error) {
+	env := rabbitmqamqp.NewEnvironment(url, nil)
+	conn, err := env.NewConnection(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("connect rabbitmq: %w", err)
+	}
+	return conn, nil
+}
+
+// closeWithTimeout closes a resource with a fresh timeout detached from the canceled run context.
+func closeWithTimeout(
+	ctx context.Context, d time.Duration, name string, closeFn func(context.Context) error, l *slog.Logger,
+) {
+	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d)
+	defer cancel()
+	if err := closeFn(closeCtx); err != nil {
+		l.Warn("close failed", slog.String("resource", name), slog.Any("error", err))
+		return
+	}
+	l.Info("closed", slog.String("resource", name))
 }
 
 // openRedis creates a rueidis client and verifies it with a ping.

@@ -27,7 +27,8 @@ const (
 		RETURNING id, name, price_minor, currency, stock, version;`
 	queryDelete = `
 		DELETE FROM products
-		WHERE id = $1;`
+		WHERE id = $1
+		RETURNING version + 1;`
 	queryPurchase = `
 		UPDATE products
 		SET stock = stock - $2, version = version + 1
@@ -35,4 +36,27 @@ const (
 		RETURNING id, name, price_minor, currency, stock, version;`
 	queryProductExists = `
 		SELECT EXISTS(SELECT 1 FROM products WHERE id = $1);`
+	queryInsertOutbox = `
+		INSERT INTO outbox (message_id, event_type, payload)
+		VALUES ($1, $2, $3);`
+	queryNotifyOutbox = `
+		SELECT pg_notify('outbox_wakeup', '');`
+	queryClaimOutbox = `
+		SELECT id, message_id, event_type, payload, attempts, created_at
+		FROM outbox
+		WHERE next_attempt_at <= now()
+		ORDER BY id
+		LIMIT $1
+		FOR UPDATE SKIP LOCKED;`
+	queryDeleteOutbox = `
+		DELETE FROM outbox
+		WHERE id = ANY($1);`
+	queryBumpOutbox = `
+		UPDATE outbox
+		SET attempts = attempts + 1,
+		    next_attempt_at = now() + make_interval(secs => LEAST(POWER(2, attempts), 30))
+		WHERE id = ANY($1);`
+	queryDeadOutbox = `
+		INSERT INTO outbox_dead (id, message_id, event_type, payload, attempts, created_at, last_error)
+		VALUES ($1, $2, $3, $4, $5, $6, $7);`
 )
