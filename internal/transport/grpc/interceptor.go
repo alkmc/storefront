@@ -48,7 +48,7 @@ func recovery(log *slog.Logger) grpc.UnaryServerInterceptor {
 			if p := recover(); p != nil {
 				log.Error(
 					"grpc panic recovered",
-					slog.Any("error", p),
+					slog.Any("panic", p),
 					slog.String("method", info.FullMethod),
 					slog.String("stack", string(debug.Stack())),
 				)
