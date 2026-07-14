@@ -83,39 +83,14 @@ func run(logger *slog.Logger, cfg config.Config) error {
 
 	repo := store.NewPostgres(pool)
 	defer repo.Close()
+
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
-	relay := outbox.New(repo, pub, outbox.Config{
-		BatchSize:      cfg.Outbox.BatchSize,
-		PollInterval:   cfg.Outbox.PollInterval,
-		PublishTimeout: cfg.Outbox.PublishTimeout,
-		MaxAttempts:    cfg.Outbox.MaxAttempts,
-	}, logger)
 
-	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
-		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
-		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
-		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
-		CORSMaxAge:         cfg.HTTP.CORSMaxAge,
-		HSTSEnabled:        cfg.HTTP.HSTSEnabled,
-		HSTSMaxAge:         cfg.HTTP.HSTSMaxAge,
-	})
+	apiSrv, err := newAPIServer(cfg, srv, logger)
 	if err != nil {
 		return err
 	}
-
-	h := httpsrv.NewHandler(srv, cfg.HTTP.RequestTimeout, logger)
-	apiSrv := httpsrv.NewAPIServer(
-		mw(httpsrv.NewMux(h)),
-		httpsrv.ServerCfg{
-			Addr:            cfg.HTTP.Address(),
-			ReadTimeout:     cfg.HTTP.ReadTimeout,
-			WriteTimeout:    cfg.HTTP.WriteTimeout,
-			IdleTimeout:     cfg.HTTP.IdleTimeout,
-			ShutdownTimeout: cfg.ShutdownTimeout,
-		},
-		logger,
-	)
 
 	ih := httpsrv.NewInternalHandler(repo, rCache)
 	internalSrv := httpsrv.NewInternalServer(
@@ -139,6 +114,13 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		srv, logger,
 	)
 
+	relay := outbox.New(repo, pub, outbox.Config{
+		BatchSize:      cfg.Outbox.BatchSize,
+		PollInterval:   cfg.Outbox.PollInterval,
+		PublishTimeout: cfg.Outbox.PublishTimeout,
+		MaxAttempts:    cfg.Outbox.MaxAttempts,
+	}, logger)
+
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error { return apiSrv.Run(ctx) })
 	eg.Go(func() error { return internalSrv.Run(ctx) })
@@ -150,6 +132,34 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	}
 	logger.Info("server shutdown completed")
 	return nil
+}
+
+// newAPIServer assembles the public HTTP server behind its middleware chain.
+func newAPIServer(cfg config.Config, svc *service.Service, l *slog.Logger) (*httpsrv.Server, error) {
+	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
+		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
+		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
+		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
+		CORSMaxAge:         cfg.HTTP.CORSMaxAge,
+		HSTSEnabled:        cfg.HTTP.HSTSEnabled,
+		HSTSMaxAge:         cfg.HTTP.HSTSMaxAge,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	h := httpsrv.NewHandler(svc, cfg.HTTP.RequestTimeout, l)
+	return httpsrv.NewAPIServer(
+		mw(httpsrv.NewMux(h)),
+		httpsrv.ServerCfg{
+			Addr:            cfg.HTTP.Address(),
+			ReadTimeout:     cfg.HTTP.ReadTimeout,
+			WriteTimeout:    cfg.HTTP.WriteTimeout,
+			IdleTimeout:     cfg.HTTP.IdleTimeout,
+			ShutdownTimeout: cfg.ShutdownTimeout,
+		},
+		l,
+	), nil
 }
 
 // openPostgres opens a pgx connection pool and verifies it with a ping.
@@ -183,19 +193,6 @@ func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection
 	return conn, nil
 }
 
-// closeWithTimeout closes a resource with a fresh timeout detached from the canceled run context.
-func closeWithTimeout(
-	ctx context.Context, d time.Duration, name string, closeFn func(context.Context) error, l *slog.Logger,
-) {
-	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d)
-	defer cancel()
-	if err := closeFn(closeCtx); err != nil {
-		l.Warn("close failed", slog.String("resource", name), slog.Any("error", err))
-		return
-	}
-	l.Info("closed", slog.String("resource", name))
-}
-
 // openRedis creates a rueidis client and verifies it with a ping.
 func openRedis(ctx context.Context, cfg config.Redis) (rueidis.Client, error) {
 	client, err := rueidis.NewClient(rueidis.ClientOption{
@@ -211,4 +208,17 @@ func openRedis(ctx context.Context, cfg config.Redis) (rueidis.Client, error) {
 		return nil, fmt.Errorf("ping redis: %w", err)
 	}
 	return client, nil
+}
+
+// closeWithTimeout closes a resource with a fresh timeout detached from the canceled run context.
+func closeWithTimeout(
+	ctx context.Context, d time.Duration, name string, closeFn func(context.Context) error, l *slog.Logger,
+) {
+	closeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), d)
+	defer cancel()
+	if err := closeFn(closeCtx); err != nil {
+		l.Warn("close failed", slog.String("resource", name), slog.Any("error", err))
+		return
+	}
+	l.Info("closed", slog.String("resource", name))
 }
