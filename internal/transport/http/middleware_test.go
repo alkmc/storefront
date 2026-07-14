@@ -11,7 +11,7 @@ func okHandler() http.Handler {
 	return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 }
 
-func TestSecureHeaders(t *testing.T) {
+func TestSecurityHeaders(t *testing.T) {
 	static := map[string]string{
 		"X-Content-Type-Options":  "nosniff",
 		"Content-Security-Policy": "frame-ancestors 'none'",
@@ -38,7 +38,7 @@ func TestSecureHeaders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mw := secureHeaders(tt.hstsEnabled, tt.hstsMaxAge)
+			mw := securityHeaders(tt.hstsEnabled, tt.hstsMaxAge)
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
 			rec := httptest.NewRecorder()
 			mw(okHandler()).ServeHTTP(rec, req)
@@ -115,7 +115,7 @@ func TestCSRF(t *testing.T) {
 	}
 }
 
-func TestCSRFInvalidTrustedOrigin(t *testing.T) {
+func TestCSRFRejectsInvalidTrustedOrigin(t *testing.T) {
 	if _, err := csrf([]string{"not a url"}); err == nil {
 		t.Errorf("expected error for invalid trusted origin")
 	}

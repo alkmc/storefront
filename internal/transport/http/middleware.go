@@ -28,7 +28,7 @@ type (
 
 // NewMiddleware builds the standard middleware chain.
 func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
-	compression, err := compress(cfg.CompressMinBytes)
+	compressMW, err := compression(cfg.CompressMinBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
 	if err != nil {
 		return nil, err
 	}
-	corsMW, err := corsMiddleware(cfg.CORSAllowedOrigins, cfg.CORSMaxAge)
+	corsMW, err := corsPolicy(cfg.CORSAllowedOrigins, cfg.CORSMaxAge)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +45,12 @@ func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
 		return chain(
 			next,
 			logging,
-			recoverer,
-			secureHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge),
+			recovery,
+			securityHeaders(cfg.HSTSEnabled, cfg.HSTSMaxAge),
 			corsMW,
 			csrfMW,
 			bodyLimit(cfg.MaxBodyBytes),
-			compression,
+			compressMW,
 		)
 	}, nil
 }
@@ -81,8 +81,8 @@ func logging(next http.Handler) http.Handler {
 	})
 }
 
-// recoverer catches panics and prevents the server from crashing
-func recoverer(next http.Handler) http.Handler {
+// recovery catches panics and prevents the server from crashing
+func recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -100,8 +100,8 @@ func recoverer(next http.Handler) http.Handler {
 	})
 }
 
-// secureHeaders sets baseline OWASP response headers on every response.
-func secureHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
+// securityHeaders sets baseline OWASP response headers on every response.
+func securityHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
 	var hsts string
 	if hstsEnabled {
 		hsts = "max-age=" + strconv.Itoa(hstsMaxAge) + "; includeSubDomains"
@@ -119,8 +119,8 @@ func secureHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
 	}
 }
 
-// corsMiddleware enforces an origin allowlist. Empty list disables CORS entirely.
-func corsMiddleware(origins []string, maxAge int) (Middleware, error) {
+// corsPolicy enforces an origin allowlist. Empty list disables CORS entirely.
+func corsPolicy(origins []string, maxAge int) (Middleware, error) {
 	if len(origins) == 0 {
 		return func(next http.Handler) http.Handler {
 			return next
@@ -166,8 +166,8 @@ func bodyLimit(maxBytes int64) Middleware {
 	}
 }
 
-// compress applies zstd/gzip to JSON responses larger than minBytes
-func compress(minBytes int) (Middleware, error) {
+// compression applies zstd/gzip to JSON responses larger than minBytes
+func compression(minBytes int) (Middleware, error) {
 	wrap, err := gzhttp.NewWrapper(
 		gzhttp.MinSize(minBytes),
 		gzhttp.ContentTypes([]string{MediaTypeJSON}),
