@@ -1,4 +1,4 @@
-.PHONY: build run test test-race testcontainers testcontainers-race fmt vet deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test testcontainers fmt vet deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/server ./cmd/migrate
@@ -7,15 +7,9 @@ run:
 	go run ./cmd/server
 
 test:
-	go test ./...
-
-test-race:
 	go test -race ./...
 
 testcontainers:
-	go test -tags integration ./...
-
-testcontainers-race:
 	go test -race -tags integration ./...
 
 fmt:
