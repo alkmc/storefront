@@ -17,12 +17,14 @@ Product catalog API exposed over REST and gRPC.
 PostgreSQL is the source of truth, with goose migrations embedded in the binary.  
 Product reads use cache-aside Redis, concurrent misses are coalesced with singleflight.  
 Purchase decrements stock atomically with a conditional UPDATE.  
+Writes emit domain events through a transactional outbox relayed to RabbitMQ.  
 
 ## Technologies
 
 * Go 1.26
 * PostgreSQL 18.x
 * Redis 8.8
+* RabbitMQ 4.3 (AMQP 1.0)
 
 ## Quickstart
 
@@ -103,6 +105,21 @@ grpcurl -plaintext -d '{"id":"<id>","quantity":2}' \
 ## Architecture
 
 `cmd/` → `transport/http` and `transport/grpc` → `service` → `store`, with `domain` and `cache` as cross-cutting packages.
+
+### Outbox & events
+
+Every write (create, update, delete, purchase) inserts a domain event into the `outbox` table
+in the same transaction as the data change, so there is no dual-write.  
+A relay claims due rows with `FOR UPDATE SKIP LOCKED` (safe with multiple instances, no leader election),
+publishes them to the `storefront.product` topic exchange over AMQP 1.0, and deletes the published rows in the
+same transaction.  
+New events wake the relay via `LISTEN/NOTIFY`, interval polling is only a fallback.
+
+Delivery is at-least-once end-to-end: consumers deduplicate by `eventId` (UUIDv7) and can discard
+stale updates by `version`, since retries and multiple relays give no ordering guarantee.  
+Transient broker failures never consume retry attempts, events wait in Postgres for as long as an outage
+lasts.  
+Only permanent rejections (poison messages) count toward `OUTBOX_MAX_ATTEMPTS` and end up in `outbox_dead` together with their last error.
 
 ## Migrations
 
