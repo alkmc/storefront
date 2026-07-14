@@ -1,0 +1,66 @@
+// Package event defines the domain events published through the outbox.
+package event
+
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/alkmc/storefront/internal/domain"
+	"github.com/google/uuid"
+)
+
+const (
+	TypeCreated   = "product.created"
+	TypeUpdated   = "product.updated"
+	TypeDeleted   = "product.deleted"
+	TypePurchased = "product.purchased"
+)
+
+// ErrUndeliverable marks a permanent, non-retryable publish rejection (poison).
+var ErrUndeliverable = errors.New("undeliverable")
+
+type (
+	// Event describes a product change. EventID (v7) lets consumers deduplicate.
+	Event struct {
+		EventID    uuid.UUID `json:"eventId"`
+		Type       string    `json:"type"`
+		ProductID  uuid.UUID `json:"productId"`
+		Version    int64     `json:"version"`
+		OccurredAt time.Time `json:"occurredAt"`
+		Quantity   int64     `json:"quantity,omitzero"`
+		Stock      int64     `json:"stock"`
+	}
+	// Record is a stored outbox row ready to publish without re-parsing its payload.
+	Record struct {
+		MessageID uuid.UUID
+		Type      string
+		Payload   []byte
+	}
+)
+
+// New builds an event with a generated v7 id and the current time.
+func New(eventType string, p domain.Product) (Event, error) {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return Event{}, fmt.Errorf("event id: %w", err)
+	}
+	return Event{
+		EventID:    id,
+		Type:       eventType,
+		ProductID:  p.ID,
+		Version:    p.Version,
+		OccurredAt: time.Now(),
+		Stock:      p.Stock,
+	}, nil
+}
+
+// NewPurchased builds a purchase event carrying the purchased quantity.
+func NewPurchased(p domain.Product, qty int64) (Event, error) {
+	e, err := New(TypePurchased, p)
+	if err != nil {
+		return Event{}, err
+	}
+	e.Quantity = qty
+	return e, nil
+}

@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/alkmc/storefront/internal/event"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -26,6 +27,8 @@ const (
 
 type Postgres struct {
 	pool *pgxpool.Pool
+	// listenConn is the dedicated LISTEN connection, touched only by the outbox relay.
+	listenConn *pgxpool.Conn
 }
 
 // NewPostgres wraps an open connection pool in a Postgres store.
@@ -37,13 +40,28 @@ func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.pool.Ping(ctx)
 }
 
+// Save inserts the product and its created event in one tx.
 func (pg *Postgres) Save(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
-	row := pg.pool.QueryRow(
+	tx, err := pg.pool.Begin(ctx)
+	if err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	row := tx.QueryRow(
 		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
 	)
 	if err := row.Scan(&p.Version); err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	if err := emitProductEvent(ctx, tx, event.TypeCreated, p); err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return domain.Product{}, mapDBError(err)
 	}
 	return p, nil
@@ -104,10 +122,19 @@ func (pg *Postgres) FindAll(
 	return productPage(products, limit), nil
 }
 
+// Update rewrites the product and stores its updated event in one tx.
 func (pg *Postgres) Update(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
-	err := pg.pool.QueryRow(
+	tx, err := pg.pool.Begin(ctx)
+	if err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	err = tx.QueryRow(
 		ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
 	).Scan(&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version)
 	if err != nil {
@@ -116,23 +143,43 @@ func (pg *Postgres) Update(
 		}
 		return domain.Product{}, mapDBError(err)
 	}
-
+	if err := emitProductEvent(ctx, tx, event.TypeUpdated, p); err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Product{}, mapDBError(err)
+	}
 	return p, nil
 }
 
+// Delete removes the product and stores its deleted event in one tx.
 func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
-	res, err := pg.pool.Exec(ctx, queryDelete, id)
+	tx, err := pg.pool.Begin(ctx)
 	if err != nil {
 		return mapDBError(err)
 	}
-	if res.RowsAffected() == 0 {
-		return domain.ErrNotFound
-	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
+	var version int64
+	if err := tx.QueryRow(ctx, queryDelete, id).Scan(&version); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.ErrNotFound
+		}
+		return mapDBError(err)
+	}
+	deleted := domain.Product{ID: id, Version: version}
+	if err := emitProductEvent(ctx, tx, event.TypeDeleted, deleted); err != nil {
+		return mapDBError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return mapDBError(err)
+	}
 	return nil
 }
 
-// Purchase atomically decrements stock in an explicit tx.
+// Purchase atomically decrements stock and stores the purchased event in one tx.
 func (pg *Postgres) Purchase(
 	ctx context.Context, id uuid.UUID, qty int64,
 ) (domain.Product, error) {
@@ -151,6 +198,14 @@ func (pg *Postgres) Purchase(
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, purchaseNoRowError(ctx, tx, id)
 		}
+		return domain.Product{}, mapDBError(err)
+	}
+
+	e, err := event.NewPurchased(p, qty)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	if err := insertOutbox(ctx, tx, e); err != nil {
 		return domain.Product{}, mapDBError(err)
 	}
 

@@ -16,6 +16,8 @@ type (
 		GRPC            GRPC
 		Postgres        Postgres
 		Redis           Redis
+		RabbitMQ        RabbitMQ
+		Outbox          Outbox
 		Service         Service
 		Log             Log
 		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
@@ -65,6 +67,18 @@ type (
 		DB       int           `env:"REDIS_DB" envDefault:"0"`
 		TTL      time.Duration `env:"REDIS_CACHE_TTL" envDefault:"10s"`
 	}
+	RabbitMQ struct {
+		Host     string `env:"RABBITMQ_HOST,required"`
+		Port     int    `env:"RABBITMQ_PORT,required"`
+		User     string `env:"RABBITMQ_USER,required"`
+		Password Secret `env:"RABBITMQ_PASSWORD,required,unset"`
+	}
+	Outbox struct {
+		BatchSize      int           `env:"OUTBOX_BATCH_SIZE" envDefault:"25"`
+		PollInterval   time.Duration `env:"OUTBOX_POLL_INTERVAL" envDefault:"5s"`
+		PublishTimeout time.Duration `env:"OUTBOX_PUBLISH_TIMEOUT" envDefault:"2s"`
+		MaxAttempts    int           `env:"OUTBOX_MAX_ATTEMPTS" envDefault:"10"`
+	}
 	Log struct {
 		Level slog.Level `env:"LOG_LEVEL" envDefault:"INFO"`
 	}
@@ -84,6 +98,17 @@ func (g GRPC) Address() string {
 
 func (r Redis) Address() string {
 	return net.JoinHostPort(r.Host, strconv.Itoa(r.Port))
+}
+
+// URL renders an amqp:// address on the default vhost.
+func (r RabbitMQ) URL() string {
+	u := url.URL{
+		Scheme: "amqp",
+		User:   url.UserPassword(r.User, r.Password.Reveal()),
+		Host:   net.JoinHostPort(r.Host, strconv.Itoa(r.Port)),
+		Path:   "/",
+	}
+	return u.String()
 }
 
 func (p Postgres) DSN() string {
