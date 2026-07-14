@@ -72,5 +72,5 @@ jobs:
           go-version-file: go.mod
           check-latest: true
           cache: true
-      - name: Run testcontainers
-        run: make testcontainers
+      - name: Run integration
+        run: make integration
