@@ -65,7 +65,7 @@ type (
 		Port     int           `env:"REDIS_PORT,required"`
 		Password Secret        `env:"REDIS_PASSWORD,required,unset"`
 		DB       int           `env:"REDIS_DB" envDefault:"0"`
-		TTL      time.Duration `env:"REDIS_CACHE_TTL" envDefault:"10s"`
+		TTL      time.Duration `env:"REDIS_CACHE_TTL" envDefault:"60s"`
 	}
 	RabbitMQ struct {
 		Host     string `env:"RABBITMQ_HOST,required"`
