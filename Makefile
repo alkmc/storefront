@@ -1,4 +1,4 @@
-.PHONY: build run test integration fmt vet deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test integration fmt deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/server ./cmd/migrate
@@ -14,9 +14,6 @@ integration:
 
 fmt:
 	gofumpt -l -w .
-
-vet:
-	go vet ./...
 
 deadcode:
 	go run golang.org/x/tools/cmd/deadcode@v0.48.0 ./...
