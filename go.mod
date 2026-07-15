@@ -6,7 +6,7 @@ require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jub0bs/cors v1.0.4
+	github.com/jub0bs/cors v1.0.5
 	github.com/klauspost/compress v1.19.0
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/rabbitmq/rabbitmq-amqp-go-client v1.2.0
