@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -23,8 +22,8 @@ type (
 		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
 	}
 	cacher interface {
-		Set(context.Context, string, domain.Product) error
-		Get(context.Context, string) (domain.Product, error)
+		Set(context.Context, string, domain.Product, cache.Entry) error
+		Get(context.Context, string) (cache.Entry, error)
 		Invalidate(context.Context, string) error
 	}
 	Service struct {
@@ -48,25 +47,18 @@ func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product,
 		return domain.Product{}, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	p.ID = id
-	saved, err := s.store.Save(ctx, p)
-	if err != nil {
-		return domain.Product{}, err
-	}
-	key := saved.ID.String()
-	if err := s.cache.Set(ctx, key, saved); err != nil {
-		s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
-	}
-	return saved, nil
+
+	return s.store.Save(ctx, p)
 }
 
 func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	key := id.String()
-	cached, err := s.cache.Get(ctx, key)
-	if err == nil {
-		return cached, nil
-	}
-	if !errors.Is(err, cache.ErrCacheMiss) {
+	entry, err := s.cache.Get(ctx, key)
+	if err != nil {
 		s.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", key))
+	}
+	if entry.Hit {
+		return entry.Product, nil
 	}
 	return s.loadProduct(ctx, id)
 }
@@ -78,12 +70,24 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
 		defer cancel()
 
+		// re-read inside the flight, because the guard needs a token read from within it.
+		entry, cacheErr := s.cache.Get(loadCtx, key)
+		if cacheErr != nil {
+			s.logger.Warn("cache get failed", slog.Any("error", cacheErr), slog.String("key", key))
+		}
+		if entry.Hit {
+			return entry.Product, nil
+		}
+
 		p, err := s.store.FindByID(loadCtx, id)
 		if err != nil {
 			return domain.Product{}, err
 		}
-		if err := s.cache.Set(loadCtx, key, p); err != nil {
-			s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
+		// populate only after a clean Get, because an unread key leaves nothing to fence with.
+		if cacheErr == nil {
+			if err := s.cache.Set(loadCtx, key, p, entry); err != nil {
+				s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
+			}
 		}
 		return p, nil
 	})
@@ -107,10 +111,7 @@ func (s *Service) Update(ctx context.Context, p domain.Product) (domain.Product,
 	if err != nil {
 		return domain.Product{}, err
 	}
-	key := p.ID.String()
-	if err := s.cache.Invalidate(ctx, key); err != nil {
-		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
-	}
+	s.invalidate(ctx, p.ID)
 	return updated, nil
 }
 
@@ -118,10 +119,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := s.store.Delete(ctx, id); err != nil {
 		return err
 	}
-	key := id.String()
-	if err := s.cache.Invalidate(ctx, key); err != nil {
-		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
-	}
+	s.invalidate(ctx, id)
 	return nil
 }
 
@@ -130,9 +128,17 @@ func (s *Service) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain
 	if err != nil {
 		return domain.Product{}, err
 	}
+	s.invalidate(ctx, id)
+	return p, nil
+}
+
+func (s *Service) invalidate(ctx context.Context, id uuid.UUID) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
+	defer cancel()
+
 	key := id.String()
 	if err := s.cache.Invalidate(ctx, key); err != nil {
-		s.logger.Warn("cache invalidate failed", slog.Any("error", err), slog.String("key", key))
+		s.logger.Warn("cache invalidate failed, entry stale until TTL",
+			slog.Any("error", err), slog.String("key", key))
 	}
-	return p, nil
 }

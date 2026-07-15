@@ -16,6 +16,9 @@
 Product catalog API exposed over REST and gRPC.  
 PostgreSQL is the source of truth, with goose migrations embedded in the binary.  
 Product reads use cache-aside Redis, concurrent misses are coalesced with singleflight.  
+Only readers populate the cache, and only under a compare-and-set guard, so a reader
+that raced a writer loses instead of restoring stale data.  
+Writers just tombstone the key.  
 Purchase decrements stock atomically with a conditional UPDATE.  
 Writes emit domain events through a transactional outbox relayed to RabbitMQ.  
 

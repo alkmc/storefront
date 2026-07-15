@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -9,6 +10,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
@@ -305,4 +307,155 @@ func newTestService(s store) *Service {
 
 func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
+}
+
+func TestService_WritersOnlyInvalidate(t *testing.T) {
+	id := uuid.New()
+
+	tests := []struct {
+		name string
+		call func(*Service) error
+	}{
+		{
+			name: "update",
+			call: func(s *Service) error {
+				_, err := s.Update(t.Context(), domain.Product{ID: id, Price: testMoney(100)})
+				return err
+			},
+		},
+		{
+			name: "delete",
+			call: func(s *Service) error { return s.Delete(t.Context(), id) },
+		},
+		{
+			name: "purchase",
+			call: func(s *Service) error {
+				_, err := s.Purchase(t.Context(), id, 1)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			spyCache := &SpyCache{}
+			srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
+
+			if err := tt.call(srv); err != nil {
+				t.Fatalf("%s: %v", tt.name, err)
+			}
+			if spyCache.Sets != 0 {
+				t.Errorf("wrote %d values to cache, a writer must only invalidate", spyCache.Sets)
+			}
+			if spyCache.Invalidates != 1 {
+				t.Fatalf("Invalidates = %d, want 1", spyCache.Invalidates)
+			}
+			if got := spyCache.InvalidatedKeys[0]; got != id.String() {
+				t.Errorf("invalidated %q, want %q", got, id.String())
+			}
+		})
+	}
+}
+
+func TestService_CreateLeavesCacheAlone(t *testing.T) {
+	spyCache := &SpyCache{}
+	spyStore := &SpyStore{
+		SaveFn: func(_ context.Context, p domain.Product) (domain.Product, error) { return p, nil },
+	}
+	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+
+	if _, err := srv.Create(t.Context(), domain.Product{Name: "New", Price: testMoney(100)}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if spyCache.Sets+spyCache.Invalidates != 0 {
+		t.Errorf("Create touched the cache: Set=%d Invalidate=%d", spyCache.Sets, spyCache.Invalidates)
+	}
+}
+
+func TestService_FindByID_CachePaths(t *testing.T) {
+	id := uuid.New()
+	found := domain.Product{ID: id, Name: "Cached", Price: testMoney(100)}
+
+	tests := []struct {
+		name           string
+		getFn          func(context.Context, string) (cache.Entry, error)
+		findErr        error
+		wantStoreCalls int32
+		wantSets       int
+		wantErr        error
+	}{
+		{
+			name: "known present, store untouched",
+			getFn: func(context.Context, string) (cache.Entry, error) {
+				return cache.Entry{Product: found, Hit: true}, nil
+			},
+		},
+		{
+			name:           "miss populates",
+			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
+			wantStoreCalls: 1,
+			wantSets:       1,
+		},
+		{
+			name: "cache unreadable, nothing populated",
+			getFn: func(context.Context, string) (cache.Entry, error) {
+				return cache.Entry{}, errors.New("redis down")
+			},
+			wantStoreCalls: 1,
+		},
+		{
+			name:           "store fails, nothing populated",
+			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
+			findErr:        domain.ErrUnavailable,
+			wantStoreCalls: 1,
+			wantErr:        domain.ErrUnavailable,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var storeCalls atomic.Int32
+			spyCache := &SpyCache{GetFn: tt.getFn}
+			spyStore := &SpyStore{
+				FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+					storeCalls.Add(1)
+					if tt.findErr != nil {
+						return domain.Product{}, tt.findErr
+					}
+					return domain.Product{ID: id, Price: testMoney(100)}, nil
+				},
+			}
+			srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+
+			_, err := srv.FindByID(t.Context(), id)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("FindByID error = %v, want %v", err, tt.wantErr)
+			}
+			if got := storeCalls.Load(); got != tt.wantStoreCalls {
+				t.Errorf("store calls = %d, want %d", got, tt.wantStoreCalls)
+			}
+			if spyCache.Sets != tt.wantSets {
+				t.Errorf("Sets = %d, want %d", spyCache.Sets, tt.wantSets)
+			}
+		})
+	}
+}
+
+func TestService_InvalidateSurvivesCanceledRequest(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	spyCache := &SpyCache{}
+	srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
+
+	if err := srv.Delete(ctx, uuid.New()); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if spyCache.Invalidates != 1 {
+		t.Fatalf("Invalidates = %d, want 1 even though the caller went away", spyCache.Invalidates)
+	}
+	if spyCache.InvalidateCtxErr != nil {
+		t.Errorf("invalidation ran on a dead context (%v), it must be detached",
+			spyCache.InvalidateCtxErr)
+	}
 }

@@ -10,15 +10,42 @@ import (
 
 type stubCache struct{}
 
-func (stubCache) Set(_ context.Context, _ string, _ domain.Product) error {
+func (stubCache) Set(_ context.Context, _ string, _ domain.Product, _ cache.Entry) error {
 	return nil
 }
 
-func (stubCache) Get(_ context.Context, _ string) (domain.Product, error) {
-	return domain.Product{}, cache.ErrCacheMiss
+func (stubCache) Get(_ context.Context, _ string) (cache.Entry, error) {
+	return cache.Entry{}, nil
 }
 
 func (stubCache) Invalidate(_ context.Context, _ string) error {
+	return nil
+}
+
+type SpyCache struct {
+	GetFn            func(context.Context, string) (cache.Entry, error)
+	Sets             int
+	InvalidateCtxErr error
+	Invalidates      int
+	InvalidatedKeys  []string
+}
+
+func (c *SpyCache) Set(_ context.Context, _ string, _ domain.Product, _ cache.Entry) error {
+	c.Sets++
+	return nil
+}
+
+func (c *SpyCache) Get(ctx context.Context, key string) (cache.Entry, error) {
+	if c.GetFn != nil {
+		return c.GetFn(ctx, key)
+	}
+	return cache.Entry{}, nil
+}
+
+func (c *SpyCache) Invalidate(ctx context.Context, key string) error {
+	c.Invalidates++
+	c.InvalidateCtxErr = ctx.Err()
+	c.InvalidatedKeys = append(c.InvalidatedKeys, key)
 	return nil
 }
 
