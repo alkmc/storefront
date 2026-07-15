@@ -17,9 +17,12 @@ type (
 		counter
 		batchSizes []int
 		errs       []error
-		wake       chan struct{}
-		wakeErrs   []error
-		wakeCalls  counter
+	}
+	fakeListener struct {
+		counter
+		wake   chan struct{}
+		errs   []error
+		closes counter
 	}
 	fakePublisher struct {
 		counter
@@ -70,11 +73,11 @@ func (f *fakeDrainer) result(n int) (count int, err error) {
 	return count, err
 }
 
-// AwaitWakeup mimics the store listener: a wake signal or the timeout ends the wait.
-func (f *fakeDrainer) AwaitWakeup(ctx context.Context, timeout time.Duration) error {
-	i := int(f.wakeCalls.inc()) - 1
-	if i < len(f.wakeErrs) && f.wakeErrs[i] != nil {
-		return f.wakeErrs[i]
+// Await mimics the store listener: a wake signal or the timeout ends the wait.
+func (f *fakeListener) Await(ctx context.Context, timeout time.Duration) error {
+	i := int(f.inc()) - 1
+	if i < len(f.errs) && f.errs[i] != nil {
+		return f.errs[i]
 	}
 	select {
 	case <-ctx.Done():
@@ -99,4 +102,8 @@ func (p *fakePublisher) Publish(ctx context.Context, _ event.Record) error {
 		return errors.New("publish error")
 	}
 	return nil
+}
+
+func (f *fakeListener) Close() {
+	f.closes.inc()
 }

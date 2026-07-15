@@ -27,8 +27,6 @@ const (
 
 type Postgres struct {
 	pool *pgxpool.Pool
-	// listenConn is the dedicated LISTEN connection, touched only by the outbox relay.
-	listenConn *pgxpool.Conn
 }
 
 // NewPostgres wraps an open connection pool in a Postgres store.

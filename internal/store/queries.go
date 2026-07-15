@@ -1,5 +1,8 @@
 package store
 
+// OutboxChannel is the NOTIFY channel that wakes the outbox relay, LISTEN and NOTIFY share it.
+const OutboxChannel = "outbox_wakeup"
+
 const (
 	queryInsert = `
 		INSERT INTO products (id, name, price_minor, currency, stock)
@@ -40,7 +43,7 @@ const (
 		INSERT INTO outbox (message_id, event_type, payload)
 		VALUES ($1, $2, $3);`
 	queryNotifyOutbox = `
-		SELECT pg_notify('outbox_wakeup', '');`
+		SELECT pg_notify('` + OutboxChannel + `', '');`
 	queryClaimOutbox = `
 		SELECT id, message_id, event_type, payload, attempts, created_at
 		FROM outbox

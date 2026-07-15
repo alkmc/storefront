@@ -19,7 +19,11 @@ type (
 		DrainBatch(ctx context.Context, batchSize, maxAttempts int,
 			publish func(context.Context, event.Record) error,
 		) (int, bool, error)
-		AwaitWakeup(ctx context.Context, timeout time.Duration) error
+	}
+	// waiter blocks until an outbox wakeup or the poll timeout, Run owns its lifecycle.
+	waiter interface {
+		Await(ctx context.Context, timeout time.Duration) error
+		Close()
 	}
 	// publisher emits a single outbox record to the broker.
 	publisher interface {
@@ -34,20 +38,28 @@ type (
 	}
 	// Relay drains the outbox to the publisher, woken by NOTIFY with a poll fallback.
 	Relay struct {
-		store drainer
-		pub   publisher
-		cfg   Config
-		log   *slog.Logger
+		store    drainer
+		listener waiter
+		pub      publisher
+		cfg      Config
+		log      *slog.Logger
 	}
 )
 
 // New returns a Relay that drains the outbox per the given config.
-func New(store drainer, pub publisher, cfg Config, log *slog.Logger) *Relay {
-	return &Relay{store: store, pub: pub, cfg: cfg, log: log}
+func New(
+	store drainer, listener waiter, pub publisher, cfg Config, log *slog.Logger,
+) *Relay {
+	return &Relay{
+		store: store, listener: listener, pub: pub, cfg: cfg, log: log,
+	}
 }
 
 // Run drains the outbox until ctx is cancelled, backing off when draining fails.
+// It owns the listener and closes it on return.
 func (r *Relay) Run(ctx context.Context) error {
+	defer r.listener.Close()
+
 	backoff := r.cfg.PollInterval
 	for {
 		published, full, err := r.store.DrainBatch(
@@ -80,7 +92,7 @@ func (r *Relay) Run(ctx context.Context) error {
 
 // wait blocks on a NOTIFY wakeup, falling back to a plain sleep when waiting fails.
 func (r *Relay) wait(ctx context.Context) error {
-	err := r.store.AwaitWakeup(ctx, r.cfg.PollInterval)
+	err := r.listener.Await(ctx, r.cfg.PollInterval)
 	if err == nil || ctx.Err() != nil {
 		return ctx.Err()
 	}
