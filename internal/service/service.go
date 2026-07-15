@@ -76,7 +76,7 @@ func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, e
 func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	key := id.String()
 	return s.loads.Do(ctx, key, func(ctx context.Context) (domain.Product, error) {
-		// re-read inside the flight, because the guard needs a token read from within it.
+		// re-read inside the flight, because the guard needs a token read from within it
 		entry, cacheErr := s.cache.Get(ctx, key)
 		if cacheErr != nil {
 			s.logger.Warn("cache get failed", slog.Any("error", cacheErr), slog.String("key", key))
@@ -86,7 +86,7 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 		}
 
 		p, err := s.store.FindByID(ctx, id)
-		// populate only after a clean Get, because an unread key leaves nothing to fence with.
+		// populate only after a clean Get, because an unread key leaves nothing to fence with
 		if cacheErr == nil {
 			s.populate(ctx, key, p, entry, err)
 		}

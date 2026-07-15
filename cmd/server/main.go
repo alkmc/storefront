@@ -41,7 +41,7 @@ func main() {
 }
 
 func run(logger *slog.Logger, cfg config.Config) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	if err := migrate.Verify(ctx, cfg.Postgres.DSN()); err != nil {
@@ -134,8 +134,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	return nil
 }
 
-// newAPIServer assembles the public HTTP server behind its middleware chain.
-func newAPIServer(cfg config.Config, svc *service.Service, l *slog.Logger) (*httpsrv.Server, error) {
+func newAPIServer(cfg config.Config, svc *service.Service, l *slog.Logger,
+) (*httpsrv.Server, error) {
 	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
 		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
