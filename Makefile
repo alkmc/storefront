@@ -1,10 +1,10 @@
 .PHONY: build run test integration fmt deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
 
 build:
-	go build ./cmd/server ./cmd/migrate
+	go build ./cmd/storefront ./cmd/migrate
 
 run:
-	go run ./cmd/server
+	go run ./cmd/storefront
 
 test:
 	go test -race ./...
