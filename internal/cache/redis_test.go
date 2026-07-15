@@ -13,7 +13,10 @@ import (
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
-const testTTL = time.Minute
+const (
+	testTTL    = time.Minute
+	testNegTTL = 10 * time.Second
+)
 
 // setupTestContainerRedis needs an image with IFEQ, which landed in Redis 8.4.
 func setupTestContainerRedis(t *testing.T) *Redis {
@@ -43,7 +46,7 @@ func setupTestContainerRedis(t *testing.T) *Redis {
 	}
 	t.Cleanup(client.Close)
 
-	return New(client, testTTL)
+	return New(client, testTTL, testNegTTL)
 }
 
 func testProduct(name string) domain.Product {

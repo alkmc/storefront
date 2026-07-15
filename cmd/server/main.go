@@ -83,7 +83,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 
 	repo := store.NewPostgres(pool)
 
-	rCache := cache.New(client, cfg.Redis.TTL)
+	rCache := cache.New(client, cfg.Redis.TTL, cfg.Redis.NegTTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
 
 	apiSrv, err := newAPIServer(cfg, srv, logger)

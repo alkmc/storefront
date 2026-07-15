@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -23,6 +24,7 @@ type (
 	}
 	cacher interface {
 		Set(context.Context, string, domain.Product, cache.Entry) error
+		SetMissing(context.Context, string, cache.Entry) error
 		Get(context.Context, string) (cache.Entry, error)
 		Invalidate(context.Context, string) error
 	}
@@ -58,7 +60,7 @@ func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, e
 		s.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", key))
 	}
 	if entry.Hit {
-		return entry.Product, nil
+		return productFrom(entry)
 	}
 	return s.loadProduct(ctx, id)
 }
@@ -76,18 +78,16 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 			s.logger.Warn("cache get failed", slog.Any("error", cacheErr), slog.String("key", key))
 		}
 		if entry.Hit {
-			return entry.Product, nil
+			return productFrom(entry)
 		}
 
 		p, err := s.store.FindByID(loadCtx, id)
-		if err != nil {
-			return domain.Product{}, err
-		}
 		// populate only after a clean Get, because an unread key leaves nothing to fence with.
 		if cacheErr == nil {
-			if err := s.cache.Set(loadCtx, key, p, entry); err != nil {
-				s.logger.Warn("cache set failed", slog.Any("error", err), slog.String("key", key))
-			}
+			s.populate(loadCtx, key, p, entry, err)
+		}
+		if err != nil {
+			return domain.Product{}, err
 		}
 		return p, nil
 	})
@@ -99,6 +99,30 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 		return domain.Product{}, fmt.Errorf("singleflight: unexpected result type %T", v)
 	}
 	return p, nil
+}
+
+func productFrom(e cache.Entry) (domain.Product, error) {
+	if !e.Found {
+		return domain.Product{}, fmt.Errorf("find product: %w", domain.ErrNotFound)
+	}
+	return e.Product, nil
+}
+
+func (s *Service) populate(
+	ctx context.Context, key string, p domain.Product, prev cache.Entry, loadErr error,
+) {
+	var err error
+	switch {
+	case loadErr == nil:
+		err = s.cache.Set(ctx, key, p, prev)
+	case errors.Is(loadErr, domain.ErrNotFound):
+		err = s.cache.SetMissing(ctx, key, prev)
+	default:
+		return
+	}
+	if err != nil {
+		s.logger.Warn("cache populate failed", slog.Any("error", err), slog.String("key", key))
+	}
 }
 
 func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,

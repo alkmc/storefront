@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/alkmc/storefront/internal/domain"
@@ -22,37 +22,53 @@ func TestClassifyStoredValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeProduct: %v", err)
 	}
+	tombstone := newTombstone()
+	unknownTag := []byte("xwhatever")
+	corrupt := []byte{tagPayload, '{'}
 
 	tests := []struct {
-		name      string
-		raw       []byte
-		want      domain.Product
-		wantHit   bool
-		wantToken bool
+		name string
+		raw  []byte
+		want Entry
 	}{
-		{name: "payload", raw: payload, want: product, wantHit: true},
-		{name: "tombstone", raw: newTombstone(), wantToken: true},
-		{name: "unknown tag", raw: []byte("xwhatever"), wantToken: true},
-		{name: "corrupt payload", raw: []byte{tagPayload, '{'}, wantToken: true},
-		{name: "empty", raw: nil, wantToken: false},
+		{
+			name: "payload",
+			raw:  payload,
+			want: Entry{Product: product, Hit: true, Found: true},
+		},
+		{
+			name: "missing marker",
+			raw:  []byte{tagMissing},
+			want: Entry{Hit: true},
+		},
+		{
+			name: "tombstone",
+			raw:  tombstone,
+			want: Entry{token: tombstone},
+		},
+		{
+			name: "unknown tag",
+			raw:  unknownTag,
+			want: Entry{token: unknownTag},
+		},
+		{
+			name: "corrupt payload",
+			raw:  corrupt,
+			want: Entry{token: corrupt},
+		},
+		{
+			name: "empty",
+			raw:  nil,
+			want: Entry{},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			got := classify(tt.raw)
-			if got.Hit != tt.wantHit {
-				t.Errorf("Hit = %v, want %v", got.Hit, tt.wantHit)
-			}
-			if got.Product != tt.want {
-				t.Errorf("Product = %+v, want %+v", got.Product, tt.want)
-			}
-			if hasToken := got.token != nil; hasToken != tt.wantToken {
-				t.Errorf("token present = %v, want %v", hasToken, tt.wantToken)
-			}
-			if tt.wantToken && !bytes.Equal(got.token, tt.raw) {
-				t.Errorf("token = %q, want the raw value %q", got.token, tt.raw)
+			if got := classify(tt.raw); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("classify(%q) = %+v, want %+v", tt.raw, got, tt.want)
 			}
 		})
 	}

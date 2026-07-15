@@ -15,6 +15,7 @@ import (
 const (
 	tagPayload   byte = 'p'
 	tagTombstone byte = 't'
+	tagMissing   byte = 'n'
 )
 
 type (
@@ -32,17 +33,19 @@ type (
 	Entry struct {
 		Product domain.Product
 		Hit     bool
+		Found   bool
 		token   []byte
 	}
 	Redis struct {
 		client rueidis.Client
 		ttl    time.Duration
+		negTTL time.Duration
 	}
 )
 
-// New wraps an open Redis client in a cache with the given entry TTL.
-func New(client rueidis.Client, ttl time.Duration) *Redis {
-	return new(Redis{client: client, ttl: ttl})
+// New wraps an open Redis client. ttl bounds a cached product, negTTL a cached absence.
+func New(client rueidis.Client, ttl, negTTL time.Duration) *Redis {
+	return new(Redis{client: client, ttl: ttl, negTTL: negTTL})
 }
 
 func (r *Redis) Set(ctx context.Context, key string, p domain.Product, prev Entry) error {
@@ -50,7 +53,11 @@ func (r *Redis) Set(ctx context.Context, key string, p domain.Product, prev Entr
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
-	return r.guardedSet(ctx, key, payload, prev)
+	return r.guardedSet(ctx, key, payload, r.ttl, prev)
+}
+
+func (r *Redis) SetMissing(ctx context.Context, key string, prev Entry) error {
+	return r.guardedSet(ctx, key, []byte{tagMissing}, r.negTTL, prev)
 }
 
 func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
@@ -79,27 +86,34 @@ func (r *Redis) Ping(ctx context.Context) error {
 	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
 }
 
-func (r *Redis) guardedSet(ctx context.Context, key string, value []byte, prev Entry) error {
-	err := r.client.Do(ctx, r.setCmd(key, value, prev)).Error()
+func (r *Redis) guardedSet(
+	ctx context.Context, key string, value []byte, ttl time.Duration, prev Entry,
+) error {
+	err := r.client.Do(ctx, r.setCmd(key, value, ttl, prev)).Error()
 	if err != nil && !rueidis.IsRedisNil(err) {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
 	return nil
 }
 
-func (r *Redis) setCmd(key string, value []byte, prev Entry) rueidis.Completed {
+func (r *Redis) setCmd(key string, value []byte, ttl time.Duration, prev Entry) rueidis.Completed {
 	set := r.client.B().Set().Key(key).Value(rueidis.BinaryString(value))
-	ttl := r.ttl.Milliseconds()
+	ms := ttl.Milliseconds()
 	if prev.token == nil {
-		return set.Nx().PxMilliseconds(ttl).Build()
+		return set.Nx().PxMilliseconds(ms).Build()
 	}
-	return set.Ifeq(rueidis.BinaryString(prev.token)).PxMilliseconds(ttl).Build()
+	return set.Ifeq(rueidis.BinaryString(prev.token)).PxMilliseconds(ms).Build()
 }
 
 func classify(raw []byte) Entry {
-	if len(raw) > 0 && raw[0] == tagPayload {
-		if p, ok := decodeProduct(raw[1:]); ok {
-			return Entry{Product: p, Hit: true}
+	if len(raw) > 0 {
+		switch raw[0] {
+		case tagPayload:
+			if p, ok := decodeProduct(raw[1:]); ok {
+				return Entry{Product: p, Hit: true, Found: true}
+			}
+		case tagMissing:
+			return Entry{Hit: true}
 		}
 	}
 	return Entry{token: raw}

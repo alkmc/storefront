@@ -344,8 +344,9 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 			if err := tt.call(srv); err != nil {
 				t.Fatalf("%s: %v", tt.name, err)
 			}
-			if spyCache.Sets != 0 {
-				t.Errorf("wrote %d values to cache, a writer must only invalidate", spyCache.Sets)
+			if spyCache.Sets != 0 || spyCache.SetMissings != 0 {
+				t.Errorf("wrote to cache (Set=%d SetMissing=%d), a writer must only invalidate",
+					spyCache.Sets, spyCache.SetMissings)
 			}
 			if spyCache.Invalidates != 1 {
 				t.Fatalf("Invalidates = %d, want 1", spyCache.Invalidates)
@@ -367,8 +368,9 @@ func TestService_CreateLeavesCacheAlone(t *testing.T) {
 	if _, err := srv.Create(t.Context(), domain.Product{Name: "New", Price: testMoney(100)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if spyCache.Sets+spyCache.Invalidates != 0 {
-		t.Errorf("Create touched the cache: Set=%d Invalidate=%d", spyCache.Sets, spyCache.Invalidates)
+	if spyCache.Sets+spyCache.SetMissings+spyCache.Invalidates != 0 {
+		t.Errorf("Create touched the cache: Set=%d SetMissing=%d Invalidate=%d",
+			spyCache.Sets, spyCache.SetMissings, spyCache.Invalidates)
 	}
 }
 
@@ -382,19 +384,35 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 		findErr        error
 		wantStoreCalls int32
 		wantSets       int
+		wantMissings   int
 		wantErr        error
 	}{
 		{
 			name: "known present, store untouched",
 			getFn: func(context.Context, string) (cache.Entry, error) {
-				return cache.Entry{Product: found, Hit: true}, nil
+				return cache.Entry{Product: found, Hit: true, Found: true}, nil
 			},
+		},
+		{
+			name: "known absent, store untouched",
+			getFn: func(context.Context, string) (cache.Entry, error) {
+				return cache.Entry{Hit: true}, nil
+			},
+			wantErr: domain.ErrNotFound,
 		},
 		{
 			name:           "miss populates",
 			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
 			wantStoreCalls: 1,
 			wantSets:       1,
+		},
+		{
+			name:           "store says missing, the absence is cached",
+			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
+			findErr:        domain.ErrNotFound,
+			wantStoreCalls: 1,
+			wantMissings:   1,
+			wantErr:        domain.ErrNotFound,
 		},
 		{
 			name: "cache unreadable, nothing populated",
@@ -437,6 +455,9 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			if spyCache.Sets != tt.wantSets {
 				t.Errorf("Sets = %d, want %d", spyCache.Sets, tt.wantSets)
 			}
+			if spyCache.SetMissings != tt.wantMissings {
+				t.Errorf("SetMissings = %d, want %d", spyCache.SetMissings, tt.wantMissings)
+			}
 		})
 	}
 }
@@ -457,5 +478,33 @@ func TestService_InvalidateSurvivesCanceledRequest(t *testing.T) {
 	if spyCache.InvalidateCtxErr != nil {
 		t.Errorf("invalidation ran on a dead context (%v), it must be detached",
 			spyCache.InvalidateCtxErr)
+	}
+}
+
+func TestService_FindByID_FlightHonoursCachedAbsence(t *testing.T) {
+	var gets atomic.Int32
+	spyCache := &SpyCache{
+		GetFn: func(context.Context, string) (cache.Entry, error) {
+			if gets.Add(1) == 1 {
+				return cache.Entry{}, nil
+			}
+			return cache.Entry{Hit: true}, nil
+		},
+	}
+	var storeCalls atomic.Int32
+	spyStore := &SpyStore{
+		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+			storeCalls.Add(1)
+			return domain.Product{ID: id}, nil
+		},
+	}
+	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+
+	_, err := srv.FindByID(t.Context(), uuid.New())
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("FindByID error = %v, want %v", err, domain.ErrNotFound)
+	}
+	if got := storeCalls.Load(); got != 0 {
+		t.Errorf("store called %d times, the cache already had the answer", got)
 	}
 }

@@ -14,6 +14,10 @@ func (stubCache) Set(_ context.Context, _ string, _ domain.Product, _ cache.Entr
 	return nil
 }
 
+func (stubCache) SetMissing(_ context.Context, _ string, _ cache.Entry) error {
+	return nil
+}
+
 func (stubCache) Get(_ context.Context, _ string) (cache.Entry, error) {
 	return cache.Entry{}, nil
 }
@@ -25,6 +29,7 @@ func (stubCache) Invalidate(_ context.Context, _ string) error {
 type SpyCache struct {
 	GetFn            func(context.Context, string) (cache.Entry, error)
 	Sets             int
+	SetMissings      int
 	InvalidateCtxErr error
 	Invalidates      int
 	InvalidatedKeys  []string
@@ -32,6 +37,11 @@ type SpyCache struct {
 
 func (c *SpyCache) Set(_ context.Context, _ string, _ domain.Product, _ cache.Entry) error {
 	c.Sets++
+	return nil
+}
+
+func (c *SpyCache) SetMissing(_ context.Context, _ string, _ cache.Entry) error {
+	c.SetMissings++
 	return nil
 }
 
