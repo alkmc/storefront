@@ -2,8 +2,8 @@ package cache
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -12,8 +12,11 @@ import (
 	"github.com/redis/rueidis"
 )
 
-// ErrCacheMiss is returned by Get when the key is not present in the cache.
-var ErrCacheMiss = errors.New("cache: key not found")
+const (
+	tagPayload   byte = 'p'
+	tagTombstone byte = 't'
+	tagMissing   byte = 'n'
+)
 
 type (
 	cacheEntry struct {
@@ -27,59 +30,124 @@ type (
 		MinorAmount int64           `json:"minorAmount"`
 		Currency    domain.Currency `json:"currency"`
 	}
+	Entry struct {
+		Product domain.Product
+		Hit     bool
+		Found   bool
+		token   []byte
+	}
 	Redis struct {
 		client rueidis.Client
 		ttl    time.Duration
+		negTTL time.Duration
 	}
 )
 
-// New wraps an open Redis client in a cache with the given entry TTL.
-func New(client rueidis.Client, ttl time.Duration) *Redis {
-	return new(Redis{client: client, ttl: ttl})
+// New wraps an open Redis client. ttl bounds a cached product, negTTL a cached absence.
+func New(client rueidis.Client, ttl, negTTL time.Duration) *Redis {
+	return new(Redis{client: client, ttl: ttl, negTTL: negTTL})
 }
 
-func (r *Redis) Set(ctx context.Context, key string, value domain.Product) error {
-	data, err := json.Marshal(cacheEntry{
-		ID:      value.ID.String(),
-		Name:    value.Name,
-		Stock:   value.Stock,
-		Version: value.Version,
-		Price: moneyEntry{
-			MinorAmount: value.Price.MinorAmount,
-			Currency:    value.Price.Currency,
-		},
-	})
+func (r *Redis) Set(ctx context.Context, key string, p domain.Product, prev Entry) error {
+	payload, err := encodeProduct(p)
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
+	return r.guardedSet(ctx, key, payload, r.ttl, prev)
+}
 
+func (r *Redis) SetMissing(ctx context.Context, key string, prev Entry) error {
+	return r.guardedSet(ctx, key, []byte{tagMissing}, r.negTTL, prev)
+}
+
+func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
+	raw, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
+	if err != nil {
+		if rueidis.IsRedisNil(err) {
+			return Entry{}, nil
+		}
+		return Entry{}, fmt.Errorf("get cache key %q: %w", key, err)
+	}
+	return classify(raw), nil
+}
+
+func (r *Redis) Invalidate(ctx context.Context, key string) error {
 	cmd := r.client.B().Set().Key(key).
-		Value(rueidis.BinaryString(data)).
+		Value(rueidis.BinaryString(newTombstone())).
 		PxMilliseconds(r.ttl.Milliseconds()).
 		Build()
 	if err := r.client.Do(ctx, cmd).Error(); err != nil {
-		return fmt.Errorf("set cache key %q: %w", key, err)
+		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
-
 	return nil
 }
 
-func (r *Redis) Get(ctx context.Context, key string) (domain.Product, error) {
-	data, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
-	if err != nil {
-		if rueidis.IsRedisNil(err) {
-			return domain.Product{}, ErrCacheMiss
-		}
-		return domain.Product{}, fmt.Errorf("get cache key %q: %w", key, err)
-	}
+func (r *Redis) Ping(ctx context.Context) error {
+	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
+}
 
+func (r *Redis) guardedSet(
+	ctx context.Context, key string, value []byte, ttl time.Duration, prev Entry,
+) error {
+	err := r.client.Do(ctx, r.setCmd(key, value, ttl, prev)).Error()
+	if err != nil && !rueidis.IsRedisNil(err) {
+		return fmt.Errorf("set cache key %q: %w", key, err)
+	}
+	return nil
+}
+
+func (r *Redis) setCmd(key string, value []byte, ttl time.Duration, prev Entry) rueidis.Completed {
+	set := r.client.B().Set().Key(key).Value(rueidis.BinaryString(value))
+	ms := ttl.Milliseconds()
+	if prev.token == nil {
+		return set.Nx().PxMilliseconds(ms).Build()
+	}
+	return set.Ifeq(rueidis.BinaryString(prev.token)).PxMilliseconds(ms).Build()
+}
+
+func classify(raw []byte) Entry {
+	if len(raw) > 0 {
+		switch raw[0] {
+		case tagPayload:
+			if p, ok := decodeProduct(raw[1:]); ok {
+				return Entry{Product: p, Hit: true, Found: true}
+			}
+		case tagMissing:
+			return Entry{Hit: true}
+		}
+	}
+	return Entry{token: raw}
+}
+
+func newTombstone() []byte {
+	return append([]byte{tagTombstone}, rand.Text()...)
+}
+
+func encodeProduct(p domain.Product) ([]byte, error) {
+	raw, err := json.Marshal(cacheEntry{
+		ID:      p.ID.String(),
+		Name:    p.Name,
+		Stock:   p.Stock,
+		Version: p.Version,
+		Price: moneyEntry{
+			MinorAmount: p.Price.MinorAmount,
+			Currency:    p.Price.Currency,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte{tagPayload}, raw...), nil
+}
+
+func decodeProduct(raw []byte) (domain.Product, bool) {
 	var e cacheEntry
-	if err := json.Unmarshal(data, &e); err != nil {
-		return domain.Product{}, fmt.Errorf("unmarshal cache value for key %q: %w", key, err)
+	if err := json.Unmarshal(raw, &e); err != nil {
+		return domain.Product{}, false
 	}
 	id, err := uuid.Parse(e.ID)
 	if err != nil {
-		return domain.Product{}, fmt.Errorf("parse cached id for key %q: %w", key, err)
+		return domain.Product{}, false
 	}
 	return domain.Product{
 		ID:      id,
@@ -90,16 +158,5 @@ func (r *Redis) Get(ctx context.Context, key string) (domain.Product, error) {
 			MinorAmount: e.Price.MinorAmount,
 			Currency:    e.Price.Currency,
 		},
-	}, nil
-}
-
-func (r *Redis) Invalidate(ctx context.Context, key string) error {
-	if err := r.client.Do(ctx, r.client.B().Del().Key(key).Build()).Error(); err != nil {
-		return fmt.Errorf("invalidate cache key %q: %w", key, err)
-	}
-	return nil
-}
-
-func (r *Redis) Ping(ctx context.Context) error {
-	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
+	}, true
 }
