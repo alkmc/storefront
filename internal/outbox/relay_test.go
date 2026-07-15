@@ -17,7 +17,7 @@ func TestRelay(t *testing.T) {
 	t.Run("StandardPolling", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{0, 0}}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, &fakePublisher{}, cfg, func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
@@ -28,7 +28,7 @@ func TestRelay(t *testing.T) {
 
 	t.Run("FullBatch", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{5, 5, 0}}
-		runRelay(t, fd, &fakePublisher{}, testConfig(), func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, &fakePublisher{}, testConfig(), func(t *testing.T) {
 			// Full batches re-drain immediately: all 3 land before settle, no sleep.
 			synctest.Wait()
 			assertDrainCalls(t, fd, 3)
@@ -38,7 +38,7 @@ func TestRelay(t *testing.T) {
 	t.Run("FullClaimPartialPublish", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{5, 5, 0}}
 		pub := &fakePublisher{poisonCall: 2}
-		runRelay(t, fd, pub, testConfig(), func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, pub, testConfig(), func(t *testing.T) {
 			// Full claims re-drain immediately even when a poison row goes unpublished.
 			synctest.Wait()
 			assertDrainCalls(t, fd, 3)
@@ -48,23 +48,25 @@ func TestRelay(t *testing.T) {
 
 	t.Run("Wakeup", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{0, 0}}
+		fl := &fakeListener{}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, fl, &fakePublisher{}, cfg, func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
 			// A NOTIFY mid-wait re-drains well before the poll tick.
 			sleep(cfg.PollInterval / 4)
-			fd.wake <- struct{}{}
+			fl.wake <- struct{}{}
 			synctest.Wait()
 			assertDrainCalls(t, fd, 2)
 		})
 	})
 
 	t.Run("WakeupErrorFallsBackToSleep", func(t *testing.T) {
-		fd := &fakeDrainer{wakeErrs: []error{errors.New("listen failed")}}
+		fd := &fakeDrainer{}
+		fl := &fakeListener{errs: []error{errors.New("listen failed")}}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, fl, &fakePublisher{}, cfg, func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
@@ -81,7 +83,7 @@ func TestRelay(t *testing.T) {
 			errs: []error{errors.New("drain error"), errors.New("drain error"), nil},
 		}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, &fakePublisher{}, cfg, func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
@@ -108,7 +110,7 @@ func TestRelay(t *testing.T) {
 	t.Run("BackoffCap", func(t *testing.T) {
 		fd := &fakeDrainer{errs: slices.Repeat([]error{errors.New("drain failed")}, 6)}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, &fakePublisher{}, cfg, func(t *testing.T) {
 			// 1st poll (fail) -> wait 2s
 			synctest.Wait()
 			// 2nd poll (fail) -> wait 4s
@@ -135,15 +137,16 @@ func TestRelay(t *testing.T) {
 
 	t.Run("BackoffIgnoresWakeup", func(t *testing.T) {
 		fd := &fakeDrainer{errs: []error{errors.New("drain failed")}}
+		fl := &fakeListener{}
 		cfg := testConfig()
-		runRelay(t, fd, &fakePublisher{}, cfg, func(t *testing.T) {
+		runRelay(t, fd, fl, &fakePublisher{}, cfg, func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
 			// The failed drain backs off on a plain timer and never touches the NOTIFY listener.
 			sleep(cfg.PollInterval*2 - epsilon)
-			if got := fd.wakeCalls.callCount(); got != 0 {
-				t.Errorf("AwaitWakeup calls during backoff = %d, want 0", got)
+			if got := fl.callCount(); got != 0 {
+				t.Errorf("Await calls during backoff = %d, want 0", got)
 			}
 			assertDrainCalls(t, fd, 1)
 			sleep(epsilon)
@@ -156,7 +159,7 @@ func TestRelay(t *testing.T) {
 		pub := &fakePublisher{shouldHang: true}
 		cfg := testConfig()
 		cfg.PublishTimeout = 3 * time.Second
-		runRelay(t, fd, pub, cfg, func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, pub, cfg, func(t *testing.T) {
 			start := time.Now()
 			synctest.Wait()
 
@@ -172,7 +175,7 @@ func TestRelay(t *testing.T) {
 	t.Run("PartialPublishError", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{5}}
 		pub := &fakePublisher{failAfter: 2} // first 2 succeed, 3rd fails
-		runRelay(t, fd, pub, testConfig(), func(t *testing.T) {
+		runRelay(t, fd, &fakeListener{}, pub, testConfig(), func(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 			assertPublishCalls(t, pub, 3)
@@ -190,7 +193,8 @@ func TestRelay(t *testing.T) {
 
 			done := make(chan error, 1)
 
-			r := New(fd, &fakePublisher{}, cfg, slog.New(slog.DiscardHandler))
+			fl := &fakeListener{wake: make(chan struct{})}
+			r := New(fd, fl, &fakePublisher{}, cfg, slog.New(slog.DiscardHandler))
 			go func() {
 				done <- r.Run(ctx)
 			}()
@@ -208,6 +212,10 @@ func TestRelay(t *testing.T) {
 			case <-time.After(1 * time.Second):
 				t.Fatal("relay did not shut down within 1s")
 			}
+
+			if got := fl.closes.callCount(); got != 1 {
+				t.Errorf("listener Close calls on shutdown = %d, want 1", got)
+			}
 		})
 	})
 }
@@ -218,15 +226,15 @@ func testConfig() Config {
 
 // runRelay runs body in a synctest bubble with a started relay and a cancellable ctx.
 func runRelay(
-	t *testing.T, fd *fakeDrainer, pub *fakePublisher, cfg Config, body func(*testing.T),
+	t *testing.T, fd *fakeDrainer, fl *fakeListener, pub *fakePublisher, cfg Config, body func(*testing.T),
 ) {
 	t.Helper()
 	synctest.Test(t, func(t *testing.T) {
 		// A select on a channel made outside the bubble is not durably blocking and hangs synctest.Wait.
-		fd.wake = make(chan struct{})
+		fl.wake = make(chan struct{})
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		r := New(fd, pub, cfg, slog.New(slog.DiscardHandler))
+		r := New(fd, fl, pub, cfg, slog.New(slog.DiscardHandler))
 		go func() { _ = r.Run(ctx) }()
 		body(t)
 	})
