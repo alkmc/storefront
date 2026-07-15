@@ -10,7 +10,6 @@ import (
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
-	"golang.org/x/sync/singleflight"
 )
 
 type (
@@ -32,15 +31,23 @@ type (
 		logger      *slog.Logger
 		store       store
 		cache       cacher
-		loadGroup   singleflight.Group
+		loads       callGroup[domain.Product]
 		loadTimeout time.Duration
 	}
 )
 
 // NewService initializes the service with the given store and cache.
 // loadTimeout caps a single detached store read and cache.Set.
-func NewService(s store, c cacher, loadTimeout time.Duration, l *slog.Logger) *Service {
-	return new(Service{logger: l, store: s, cache: c, loadTimeout: loadTimeout})
+func NewService(
+	st store, c cacher, loadTimeout time.Duration, l *slog.Logger,
+) *Service {
+	return new(Service{
+		logger:      l,
+		store:       st,
+		cache:       c,
+		loads:       callGroup[domain.Product]{timeout: loadTimeout},
+		loadTimeout: loadTimeout,
+	})
 }
 
 func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -65,15 +72,12 @@ func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, e
 	return s.loadProduct(ctx, id)
 }
 
-// loadProduct coalesces concurrent misses for id into a single DB load via singleflight.
+// loadProduct coalesces concurrent misses for id into a single DB load.
 func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product, error) {
 	key := id.String()
-	v, err, _ := s.loadGroup.Do(key, func() (any, error) {
-		loadCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
-		defer cancel()
-
+	return s.loads.Do(ctx, key, func(ctx context.Context) (domain.Product, error) {
 		// re-read inside the flight, because the guard needs a token read from within it.
-		entry, cacheErr := s.cache.Get(loadCtx, key)
+		entry, cacheErr := s.cache.Get(ctx, key)
 		if cacheErr != nil {
 			s.logger.Warn("cache get failed", slog.Any("error", cacheErr), slog.String("key", key))
 		}
@@ -81,24 +85,16 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 			return productFrom(entry)
 		}
 
-		p, err := s.store.FindByID(loadCtx, id)
+		p, err := s.store.FindByID(ctx, id)
 		// populate only after a clean Get, because an unread key leaves nothing to fence with.
 		if cacheErr == nil {
-			s.populate(loadCtx, key, p, entry, err)
+			s.populate(ctx, key, p, entry, err)
 		}
 		if err != nil {
 			return domain.Product{}, err
 		}
 		return p, nil
 	})
-	if err != nil {
-		return domain.Product{}, err
-	}
-	p, ok := v.(domain.Product)
-	if !ok {
-		return domain.Product{}, fmt.Errorf("singleflight: unexpected result type %T", v)
-	}
-	return p, nil
 }
 
 func productFrom(e cache.Entry) (domain.Product, error) {
