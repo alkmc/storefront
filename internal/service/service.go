@@ -36,8 +36,8 @@ type (
 	}
 )
 
-// NewService initializes the service with the given store and cache.
-// loadTimeout caps a single detached store read and cache.Set.
+// NewService applies loadTimeout to every cache and store call that runs detached from
+// the caller, so a client disconnect cannot leave the cache unwritten.
 func NewService(
 	st store, c cacher, loadTimeout time.Duration, l *slog.Logger,
 ) *Service {
@@ -86,39 +86,15 @@ func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product
 		}
 
 		p, err := s.store.FindByID(ctx, id)
-		// populate only after a clean Get, because an unread key leaves nothing to fence with
+		// fill only after a clean Get, because an unread key leaves nothing to fence with
 		if cacheErr == nil {
-			s.populate(ctx, key, p, entry, err)
+			s.fill(ctx, key, p, entry, err)
 		}
 		if err != nil {
 			return domain.Product{}, err
 		}
 		return p, nil
 	})
-}
-
-func productFrom(e cache.Entry) (domain.Product, error) {
-	if !e.Found {
-		return domain.Product{}, fmt.Errorf("find product: %w", domain.ErrNotFound)
-	}
-	return e.Product, nil
-}
-
-func (s *Service) populate(
-	ctx context.Context, key string, p domain.Product, prev cache.Entry, loadErr error,
-) {
-	var err error
-	switch {
-	case loadErr == nil:
-		err = s.cache.Set(ctx, key, p, prev)
-	case errors.Is(loadErr, domain.ErrNotFound):
-		err = s.cache.SetMissing(ctx, key, prev)
-	default:
-		return
-	}
-	if err != nil {
-		s.logger.Warn("cache populate failed", slog.Any("error", err), slog.String("key", key))
-	}
 }
 
 func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
@@ -152,6 +128,23 @@ func (s *Service) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain
 	return p, nil
 }
 
+func (s *Service) fill(
+	ctx context.Context, key string, p domain.Product, prev cache.Entry, loadErr error,
+) {
+	var err error
+	switch {
+	case loadErr == nil:
+		err = s.cache.Set(ctx, key, p, prev)
+	case errors.Is(loadErr, domain.ErrNotFound):
+		err = s.cache.SetMissing(ctx, key, prev)
+	default:
+		return
+	}
+	if err != nil {
+		s.logger.Warn("cache fill failed", slog.Any("error", err), slog.String("key", key))
+	}
+}
+
 func (s *Service) invalidate(ctx context.Context, id uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.loadTimeout)
 	defer cancel()
@@ -161,4 +154,11 @@ func (s *Service) invalidate(ctx context.Context, id uuid.UUID) {
 		s.logger.Warn("cache invalidate failed, entry stale until TTL",
 			slog.Any("error", err), slog.String("key", key))
 	}
+}
+
+func productFrom(e cache.Entry) (domain.Product, error) {
+	if !e.Found {
+		return domain.Product{}, fmt.Errorf("find product: %w", domain.ErrNotFound)
+	}
+	return e.Product, nil
 }
