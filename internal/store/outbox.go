@@ -10,7 +10,6 @@ import (
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/event"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type (
@@ -65,59 +64,6 @@ func (pg *Postgres) DrainBatch(
 		return 0, false, fmt.Errorf("outbox commit: %w", err)
 	}
 	return len(sent), full, transientErr
-}
-
-// AwaitWakeup waits for an outbox NOTIFY or timeout (a poll tick), relay goroutine use only.
-func (pg *Postgres) AwaitWakeup(ctx context.Context, timeout time.Duration) error {
-	conn, err := pg.listenerConn(ctx)
-	if err != nil {
-		return err
-	}
-
-	waitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	if _, err := conn.Conn().WaitForNotification(waitCtx); err != nil {
-		if ctx.Err() != nil {
-			pg.releaseListener()
-			return ctx.Err()
-		}
-		if errors.Is(err, context.DeadlineExceeded) {
-			return nil
-		}
-		pg.releaseListener()
-		return fmt.Errorf("outbox wait: %w", err)
-	}
-	return nil
-}
-
-// Close releases the relay's dedicated LISTEN connection. The pool itself is the caller's.
-func (pg *Postgres) Close() {
-	pg.releaseListener()
-}
-
-// listenerConn returns the LISTEN connection, held between waits to buffer NOTIFYs sent while draining.
-func (pg *Postgres) listenerConn(ctx context.Context) (*pgxpool.Conn, error) {
-	if pg.listenConn != nil {
-		return pg.listenConn, nil
-	}
-	conn, err := pg.pool.Acquire(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("outbox listen acquire: %w", err)
-	}
-	if _, err := conn.Exec(ctx, "LISTEN outbox_wakeup"); err != nil {
-		conn.Release()
-		return nil, fmt.Errorf("outbox listen: %w", err)
-	}
-	pg.listenConn = conn
-	return conn, nil
-}
-
-// releaseListener drops the LISTEN connection so the next wait re-acquires a fresh one.
-func (pg *Postgres) releaseListener() {
-	if pg.listenConn != nil {
-		pg.listenConn.Release()
-		pg.listenConn = nil
-	}
 }
 
 // insertOutbox stores one pending event and schedules a relay wakeup within the caller's tx.

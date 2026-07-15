@@ -82,7 +82,6 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "event publisher", pub.Close, logger)
 
 	repo := store.NewPostgres(pool)
-	defer repo.Close()
 
 	rCache := cache.New(client, cfg.Redis.TTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
@@ -114,7 +113,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		srv, logger,
 	)
 
-	relay := outbox.New(repo, pub, outbox.Config{
+	listener := store.NewListener(pool, store.OutboxChannel)
+	relay := outbox.New(repo, listener, pub, outbox.Config{
 		BatchSize:      cfg.Outbox.BatchSize,
 		PollInterval:   cfg.Outbox.PollInterval,
 		PublishTimeout: cfg.Outbox.PublishTimeout,
