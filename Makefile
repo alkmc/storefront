@@ -1,4 +1,4 @@
-.PHONY: build run test integration fmt deadcode lint check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test integration fmt deadcode lint lint-integration check verify proto proto-lint up down logs migrate-up migrate-down migrate-status
 
 build:
 	go build ./cmd/storefront ./cmd/migrate
@@ -20,6 +20,9 @@ deadcode:
 
 lint:
 	golangci-lint run
+
+lint-integration:
+	golangci-lint run --build-tags integration
 
 check:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
