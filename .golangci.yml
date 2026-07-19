@@ -1,7 +1,9 @@
 version: "2"
 
 run:
-  timeout: 5m
+  timeout: 10m
+  build-tags:
+    - integration
   tests: true
   modules-download-mode: readonly
   relative-path-mode: gomod
