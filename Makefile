@@ -1,4 +1,4 @@
-.PHONY: build run test integration fmt deadcode lint check proto proto-lint up down logs migrate-up migrate-down migrate-status
+.PHONY: build run test integration fmt deadcode lint check proto proto-lint up down logs migrate-up migrate-down migrate-status token
 
 build:
 	go build ./cmd/storefront ./cmd/migrate
@@ -47,3 +47,6 @@ migrate-down:
 
 migrate-status:
 	docker compose run --rm migrate status
+
+token:
+	@set -a && . ./.env && go run ./cmd/token
