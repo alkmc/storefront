@@ -13,6 +13,8 @@ var (
 	ErrUnavailable = errors.New("domain: dependency unavailable")
 	// ErrInsufficientStock signals a purchase for more units than are in stock.
 	ErrInsufficientStock = errors.New("domain: insufficient stock")
+	// ErrProductInUse signals a delete of a product that has recorded orders.
+	ErrProductInUse = errors.New("domain: product in use")
 )
 
 type (
