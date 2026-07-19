@@ -976,6 +976,7 @@ type PurchaseProductResponse struct {
 	xxx_hidden_ProductId      string                 `protobuf:"bytes,1,opt,name=product_id,json=productId"`
 	xxx_hidden_Quantity       int64                  `protobuf:"varint,2,opt,name=quantity"`
 	xxx_hidden_RemainingStock int64                  `protobuf:"varint,3,opt,name=remaining_stock,json=remainingStock"`
+	xxx_hidden_OrderId        string                 `protobuf:"bytes,4,opt,name=order_id,json=orderId"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -1026,6 +1027,13 @@ func (x *PurchaseProductResponse) GetRemainingStock() int64 {
 	return 0
 }
 
+func (x *PurchaseProductResponse) GetOrderId() string {
+	if x != nil {
+		return x.xxx_hidden_OrderId
+	}
+	return ""
+}
+
 func (x *PurchaseProductResponse) SetProductId(v string) {
 	x.xxx_hidden_ProductId = v
 }
@@ -1038,12 +1046,17 @@ func (x *PurchaseProductResponse) SetRemainingStock(v int64) {
 	x.xxx_hidden_RemainingStock = v
 }
 
+func (x *PurchaseProductResponse) SetOrderId(v string) {
+	x.xxx_hidden_OrderId = v
+}
+
 type PurchaseProductResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	ProductId      string
 	Quantity       int64
 	RemainingStock int64
+	OrderId        string
 }
 
 func (b0 PurchaseProductResponse_builder) Build() *PurchaseProductResponse {
@@ -1053,6 +1066,7 @@ func (b0 PurchaseProductResponse_builder) Build() *PurchaseProductResponse {
 	x.xxx_hidden_ProductId = b.ProductId
 	x.xxx_hidden_Quantity = b.Quantity
 	x.xxx_hidden_RemainingStock = b.RemainingStock
+	x.xxx_hidden_OrderId = b.OrderId
 	return m0
 }
 
@@ -1098,12 +1112,13 @@ const file_catalog_v1_product_proto_rawDesc = "" +
 	"\x15DeleteProductResponse\"D\n" +
 	"\x16PurchaseProductRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x03R\bquantity\"}\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity\"\x98\x01\n" +
 	"\x17PurchaseProductResponse\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12\x1a\n" +
 	"\bquantity\x18\x02 \x01(\x03R\bquantity\x12'\n" +
-	"\x0fremaining_stock\x18\x03 \x01(\x03R\x0eremainingStock2\x8e\x04\n" +
+	"\x0fremaining_stock\x18\x03 \x01(\x03R\x0eremainingStock\x12\x19\n" +
+	"\border_id\x18\x04 \x01(\tR\aorderId2\x8e\x04\n" +
 	"\x0eProductService\x12T\n" +
 	"\rCreateProduct\x12 .catalog.v1.CreateProductRequest\x1a!.catalog.v1.CreateProductResponse\x12K\n" +
 	"\n" +
