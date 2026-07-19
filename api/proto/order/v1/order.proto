@@ -1,0 +1,48 @@
+edition = "2024";
+
+package order.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option features.field_presence = IMPLICIT;
+
+// OrderService exposes the authenticated caller's own orders.
+service OrderService {
+  // ListOrders returns a keyset page of the caller's orders, newest first.
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  // GetOrder returns one of the caller's orders by id.
+  rpc GetOrder(GetOrderRequest) returns (GetOrderResponse);
+}
+
+// Money is an amount in the smallest unit of an ISO 4217 currency.
+message Money {
+  int64 minor_amount = 1;
+  string currency = 2;
+}
+
+// Order is a purchase snapshot owned by the calling user.
+message Order {
+  string id = 1;
+  string product_id = 2;
+  int64 quantity = 3;
+  Money unit_price = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListOrdersRequest {
+  int32 limit = 1;
+  string cursor = 2;
+}
+
+message ListOrdersResponse {
+  repeated Order orders = 1;
+  string next_cursor = 2;
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message GetOrderResponse {
+  Order order = 1;
+}

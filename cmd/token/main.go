@@ -1,0 +1,42 @@
+// Command token prints a signed dev bearer token for api.rest and manual calls.
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/alkmc/storefront/internal/auth/authtest"
+	"github.com/google/uuid"
+)
+
+func main() {
+	sub := flag.String("sub", "", "user id claim, a fresh UUID when empty")
+	ttl := flag.Duration("ttl", time.Hour, "token lifetime")
+	flag.Parse()
+
+	secret := os.Getenv("AUTH_JWT_SECRET")
+	if secret == "" {
+		fail("AUTH_JWT_SECRET is empty, run via make token or export it first")
+	}
+
+	id, err := subID(*sub)
+	if err != nil {
+		fail("sub: " + err.Error())
+	}
+
+	_, _ = fmt.Fprintln(os.Stdout, authtest.Token(secret, id, time.Now().Add(*ttl)))
+}
+
+func subID(sub string) (uuid.UUID, error) {
+	if sub == "" {
+		return uuid.NewV7()
+	}
+	return uuid.Parse(sub)
+}
+
+func fail(msg string) {
+	_, _ = fmt.Fprintln(os.Stderr, msg)
+	os.Exit(1)
+}
