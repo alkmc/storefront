@@ -255,14 +255,13 @@ func TestOutbox_ConcurrentRelaysPublishExactlyOnce(t *testing.T) {
 		wg    sync.WaitGroup
 		calls atomic.Int64
 	)
-	publish := func(context.Context, event.Record) error {
-		calls.Add(1)
-		return nil
-	}
 	for range 2 {
 		wg.Go(func() {
 			for {
-				n, _, err := repo.DrainBatch(ctx, batchSize, 3, publish)
+				n, _, err := repo.DrainBatch(ctx, batchSize, 3, func(context.Context, event.Record) error {
+					calls.Add(1)
+					return nil
+				})
 				if err != nil {
 					t.Errorf("drain: %v", err)
 					return
