@@ -54,7 +54,7 @@ jobs:
       - name: Build
         run: make build
       - name: Verify module checksums
-        run: make verify
+        run: go mod verify
       - name: Run govulncheck (go run)
         run: make check
 
