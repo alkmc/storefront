@@ -1,26 +1,21 @@
-package migrate
+package migrations
 
 import (
 	"context"
 	"database/sql"
 	"embed"
 	"fmt"
-	"io/fs"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
-//go:embed migrations/*.sql
-var fsys embed.FS
+//go:embed *.sql
+var sqlFiles embed.FS
 
 func newProvider(db *sql.DB) (*goose.Provider, error) {
-	sub, err := fs.Sub(fsys, "migrations")
-	if err != nil {
-		return nil, fmt.Errorf("sub migrations fs: %w", err)
-	}
-	return goose.NewProvider(goose.DialectPostgres, db, sub)
+	return goose.NewProvider(goose.DialectPostgres, db, sqlFiles)
 }
 
 func Up(ctx context.Context, db *sql.DB) error {
