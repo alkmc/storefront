@@ -17,7 +17,7 @@ import (
 	"github.com/alkmc/storefront/internal/store"
 	grpcsrv "github.com/alkmc/storefront/internal/transport/grpc"
 	httpsrv "github.com/alkmc/storefront/internal/transport/http"
-	"github.com/alkmc/storefront/migrate"
+	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 	"github.com/redis/rueidis"
@@ -44,7 +44,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	if err := migrate.Verify(ctx, cfg.Postgres.DSN()); err != nil {
+	if err := migrations.Verify(ctx, cfg.Postgres.DSN()); err != nil {
 		return err
 	}
 

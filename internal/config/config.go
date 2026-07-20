@@ -129,3 +129,7 @@ func (p Postgres) DSN() string {
 func Load() (Config, error) {
 	return env.ParseAs[Config]()
 }
+
+func LoadPostgres() (Postgres, error) {
+	return env.ParseAs[Postgres]()
+}

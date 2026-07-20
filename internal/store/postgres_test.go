@@ -12,7 +12,7 @@ import (
 
 	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/alkmc/storefront/migrate"
+	"github.com/alkmc/storefront/migrations"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -72,7 +72,7 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 		t.Fatalf("failed to parse pg config: %v", err)
 	}
 	migrationDB := stdlib.OpenDB(*pgxCfg)
-	if err := migrate.Up(ctx, migrationDB); err != nil {
+	if err := migrations.Up(ctx, migrationDB); err != nil {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
 	if err := migrationDB.Close(); err != nil {
