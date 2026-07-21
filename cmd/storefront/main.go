@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/bus"
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
@@ -86,7 +87,9 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	rCache := cache.New(client, cfg.Redis.TTL, cfg.Redis.NegTTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
 
-	apiSrv, err := newAPIServer(cfg, srv, logger)
+	verifier := auth.NewVerifier(cfg.Auth.JWTSecret.Reveal())
+
+	apiSrv, err := newAPIServer(cfg, srv, verifier, logger)
 	if err != nil {
 		return err
 	}
@@ -110,7 +113,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 			ShutdownTimeout: cfg.ShutdownTimeout,
 			Reflection:      cfg.GRPC.Reflection,
 		},
-		srv, logger,
+		srv, verifier, logger,
 	)
 
 	listener := store.NewListener(pool, store.OutboxChannel)
@@ -134,7 +137,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	return nil
 }
 
-func newAPIServer(cfg config.Config, svc *service.Service, l *slog.Logger,
+func newAPIServer(
+	cfg config.Config, svc *service.Service, v *auth.Verifier, l *slog.Logger,
 ) (*httpsrv.Server, error) {
 	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
@@ -150,7 +154,7 @@ func newAPIServer(cfg config.Config, svc *service.Service, l *slog.Logger,
 
 	h := httpsrv.NewHandler(svc, cfg.HTTP.RequestTimeout, l)
 	return httpsrv.NewAPIServer(
-		mw(httpsrv.NewMux(h)),
+		mw(httpsrv.NewMux(h, httpsrv.Auth(v))),
 		httpsrv.ServerCfg{
 			Addr:            cfg.HTTP.Address(),
 			ReadTimeout:     cfg.HTTP.ReadTimeout,

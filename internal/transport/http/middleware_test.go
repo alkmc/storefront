@@ -5,6 +5,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/alkmc/storefront/internal/auth"
+	"github.com/alkmc/storefront/internal/auth/authtest"
+	"github.com/google/uuid"
 )
 
 func okHandler() http.Handler {
@@ -118,5 +123,104 @@ func TestCSRF(t *testing.T) {
 func TestCSRFRejectsInvalidTrustedOrigin(t *testing.T) {
 	if _, err := csrf([]string{"not a url"}); err == nil {
 		t.Errorf("expected error for invalid trusted origin")
+	}
+}
+
+func TestAuth(t *testing.T) {
+	sub := uuid.Must(uuid.NewV7())
+	valid := authtest.Token(testJWTSecret, sub, time.Now().Add(time.Hour))
+
+	tests := []struct {
+		name       string
+		header     string
+		wantStatus int
+	}{
+		{
+			name:       "missing header",
+			header:     "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "basic scheme",
+			header:     "Basic abc",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "bearer without token",
+			header:     "Bearer ",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "expired token",
+			header:     "Bearer " + authtest.Token(testJWTSecret, sub, time.Now().Add(-time.Minute)),
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "valid token",
+			header:     "Bearer " + valid,
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "lowercase scheme accepted",
+			header:     "bearer " + valid,
+			wantStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var (
+				gotUser uuid.UUID
+				called  bool
+			)
+			next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				called = true
+				gotUser, _ = auth.UserID(r.Context())
+			})
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/orders", nil)
+			if tt.header != "" {
+				req.Header.Set("Authorization", tt.header)
+			}
+			rec := httptest.NewRecorder()
+			Auth(auth.NewVerifier(testJWTSecret))(next).ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Errorf("got status %d, want %d", rec.Code, tt.wantStatus)
+			}
+			if tt.wantStatus == http.StatusOK {
+				if !called {
+					t.Fatal("handler not called for a valid token")
+				}
+				if gotUser != sub {
+					t.Errorf("got user %v in context, want %v", gotUser, sub)
+				}
+				return
+			}
+			if called {
+				t.Error("handler called despite rejected token")
+			}
+			if got := rec.Header().Get("WWW-Authenticate"); got != "Bearer" {
+				t.Errorf("got WWW-Authenticate %q, want %q", got, "Bearer")
+			}
+		})
+	}
+}
+
+func TestCORS(t *testing.T) {
+	mw, err := corsPolicy([]string{"https://app.example.com"}, 600)
+	if err != nil {
+		t.Fatalf("cors init: %v", err)
+	}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/v1/orders", nil)
+	req.Header.Set("Origin", "https://app.example.com")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "authorization")
+	rec := httptest.NewRecorder()
+	mw(okHandler()).ServeHTTP(rec, req)
+
+	allowed := strings.ToLower(rec.Header().Get("Access-Control-Allow-Headers"))
+	if !strings.Contains(allowed, "authorization") {
+		t.Errorf("preflight does not allow Authorization: %q", allowed)
 	}
 }

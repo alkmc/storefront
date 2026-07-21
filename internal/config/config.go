@@ -20,6 +20,7 @@ type (
 		Outbox          Outbox
 		Service         Service
 		Log             Log
+		Auth            Auth
 		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	}
 	GRPC struct {
@@ -82,6 +83,9 @@ type (
 	}
 	Log struct {
 		Level slog.Level `env:"LOG_LEVEL" envDefault:"INFO"`
+	}
+	Auth struct {
+		JWTSecret Secret `env:"AUTH_JWT_SECRET,required,unset"`
 	}
 )
 
