@@ -5,17 +5,25 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"strings"
 	"testing"
+	"time"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
+	"github.com/alkmc/storefront/internal/auth"
+	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+const testJWTSecret = "test-secret"
 
 func TestHandler_CreateProduct(t *testing.T) {
 	client := newTestClient(t, stubProcessor{
@@ -128,9 +136,11 @@ func TestHandler_PurchaseProduct(t *testing.T) {
 		},
 	})
 
-	resp, err := client.PurchaseProduct(t.Context(), catalogv1.PurchaseProductRequest_builder{
-		Id: id.String(), Quantity: 2,
-	}.Build())
+	resp, err := client.PurchaseProduct(
+		authCtx(t, uuid.New()), catalogv1.PurchaseProductRequest_builder{
+			Id: id.String(), Quantity: 2,
+		}.Build(),
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -248,7 +258,8 @@ func TestHandler_ErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := newTestClient(t, tt.proc)
-			if got := status.Code(tt.call(t.Context(), client)); got != tt.want {
+			// the token is inert on public methods and lets the protected ones reach the handler
+			if got := status.Code(tt.call(authCtx(t, uuid.New()), client)); got != tt.want {
 				t.Errorf("got code %v, want %v", got, tt.want)
 			}
 		})
@@ -262,10 +273,21 @@ func testMoney(amount int64) *catalogv1.Money {
 // newTestClient wires the handler behind an in-memory gRPC server over bufconn.
 func newTestClient(t *testing.T, p processor) catalogv1.ProductServiceClient {
 	t.Helper()
-	log := slog.New(slog.DiscardHandler)
-	lis := bufconn.Listen(1 << 20)
-	srv := grpc.NewServer(grpc.ChainUnaryInterceptor(logging(log), recovery(log)))
-	catalogv1.RegisterProductServiceServer(srv, NewHandler(p, log))
+	conn, _ := newTestConn(t, p)
+	return catalogv1.NewProductServiceClient(conn)
+}
+
+// newTestConn serves the real newServer chain, auth included, over bufconn.
+func newTestConn(t *testing.T, p processor) (*grpc.ClientConn, *grpc.Server) {
+	t.Helper()
+	const maxRequestBytes = 1 << 20 // 1 MiB
+
+	s := NewServer(
+		ServerCfg{RequestTimeout: 2 * time.Second, MaxRequestBytes: maxRequestBytes},
+		p, auth.NewVerifier(testJWTSecret), slog.New(slog.DiscardHandler),
+	)
+	lis := bufconn.Listen(maxRequestBytes)
+	srv := s.newServer()
 	go func() {
 		_ = srv.Serve(lis)
 	}()
@@ -282,5 +304,68 @@ func newTestClient(t *testing.T, p processor) catalogv1.ProductServiceClient {
 		t.Fatalf("failed to dial bufconn: %v", err)
 	}
 	t.Cleanup(func() { _ = conn.Close() })
-	return catalogv1.NewProductServiceClient(conn)
+	return conn, srv
+}
+
+// TestAuthDeniesByDefault proves every registered unary RPC outside the public list needs a token,
+// so a future method cannot ship open by omission.
+func TestAuthDeniesByDefault(t *testing.T) {
+	conn, srv := newTestConn(t, stubProcessor{
+		FindAllFn: func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error) {
+			return domain.ProductPage{}, nil
+		},
+	})
+
+	var protected int
+	for name, info := range srv.GetServiceInfo() {
+		if strings.HasPrefix(name, "grpc.") {
+			continue
+		}
+		for _, m := range info.Methods {
+			full := "/" + name + "/" + m.Name
+			err := conn.Invoke(t.Context(), full, &emptypb.Empty{}, &emptypb.Empty{})
+			if _, ok := publicMethods[full]; ok {
+				if status.Code(err) == codes.Unauthenticated {
+					t.Errorf("%s: public method blocked without a token", full)
+				}
+				continue
+			}
+			protected++
+			if status.Code(err) != codes.Unauthenticated {
+				t.Errorf("%s: got %v, want Unauthenticated without a token", full, status.Code(err))
+			}
+		}
+	}
+	if protected == 0 {
+		t.Fatal("no protected methods visited, the canary is vacuous")
+	}
+}
+
+// authCtx carries a valid bearer token in the outgoing metadata.
+func authCtx(t *testing.T, sub uuid.UUID) context.Context {
+	t.Helper()
+	token := authtest.Token(testJWTSecret, sub, time.Now().Add(time.Hour))
+	return metadata.AppendToOutgoingContext(t.Context(), "authorization", "Bearer "+token)
+}
+
+func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
+	conn, _ := newTestConn(t, stubProcessor{
+		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+			return domain.Product{ID: id, Name: "Public"}, nil
+		},
+	})
+	products := catalogv1.NewProductServiceClient(conn)
+
+	if _, err := products.PurchaseProduct(t.Context(), catalogv1.PurchaseProductRequest_builder{
+		Id: uuid.NewString(), Quantity: 1,
+	}.Build()); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("purchase: got %v, want Unauthenticated", status.Code(err))
+	}
+
+	// the catalog stays public, no token needed
+	if _, err := products.GetProduct(t.Context(), catalogv1.GetProductRequest_builder{
+		Id: uuid.NewString(),
+	}.Build()); err != nil {
+		t.Errorf("public get product: unexpected error %v", err)
+	}
 }

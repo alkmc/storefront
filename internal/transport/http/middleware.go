@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alkmc/storefront/internal/auth"
+	"github.com/google/uuid"
 	"github.com/jub0bs/cors"
 	"github.com/klauspost/compress/gzhttp"
 )
@@ -24,6 +26,10 @@ type (
 		HSTSMaxAge         int
 	}
 	Middleware = func(http.Handler) http.Handler
+	// verifier checks a bearer token and returns the caller id.
+	verifier interface {
+		Verify(string) (uuid.UUID, error)
+	}
 )
 
 // NewMiddleware builds the standard middleware chain.
@@ -129,7 +135,7 @@ func corsPolicy(origins []string, maxAge int) (Middleware, error) {
 	m, err := cors.NewMiddleware(cors.Config{
 		Origins:         origins,
 		Methods:         []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
-		RequestHeaders:  []string{"Content-Type"},
+		RequestHeaders:  []string{"Content-Type", "Authorization"},
 		MaxAgeInSeconds: maxAge,
 	})
 	if err != nil {
@@ -179,6 +185,32 @@ func compression(minBytes int) (Middleware, error) {
 	return func(next http.Handler) http.Handler {
 		return wrap(next)
 	}, nil
+}
+
+// Auth rejects requests without a valid bearer token and puts the caller id in the context.
+func Auth(v verifier) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			token, ok := auth.BearerToken(r.Header.Get("Authorization"))
+			if !ok {
+				unauthorized(w)
+				return
+			}
+			sub, err := v.Verify(token)
+			if err != nil {
+				slog.Default().Debug("token rejected", slog.Any("error", err))
+				unauthorized(w)
+				return
+			}
+			next(w, r.WithContext(auth.WithUserID(r.Context(), sub)))
+		}
+	}
+}
+
+// unauthorized replies with a bare 401 and the RFC 6750 challenge, the reason stays in the log.
+func unauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", "Bearer")
+	respondError(w, http.StatusUnauthorized, "invalid or missing token")
 }
 
 type statusRecorder struct {
