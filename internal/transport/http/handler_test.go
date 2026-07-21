@@ -507,6 +507,7 @@ func TestPurchaseProduct(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	userID := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
 		name           string
@@ -519,8 +520,14 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "success",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, pid uuid.UUID, _ int64) (domain.Product, error) {
-					return domain.Product{ID: pid, Name: "Car", Price: testMoney(), Stock: 5}, nil
+				proc.purchase = func(_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64,
+				) (domain.Product, domain.Order, error) {
+					if gotUser != domain.UserID(userID) {
+						t.Errorf("got user %v, want %v", gotUser, userID)
+					}
+					p := domain.Product{ID: pid, Name: "Car", Price: testMoney(), Stock: 5}
+					o := domain.Order{ID: domain.OrderID(orderID), UserID: gotUser, ProductID: pid, Quantity: qty}
+					return p, o, nil
 				}
 			},
 			expectedStatus: http.StatusOK,
@@ -543,8 +550,9 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "product not found",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
-					return domain.Product{}, domain.ErrNotFound
+				proc.purchase = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
+				) (domain.Product, domain.Order, error) {
+					return domain.Product{}, domain.Order{}, domain.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -554,8 +562,9 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "insufficient stock",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
-					return domain.Product{}, domain.ErrInsufficientStock
+				proc.purchase = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
+				) (domain.Product, domain.Order, error) {
+					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
 				}
 			},
 			expectedStatus: http.StatusConflict,
@@ -587,6 +596,9 @@ func TestPurchaseProduct(t *testing.T) {
 				if pr.ProductID != id || pr.Quantity != 2 || pr.RemainingStock != 5 {
 					t.Errorf("got %+v, want productId=%v quantity=2 remainingStock=5", pr, id)
 				}
+				if pr.OrderID != orderID {
+					t.Errorf("got orderId %v, want %v", pr.OrderID, orderID)
+				}
 				return
 			}
 			e := decodeJSON[messageResponse](t, resp.Body)
@@ -597,31 +609,173 @@ func TestPurchaseProduct(t *testing.T) {
 	}
 }
 
-func TestAuthGuardByRoute(t *testing.T) {
-	h := NewHandler(&stubProcessor{
-		findAll: func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error) {
-			return domain.ProductPage{}, nil
-		},
-	}, 2*time.Second, slog.New(slog.DiscardHandler))
-	mux := NewMux(h, Auth(auth.NewVerifier(testJWTSecret)))
+func TestProtectedRoutesRequireToken(t *testing.T) {
+	mux, _ := setupTest(t)
 
-	// protected route rejects a missing token
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product/x/purchase", nil)
+	tests := []struct {
+		name   string
+		method string
+		url    string
+		body   string
+	}{
+		{
+			name:   "purchase",
+			method: http.MethodPost,
+			url:    "/v1/product/" + uuid.NewString() + "/purchase",
+			body:   `{"quantity":1}`,
+		},
+		{
+			name:   "list orders",
+			method: http.MethodGet,
+			url:    "/v1/orders",
+		},
+		{
+			name:   "get order",
+			method: http.MethodGet,
+			url:    "/v1/orders/" + uuid.NewString(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(
+				t.Context(), tt.method, tt.url, strings.NewReader(tt.body),
+			)
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != http.StatusUnauthorized {
+				t.Errorf("got status %d, want %d", resp.Code, http.StatusUnauthorized)
+			}
+			if got := resp.Header().Get("WWW-Authenticate"); got != "Bearer" {
+				t.Errorf("got WWW-Authenticate %q, want %q", got, "Bearer")
+			}
+		})
+	}
+}
+
+func TestGetOrder(t *testing.T) {
+	mux, proc := setupTest(t)
+
+	userID := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
+	productID := uuid.Must(uuid.NewV7())
+
+	tests := []struct {
+		name           string
+		id             string
+		setupMock      func()
+		expectedStatus int
+		expectedMsg    string
+	}{
+		{
+			name: "success",
+			id:   orderID.String(),
+			setupMock: func() {
+				proc.findOrder = func(_ context.Context, gotUser domain.UserID, id domain.OrderID,
+				) (domain.Order, error) {
+					if gotUser != domain.UserID(userID) {
+						t.Errorf("got user %v, want %v", gotUser, userID)
+					}
+					return domain.Order{
+						ID: id, UserID: gotUser, ProductID: productID, Quantity: 2, UnitPrice: testMoney(),
+					}, nil
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "foreign or missing order",
+			id:   orderID.String(),
+			setupMock: func() {
+				proc.findOrder = func(_ context.Context, _ domain.UserID, _ domain.OrderID) (domain.Order, error) {
+					return domain.Order{}, domain.ErrNotFound
+				}
+			},
+			expectedStatus: http.StatusNotFound,
+			expectedMsg:    "order not found",
+		},
+		{
+			name:           "invalid uuid",
+			id:             "nope",
+			setupMock:      func() {},
+			expectedStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.setupMock()
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/orders/"+tt.id, nil)
+			req.Header.Set("Authorization", bearer(t, userID))
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != tt.expectedStatus {
+				t.Errorf("got status %d, want %d", resp.Code, tt.expectedStatus)
+			}
+
+			if tt.expectedStatus == http.StatusOK {
+				o := decodeJSON[orderResponse](t, resp.Body)
+				if o.ID != orderID || o.ProductID != productID || o.Quantity != 2 {
+					t.Errorf("got %+v, want id=%v productId=%v quantity=2", o, orderID, productID)
+				}
+				return
+			}
+			if tt.expectedMsg != "" {
+				e := decodeJSON[messageResponse](t, resp.Body)
+				if e.Message != tt.expectedMsg {
+					t.Errorf("got msg %q, want %q", e.Message, tt.expectedMsg)
+				}
+			}
+		})
+	}
+}
+
+func TestListOrders(t *testing.T) {
+	mux, proc := setupTest(t)
+
+	userID := uuid.Must(uuid.NewV7())
+	cursorID := uuid.Must(uuid.NewV7())
+	lastID := uuid.Must(uuid.NewV7())
+
+	proc.findOrders = func(_ context.Context, gotUser domain.UserID, cursor uuid.NullUUID, limit int,
+	) (domain.OrderPage, error) {
+		if gotUser != domain.UserID(userID) {
+			t.Errorf("got user %v, want %v", gotUser, userID)
+		}
+		if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
+			t.Errorf("got limit %d cursor %v, want 10 %s", limit, cursor, cursorID)
+		}
+		return domain.OrderPage{
+			Items: []domain.Order{
+				{
+					ID:        domain.OrderID(lastID),
+					UserID:    gotUser,
+					ProductID: uuid.Must(uuid.NewV7()),
+					Quantity:  1,
+					UnitPrice: testMoney(),
+				},
+			},
+			HasMore: true,
+		}, nil
+	}
+
+	url := "/v1/orders?limit=10&cursor=" + cursorID.String()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	req.Header.Set("Authorization", bearer(t, userID))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
-	if resp.Code != http.StatusUnauthorized {
-		t.Errorf("protected route not blocked, got %d, want 401", resp.Code)
-	}
-	if got := resp.Header().Get("WWW-Authenticate"); got != "Bearer" {
-		t.Errorf("got WWW-Authenticate %q, want %q", got, "Bearer")
-	}
 
-	// public route serves without a token
-	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/product", nil)
-	resp = httptest.NewRecorder()
-	mux.ServeHTTP(resp, req)
-	if resp.Code == http.StatusUnauthorized {
-		t.Error("public route blocked without a token, got 401")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("got status %d, want %d", resp.Code, http.StatusOK)
+	}
+	page := decodeJSON[ordersPage](t, resp.Body)
+	if len(page.Items) != 1 || page.Items[0].ID != lastID {
+		t.Errorf("got items %+v, want single order %v", page.Items, lastID)
+	}
+	if page.NextCursor != lastID.String() {
+		t.Errorf("got nextCursor %q, want %q", page.NextCursor, lastID.String())
 	}
 }
 

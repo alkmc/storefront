@@ -285,23 +285,30 @@ func TestService_Delete(t *testing.T) {
 func TestService_Purchase(t *testing.T) {
 	ctx := t.Context()
 	id := uuid.Must(uuid.NewV7())
+	userID := domain.UserID(uuid.Must(uuid.NewV7()))
 
 	spyStore := new(SpyStore{})
-	spyStore.PurchaseFn = func(_ context.Context, _ uuid.UUID, _ int64) (domain.Product, error) {
-		return domain.Product{ID: id, Stock: 3}, nil
+	spyStore.PurchaseFn = func(_ context.Context, o domain.Order) (domain.Product, domain.Order, error) {
+		return domain.Product{ID: o.ProductID, Stock: 3}, o, nil
 	}
 	srv := newTestService(spyStore)
 
-	p, err := srv.Purchase(ctx, id, 2)
+	p, o, err := srv.Purchase(ctx, userID, id, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if p.Stock != 3 {
 		t.Errorf("got remaining stock %d, want 3", p.Stock)
 	}
+	if o.UserID != userID || o.ProductID != id || o.Quantity != 2 {
+		t.Errorf("order fields not propagated: got %+v", o)
+	}
+	if uuid.UUID(o.ID) == uuid.Nil {
+		t.Error("order id not generated")
+	}
 }
 
-func newTestService(s store) *Service {
+func newTestService(s storer) *Service {
 	return NewService(s, stubCache{}, time.Second, slog.New(slog.DiscardHandler))
 }
 
@@ -330,7 +337,7 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 		{
 			name: "purchase",
 			call: func(s *Service) error {
-				_, err := s.Purchase(t.Context(), id, 1)
+				_, _, err := s.Purchase(t.Context(), domain.UserID(uuid.New()), id, 1)
 				return err
 			},
 		},

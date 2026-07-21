@@ -65,7 +65,10 @@ type SpyStore struct {
 	FindAllFn  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn   func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn   func(context.Context, uuid.UUID) error
-	PurchaseFn func(context.Context, uuid.UUID, int64) (domain.Product, error)
+	PurchaseFn func(context.Context, domain.Order) (domain.Product, domain.Order, error)
+
+	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
+	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 }
 
 func (s *SpyStore) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -95,9 +98,26 @@ func (s *SpyStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *SpyStore) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain.Product, error) {
+func (s *SpyStore) Purchase(ctx context.Context, o domain.Order) (domain.Product, domain.Order, error) {
 	if s.PurchaseFn != nil {
-		return s.PurchaseFn(ctx, id, qty)
+		return s.PurchaseFn(ctx, o)
 	}
-	return domain.Product{}, nil
+	return domain.Product{}, domain.Order{}, nil
+}
+
+func (s *SpyStore) FindOrder(
+	ctx context.Context, userID domain.UserID, orderID domain.OrderID,
+) (domain.Order, error) {
+	if s.FindOrderFn != nil {
+		return s.FindOrderFn(ctx, userID, orderID)
+	}
+	return domain.Order{}, nil
+}
+
+func (s *SpyStore) FindOrders(ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+) (domain.OrderPage, error) {
+	if s.FindOrdersFn != nil {
+		return s.FindOrdersFn(ctx, userID, cursor, limit)
+	}
+	return domain.OrderPage{}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
+	orderv1 "github.com/alkmc/storefront/api/gen/order/v1"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -80,7 +81,9 @@ func (s *Server) newServer() *grpc.Server {
 		),
 		grpc.MaxRecvMsgSize(s.cfg.MaxRequestBytes),
 	)
-	catalogv1.RegisterProductServiceServer(srv, NewHandler(s.svc, s.log))
+	h := NewHandler(s.svc, s.log)
+	catalogv1.RegisterProductServiceServer(srv, h)
+	orderv1.RegisterOrderServiceServer(srv, h)
 	healthgrpc.RegisterHealthServer(srv, health.NewServer())
 	if s.cfg.Reflection {
 		reflection.Register(srv)

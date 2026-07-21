@@ -13,7 +13,10 @@ type stubProcessor struct {
 	FindAllFn  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn   func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn   func(context.Context, uuid.UUID) error
-	PurchaseFn func(context.Context, uuid.UUID, int64) (domain.Product, error)
+	PurchaseFn func(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+
+	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
+	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 }
 
 func (s stubProcessor) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -38,6 +41,17 @@ func (s stubProcessor) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.DeleteFn(ctx, id)
 }
 
-func (s stubProcessor) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain.Product, error) {
-	return s.PurchaseFn(ctx, id, qty)
+func (s stubProcessor) Purchase(ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64,
+) (domain.Product, domain.Order, error) {
+	return s.PurchaseFn(ctx, userID, id, qty)
+}
+
+func (s stubProcessor) FindOrder(ctx context.Context, userID domain.UserID, orderID domain.OrderID,
+) (domain.Order, error) {
+	return s.FindOrderFn(ctx, userID, orderID)
+}
+
+func (s stubProcessor) FindOrders(ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+) (domain.OrderPage, error) {
+	return s.FindOrdersFn(ctx, userID, cursor, limit)
 }

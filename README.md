@@ -60,27 +60,59 @@ curl -s 'http://localhost:8080/v1/product?limit=10'
 # next page: pass the nextCursor from the previous response
 curl -s 'http://localhost:8080/v1/product?limit=10&cursor={nextCursor}'
 
-# purchase units, decrementing stock atomically
+# purchase units, decrementing stock atomically (requires a bearer token)
+TOKEN=$(make -s token)
 curl -s -X POST http://localhost:8080/v1/product/{id}/purchase \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
   -d '{"quantity":2}'
+
+# list your own orders (keyset pagination, newest first)
+curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:8080/v1/orders?limit=10'
+
+# get one of your orders by id
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8080/v1/orders/{id}
 ```
 
-The list endpoint returns `{"items":[...],"nextCursor":"<id>"}`.  
+The list endpoints return `{"items":[...],"nextCursor":"<id>"}`.  
 A missing `nextCursor` means the last page.  
 
 Stock is set at creation and changed only through purchase.  
 `PUT` does not accept a `stock` field.  
-Purchase returns `{"productId":"<id>","quantity":2,"remainingStock":8}`.  
+Purchase returns `{"productId":"<id>","quantity":2,"remainingStock":8,"orderId":"<id>"}`.  
 A `409 Conflict` signals insufficient stock.  
 See `api.rest` for the full set of example requests.
+
+### Auth & orders
+
+Purchase and the `/v1/orders*` endpoints require a bearer token, catalog reads stay public.  
+Tokens are HS256 JWTs verified against `AUTH_JWT_SECRET`,
+`make token` prints a dev token.  
+Verification uses [golang-jwt](https://github.com/golang-jwt/jwt) pinned to HS256 through its `alg`
+allowlist, with `exp` required, and the test suite keeps the adversarial cases (`alg: none`,
+RS256 key confusion) as configuration regression guards.  
+There is intentionally no signup, refresh, or IdP integration, the showcase is object-level
+authorization, not identity management.  
+Both transports deny by default: a route or RPC serves anonymous callers only when it is
+explicitly registered as public, gRPC infrastructure (health, reflection) is excepted, and
+application streams are rejected outright until one consciously opts in.  
+
+Every purchase records an order owned by the token's user, with the unit price snapshotted at
+purchase time.  
+Listings return only your own rows because ownership is enforced in the SQL query, not filtered
+in the handler, and a foreign order id answers `404`, so its existence stays hidden.  
+`DELETE /v1/product/{id}` answers `409 Conflict` once a product has orders, backed by a
+foreign key with `ON DELETE RESTRICT`.
 
 ## gRPC API
 
 A gRPC transport mirrors the HTTP surface over the same service, on `GRPC_PORT` (default `9090`),
 with a registered gRPC health service.  
-The contract lives in `api/proto/catalog/v1/product.proto` (Protobuf edition 2024).  
-Code is generated with [buf](https://buf.build) into `api/gen` (`make proto`).
+The contract lives in `api/proto` as two packages, `catalog.v1` and `order.v1` (Protobuf edition 2024),
+mirroring the aggregate split of the HTTP paths.  
+Code is generated with [buf](https://buf.build) into `api/gen` (`make proto`).  
+The same bearer token guards the same operations: `PurchaseProduct` and `order.v1.OrderService`
+require an `authorization` metadata entry, catalog reads stay public.
 
 Server reflection is off by default.  
 Set `GRPC_REFLECTION=true` (dev only) and [grpcurl](https://github.com/fullstorydev/grpcurl) discovers the API without the proto:
@@ -101,9 +133,18 @@ grpcurl -plaintext -d '{"id":"<id>"}' \
 grpcurl -plaintext -d '{"limit":10}' \
   localhost:9090 catalog.v1.ProductService/ListProducts
 
-# purchase units (FAILED_PRECONDITION on insufficient stock)
-grpcurl -plaintext -d '{"id":"<id>","quantity":2}' \
+# purchase units (FAILED_PRECONDITION on insufficient stock, requires a bearer token)
+grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
+  -d '{"id":"<id>","quantity":2}' \
   localhost:9090 catalog.v1.ProductService/PurchaseProduct
+
+# list your own orders (newest first)
+grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
+  -d '{"limit":10}' localhost:9090 order.v1.OrderService/ListOrders
+
+# get one of your orders by id
+grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
+  -d '{"id":"<id>"}' localhost:9090 order.v1.OrderService/GetOrder
 ```
 
 ## Architecture
