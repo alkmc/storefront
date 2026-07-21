@@ -53,8 +53,13 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
+    paths:
+      - api/gen
 
 formatters:
   enable:
     - gofumpt
     - goimports
+  exclusions:
+    paths:
+      - api/gen
