@@ -10,7 +10,7 @@
 
 ### CREATE PRODUCT
 # @name newproduct
-POST {{apiBase}}/product
+POST {{apiBase}}/products
 Content-Type: {{json}}
 
 {
@@ -25,20 +25,20 @@ Content-Type: {{json}}
 @prodID = {{newproduct.response.body.$.id}}
 
 ### LIST PRODUCT
-GET {{apiBase}}/product/{{prodID}}
+GET {{apiBase}}/products/{{prodID}}
 
 ### LIST PRODUCTS
-GET {{apiBase}}/product
+GET {{apiBase}}/products
 
 ### LIST PRODUCTS (keyset paginated)
 # next page: copy `nextCursor` from the response into the cursor query param
-GET {{apiBase}}/product?limit=10&cursor=
+GET {{apiBase}}/products?limit=10&cursor=
 
 ### UPDATE PRODUCT
-PUT {{apiBase}}/product/{{prodID}}
+PUT {{apiBase}}/products/{{prodID}}
 Content-Type: {{json}}
 
-{   
+{
     "name": "t-shirt2",
     "price": {
         "minorAmount": 2006,
@@ -48,7 +48,7 @@ Content-Type: {{json}}
 
 ### PURCHASE PRODUCT
 # @name purchase
-POST {{apiBase}}/product/{{prodID}}/purchase
+POST {{apiBase}}/products/{{prodID}}/purchase
 Content-Type: {{json}}
 Authorization: Bearer {{token}}
 
@@ -72,7 +72,7 @@ GET {{apiBase}}/orders?limit=10&cursor=
 Authorization: Bearer {{token}}
 
 ### PURCHASE WITHOUT TOKEN (401)
-POST {{apiBase}}/product/{{prodID}}/purchase
+POST {{apiBase}}/products/{{prodID}}/purchase
 Content-Type: {{json}}
 
 {
@@ -81,10 +81,10 @@ Content-Type: {{json}}
 
 ### DELETE PRODUCT
 # answers 409 Conflict when the product has orders
-DELETE {{apiBase}}/product/{{prodID}}
+DELETE {{apiBase}}/products/{{prodID}}
 
 ### UPDATE PRODUCT WITH INCORRECT BODY
-PUT {{apiBase}}/product/{{prodID}}
+PUT {{apiBase}}/products/{{prodID}}
 Content-Type: {{json}}
 
 {   
@@ -94,7 +94,7 @@ Content-Type: {{json}}
 }
 
 ### CREATE PRODUCT WITH INCORRECT BODY
-POST {{apiBase}}/product
+POST {{apiBase}}/products
 Content-Type: {{json}}
 
 {   
@@ -106,7 +106,7 @@ Content-Type: {{json}}
 
 
 ### CREATE PRODUCT WITH EXTRA FIELD BODY
-POST {{apiBase}}/product
+POST {{apiBase}}/products
 Content-Type: {{json}}
 
 {   

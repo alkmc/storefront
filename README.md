@@ -48,21 +48,21 @@ All available variables with their defaults are documented in `.env.example`.
 
 ```bash
 # create a product (stock is optional, defaults to 0)
-curl -s -X POST http://localhost:8080/v1/product \
+curl -s -X POST http://localhost:8080/v1/products \
   -H 'Content-Type: application/json' \
   -d '{"name":"widget","stock":10,"price":{"minorAmount":999,"currency":"PLN"}}'
 
 # get a product by id
-curl -s http://localhost:8080/v1/product/{id}
+curl -s http://localhost:8080/v1/products/{id}
 
 # list products (keyset pagination)
-curl -s 'http://localhost:8080/v1/product?limit=10'
+curl -s 'http://localhost:8080/v1/products?limit=10'
 # next page: pass the nextCursor from the previous response
-curl -s 'http://localhost:8080/v1/product?limit=10&cursor={nextCursor}'
+curl -s 'http://localhost:8080/v1/products?limit=10&cursor={nextCursor}'
 
 # purchase units, decrementing stock atomically (requires a bearer token)
 TOKEN=$(make -s token)
-curl -s -X POST http://localhost:8080/v1/product/{id}/purchase \
+curl -s -X POST http://localhost:8080/v1/products/{id}/purchase \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"quantity":2}'
@@ -101,7 +101,7 @@ Every purchase records an order owned by the token's user, with the unit price s
 purchase time.  
 Listings return only your own rows because ownership is enforced in the SQL query, not filtered
 in the handler, and a foreign order id answers `404`, so its existence stays hidden.  
-`DELETE /v1/product/{id}` answers `409 Conflict` once a product has orders, backed by a
+`DELETE /v1/products/{id}` answers `409 Conflict` once a product has orders, backed by a
 foreign key with `ON DELETE RESTRICT`.
 
 ## gRPC API
