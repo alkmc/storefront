@@ -5,6 +5,8 @@
 @baseUrl = {{scheme}}://{{host}}
 @apiBase = {{baseUrl}}/v1
 @json = application/json
+# protected requests need a bearer token, generate one with: make token
+@token = paste-output-of-make-token-here
 
 ### CREATE PRODUCT
 # @name newproduct
@@ -45,6 +47,31 @@ Content-Type: {{json}}
 }
 
 ### PURCHASE PRODUCT
+# @name purchase
+POST {{apiBase}}/product/{{prodID}}/purchase
+Content-Type: {{json}}
+Authorization: Bearer {{token}}
+
+{
+    "quantity": 2
+}
+
+@orderID = {{purchase.response.body.$.orderId}}
+
+### GET MY ORDER
+GET {{apiBase}}/orders/{{orderID}}
+Authorization: Bearer {{token}}
+
+### LIST MY ORDERS
+GET {{apiBase}}/orders?limit=10
+Authorization: Bearer {{token}}
+
+### LIST MY ORDERS (keyset paginated)
+# next page: copy `nextCursor` from the response into the cursor query param
+GET {{apiBase}}/orders?limit=10&cursor=
+Authorization: Bearer {{token}}
+
+### PURCHASE WITHOUT TOKEN (401)
 POST {{apiBase}}/product/{{prodID}}/purchase
 Content-Type: {{json}}
 
@@ -53,6 +80,7 @@ Content-Type: {{json}}
 }
 
 ### DELETE PRODUCT
+# answers 409 Conflict when the product has orders
 DELETE {{apiBase}}/product/{{prodID}}
 
 ### UPDATE PRODUCT WITH INCORRECT BODY

@@ -13,13 +13,22 @@ import (
 )
 
 type (
-	store interface {
+	productStorer interface {
 		Save(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, uuid.UUID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
+	}
+	orderStorer interface {
+		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
+		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
+	}
+	storer interface {
+		productStorer
+		orderStorer
+		// Purchase spans both domains, it decrements product stock and records an order.
+		Purchase(context.Context, domain.Order) (domain.Product, domain.Order, error)
 	}
 	cacher interface {
 		Set(context.Context, string, domain.Product, cache.Entry) error
@@ -29,7 +38,7 @@ type (
 	}
 	Service struct {
 		logger      *slog.Logger
-		store       store
+		store       storer
 		cache       cacher
 		loads       callGroup[domain.Product]
 		loadTimeout time.Duration
@@ -39,7 +48,7 @@ type (
 // NewService applies loadTimeout to every cache and store call that runs detached from
 // the caller, so a client disconnect cannot leave the cache unwritten.
 func NewService(
-	st store, c cacher, loadTimeout time.Duration, l *slog.Logger,
+	st storer, c cacher, loadTimeout time.Duration, l *slog.Logger,
 ) *Service {
 	return new(Service{
 		logger:      l,
@@ -119,13 +128,22 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *Service) Purchase(ctx context.Context, id uuid.UUID, qty int64) (domain.Product, error) {
-	p, err := s.store.Purchase(ctx, id, qty)
+// Purchase decrements stock and records an order owned by userID in one store tx.
+func (s *Service) Purchase(
+	ctx context.Context, userID domain.UserID, productID uuid.UUID, qty int64,
+) (domain.Product, domain.Order, error) {
+	orderID, err := uuid.NewV7()
 	if err != nil {
-		return domain.Product{}, err
+		return domain.Product{}, domain.Order{}, fmt.Errorf("failed to generate uuid: %w", err)
 	}
-	s.invalidate(ctx, id)
-	return p, nil
+	o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: productID, Quantity: qty}
+
+	p, placed, err := s.store.Purchase(ctx, o)
+	if err != nil {
+		return domain.Product{}, domain.Order{}, err
+	}
+	s.invalidate(ctx, productID)
+	return p, placed, nil
 }
 
 func (s *Service) fill(
@@ -154,6 +172,20 @@ func (s *Service) invalidate(ctx context.Context, id uuid.UUID) {
 		s.logger.Warn("cache invalidate failed, entry stale until TTL",
 			slog.Any("error", err), slog.String("key", key))
 	}
+}
+
+// FindOrder returns the caller's own order, foreign ones stay hidden.
+func (s *Service) FindOrder(
+	ctx context.Context, userID domain.UserID, orderID domain.OrderID,
+) (domain.Order, error) {
+	return s.store.FindOrder(ctx, userID, orderID)
+}
+
+// FindOrders returns a keyset page of the caller's own orders, newest first, uncached.
+func (s *Service) FindOrders(
+	ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+) (domain.OrderPage, error) {
+	return s.store.FindOrders(ctx, userID, cursor, limit)
 }
 
 func productFrom(e cache.Entry) (domain.Product, error) {

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
@@ -20,7 +21,9 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
+		Purchase(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
+		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
 	Handler struct {
 		logger         *slog.Logger
@@ -148,6 +151,10 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
 		}
+		if errors.Is(err, domain.ErrProductInUse) {
+			respondError(w, http.StatusConflict, "product has existing orders")
+			return
+		}
 		h.respondServerError(
 			w, err, "failed to delete product",
 			slog.Any("error", err), slog.String("id", id.String()),
@@ -223,10 +230,15 @@ func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userID, ok := h.callerID(w, r)
+	if !ok {
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	p, err := h.processor.Purchase(ctx, id, in.Quantity)
+	p, o, err := h.processor.Purchase(ctx, userID, id, in.Quantity)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
@@ -241,7 +253,7 @@ func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	respond(w, http.StatusOK, toPurchaseResponse(p, in.Quantity))
+	respond(w, http.StatusOK, toPurchaseResponse(p, o))
 }
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.
@@ -260,6 +272,15 @@ func (h *Handler) internalError(w http.ResponseWriter, msg string, attrs ...any)
 	respondError(w, http.StatusInternalServerError, msgInternalError)
 }
 
+// callerID reads the authenticated user, its absence on a protected route is a mux wiring bug.
+func (h *Handler) callerID(w http.ResponseWriter, r *http.Request) (domain.UserID, bool) {
+	userID, ok := auth.UserID(r.Context())
+	if !ok {
+		h.internalError(w, "user id missing on protected route")
+	}
+	return domain.UserID(userID), ok
+}
+
 func parseLimit(raw string) (int, error) {
 	if raw == "" {
 		return domain.DefaultPageSize, nil
@@ -269,4 +290,62 @@ func parseLimit(raw string) (int, error) {
 		return 0, fmt.Errorf("invalid limit: %q", raw)
 	}
 	return domain.NormalizePageSize(n), nil
+}
+
+func (h *Handler) GetOrder(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.callerID(w, r)
+	if !ok {
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
+	defer cancel()
+
+	o, err := h.processor.FindOrder(ctx, userID, domain.OrderID(id))
+	if err != nil {
+		// a foreign order takes the same path, the caller cannot tell it from a missing one
+		if errors.Is(err, domain.ErrNotFound) {
+			respondError(w, http.StatusNotFound, "order not found")
+			return
+		}
+		h.respondServerError(
+			w, err, "failed to find order",
+			slog.Any("error", err), slog.String("id", id.String()),
+		)
+		return
+	}
+	respond(w, http.StatusOK, toOrderResponse(o))
+}
+
+func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.callerID(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query()
+	limit, err := parseLimit(q.Get("limit"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	cursor, err := domain.ParseCursor(q.Get("cursor"))
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
+	defer cancel()
+
+	page, err := h.processor.FindOrders(ctx, userID, cursor, limit)
+	if err != nil {
+		h.respondServerError(w, err, "failed to find orders", slog.Any("error", err))
+		return
+	}
+	respond(w, http.StatusOK, toOrdersPage(page))
 }

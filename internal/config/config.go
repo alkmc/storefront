@@ -35,7 +35,7 @@ type (
 	}
 	HTTP struct {
 		Host           string        `env:"HTTP_HOST"`
-		Port           int           `env:"HTTP_PORT" envDefault:"7000"`
+		Port           int           `env:"HTTP_PORT" envDefault:"8080"`
 		InternalPort   int           `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
 		ReadTimeout    time.Duration `env:"HTTP_READ_TIMEOUT" envDefault:"5s"`
 		WriteTimeout   time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"10s"`
