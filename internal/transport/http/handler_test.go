@@ -13,11 +13,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alkmc/storefront/internal/auth"
+	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 )
 
-const testMaxBodyBytes = 1 << 20 // 1 MiB
+const (
+	testMaxBodyBytes = 1 << 20 // 1 MiB
+	testJWTSecret    = "test-secret"
+)
 
 func setupTest(t *testing.T) (http.Handler, *stubProcessor) {
 	t.Helper()
@@ -25,7 +30,7 @@ func setupTest(t *testing.T) (http.Handler, *stubProcessor) {
 	proc := new(stubProcessor{})
 
 	h := NewHandler(proc, 2*time.Second, logger)
-	return bodyLimit(testMaxBodyBytes)(NewMux(h)), proc
+	return bodyLimit(testMaxBodyBytes)(NewMux(h, Auth(auth.NewVerifier(testJWTSecret)))), proc
 }
 
 func TestGetProductByID(t *testing.T) {
@@ -359,7 +364,7 @@ func TestServiceUnavailable(t *testing.T) {
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
 	h := NewHandler(new(stubProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))
-	mux := bodyLimit(limit)(NewMux(h))
+	mux := bodyLimit(limit)(NewMux(h, Auth(auth.NewVerifier(testJWTSecret))))
 
 	body := []byte(`{"name":"a long enough name","price":{"minorAmount":100,"currency":"PLN"}}`)
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product", bytes.NewReader(body))
@@ -501,6 +506,7 @@ func TestPurchaseProduct(t *testing.T) {
 	mux, proc := setupTest(t)
 
 	id := uuid.Must(uuid.NewV7())
+	userID := uuid.Must(uuid.NewV7())
 
 	tests := []struct {
 		name           string
@@ -568,6 +574,7 @@ func TestPurchaseProduct(t *testing.T) {
 			req := httptest.NewRequestWithContext(
 				t.Context(), http.MethodPost, "/v1/product/"+id.String()+"/purchase", bytes.NewReader(b),
 			)
+			req.Header.Set("Authorization", bearer(t, userID))
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -588,6 +595,39 @@ func TestPurchaseProduct(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthGuardByRoute(t *testing.T) {
+	h := NewHandler(&stubProcessor{
+		findAll: func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error) {
+			return domain.ProductPage{}, nil
+		},
+	}, 2*time.Second, slog.New(slog.DiscardHandler))
+	mux := NewMux(h, Auth(auth.NewVerifier(testJWTSecret)))
+
+	// protected route rejects a missing token
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product/x/purchase", nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code != http.StatusUnauthorized {
+		t.Errorf("protected route not blocked, got %d, want 401", resp.Code)
+	}
+	if got := resp.Header().Get("WWW-Authenticate"); got != "Bearer" {
+		t.Errorf("got WWW-Authenticate %q, want %q", got, "Bearer")
+	}
+
+	// public route serves without a token
+	req = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/product", nil)
+	resp = httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+	if resp.Code == http.StatusUnauthorized {
+		t.Error("public route blocked without a token, got 401")
+	}
+}
+
+func bearer(t *testing.T, sub uuid.UUID) string {
+	t.Helper()
+	return "Bearer " + authtest.Token(testJWTSecret, sub, time.Now().Add(time.Hour))
 }
 
 func testMoney() domain.Money {

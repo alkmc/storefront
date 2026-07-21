@@ -30,12 +30,13 @@ type (
 		cfg ServerCfg
 		svc processor
 		log *slog.Logger
+		ver verifier
 	}
 )
 
 // NewServer configures a gRPC server for svc.
-func NewServer(cfg ServerCfg, svc processor, log *slog.Logger) *Server {
-	return new(Server{cfg: cfg, svc: svc, log: log})
+func NewServer(cfg ServerCfg, svc processor, v verifier, log *slog.Logger) *Server {
+	return new(Server{cfg: cfg, svc: svc, log: log, ver: v})
 }
 
 // Run serves until ctx is cancelled, then stops gracefully.
@@ -71,7 +72,12 @@ func (s *Server) Run(ctx context.Context) error {
 // newServer assembles the grpc.Server with interceptors and registered services.
 func (s *Server) newServer() *grpc.Server {
 	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(logging(s.log), recovery(s.log), timeout(s.cfg.RequestTimeout)),
+		grpc.ChainUnaryInterceptor(
+			logging(s.log),
+			recovery(s.log),
+			timeout(s.cfg.RequestTimeout),
+			requireAuth(s.ver, s.log),
+		),
 		grpc.MaxRecvMsgSize(s.cfg.MaxRequestBytes),
 	)
 	catalogv1.RegisterProductServiceServer(srv, NewHandler(s.svc, s.log))
