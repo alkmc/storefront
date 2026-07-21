@@ -14,6 +14,8 @@ func NewMux(h *Handler, requireAuth func(http.HandlerFunc) http.HandlerFunc) htt
 	mux.HandleFunc("GET /v1/product/{id}", h.GetByID)
 	mux.HandleFunc("DELETE /v1/product/{id}", h.Delete)
 	mux.HandleFunc("POST /v1/product/{id}/purchase", requireAuth(h.Purchase))
+	mux.HandleFunc("GET /v1/orders", requireAuth(h.ListOrders))
+	mux.HandleFunc("GET /v1/orders/{id}", requireAuth(h.GetOrder))
 
 	return mux
 }

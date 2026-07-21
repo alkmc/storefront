@@ -62,4 +62,24 @@ const (
 	queryDeadOutbox = `
 		INSERT INTO outbox_dead (id, message_id, event_type, payload, attempts, created_at, last_error)
 		VALUES ($1, $2, $3, $4, $5, $6, $7);`
+	queryInsertOrder = `
+		INSERT INTO orders (id, user_id, product_id, quantity, unit_price_minor, currency)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING created_at;`
+	queryGetOrderByID = `
+		SELECT id, user_id, product_id, quantity, unit_price_minor, currency, created_at
+		FROM orders
+		WHERE id = $1 AND user_id = $2;`
+	queryGetOrders = `
+		SELECT id, user_id, product_id, quantity, unit_price_minor, currency, created_at
+		FROM orders
+		WHERE user_id = $1
+		ORDER BY id DESC
+		LIMIT $2;`
+	queryGetOrdersAfterCursor = `
+		SELECT id, user_id, product_id, quantity, unit_price_minor, currency, created_at
+		FROM orders
+		WHERE user_id = $1 AND id < $2
+		ORDER BY id DESC
+		LIMIT $3;`
 )

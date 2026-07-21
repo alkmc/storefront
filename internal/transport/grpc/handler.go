@@ -6,6 +6,8 @@ import (
 	"log/slog"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
+	orderv1 "github.com/alkmc/storefront/api/gen/order/v1"
+	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -20,11 +22,14 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		Purchase(context.Context, uuid.UUID, int64) (domain.Product, error)
+		Purchase(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
+		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
-	// Handler adapts the product service to the generated ProductServiceServer.
+	// Handler adapts the product service to the generated ProductServiceServer and OrderServiceServer.
 	Handler struct {
 		catalogv1.UnimplementedProductServiceServer
+		orderv1.UnimplementedOrderServiceServer
 		logger    *slog.Logger
 		processor processor
 	}
@@ -46,7 +51,7 @@ func (h *Handler) CreateProduct(
 	if err != nil {
 		return nil, h.toStatus(err, "create product")
 	}
-	return catalogv1.CreateProductResponse_builder{Product: toProto(created)}.Build(), nil
+	return catalogv1.CreateProductResponse_builder{Product: toProductProto(created)}.Build(), nil
 }
 
 func (h *Handler) GetProduct(
@@ -60,7 +65,7 @@ func (h *Handler) GetProduct(
 	if err != nil {
 		return nil, h.toStatus(err, "get product")
 	}
-	return catalogv1.GetProductResponse_builder{Product: toProto(p)}.Build(), nil
+	return catalogv1.GetProductResponse_builder{Product: toProductProto(p)}.Build(), nil
 }
 
 func (h *Handler) ListProducts(
@@ -75,7 +80,7 @@ func (h *Handler) ListProducts(
 		return nil, h.toStatus(err, "list products")
 	}
 	return catalogv1.ListProductsResponse_builder{
-		Products:   toProtos(page.Items),
+		Products:   mapSlice(page.Items, toProductProto),
 		NextCursor: page.NextCursor(),
 	}.Build(), nil
 }
@@ -95,7 +100,7 @@ func (h *Handler) UpdateProduct(
 	if err != nil {
 		return nil, h.toStatus(err, "update product")
 	}
-	return catalogv1.UpdateProductResponse_builder{Product: toProto(updated)}.Build(), nil
+	return catalogv1.UpdateProductResponse_builder{Product: toProductProto(updated)}.Build(), nil
 }
 
 func (h *Handler) DeleteProduct(
@@ -122,7 +127,11 @@ func (h *Handler) PurchaseProduct(
 	if !domain.ValidPurchaseQuantity(qty) {
 		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
 	}
-	p, err := h.processor.Purchase(ctx, id, qty)
+	userID, err := h.callerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	p, o, err := h.processor.Purchase(ctx, userID, id, qty)
 	if err != nil {
 		return nil, h.toStatus(err, "purchase product")
 	}
@@ -130,6 +139,7 @@ func (h *Handler) PurchaseProduct(
 		ProductId:      p.ID.String(),
 		Quantity:       qty,
 		RemainingStock: p.Stock,
+		OrderId:        o.ID.String(),
 	}.Build(), nil
 }
 
@@ -144,10 +154,65 @@ func (h *Handler) toStatus(err error, op string) error {
 		return status.Error(codes.NotFound, "product not found")
 	case errors.Is(err, domain.ErrInsufficientStock):
 		return status.Error(codes.FailedPrecondition, "insufficient stock")
+	case errors.Is(err, domain.ErrProductInUse):
+		return status.Error(codes.FailedPrecondition, "product has existing orders")
 	case errors.Is(err, domain.ErrUnavailable):
 		return status.Error(codes.Unavailable, "service temporarily unavailable")
 	default:
 		h.logger.Error(op+" failed", slog.Any("error", err))
 		return status.Error(codes.Internal, "internal error")
 	}
+}
+
+// callerID reads the authenticated user, its absence on a protected method is an interceptor wiring bug.
+func (h *Handler) callerID(ctx context.Context) (domain.UserID, error) {
+	userID, ok := auth.UserID(ctx)
+	if !ok {
+		h.logger.Error("user id missing on protected method")
+		return domain.UserID{}, status.Error(codes.Internal, "internal error")
+	}
+	return domain.UserID(userID), nil
+}
+
+func (h *Handler) GetOrder(
+	ctx context.Context, req *orderv1.GetOrderRequest,
+) (*orderv1.GetOrderResponse, error) {
+	userID, err := h.callerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	id, err := uuid.Parse(req.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	o, err := h.processor.FindOrder(ctx, userID, domain.OrderID(id))
+	if err != nil {
+		// the shared toStatus says "product not found", an order needs its own message
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "order not found")
+		}
+		return nil, h.toStatus(err, "get order")
+	}
+	return orderv1.GetOrderResponse_builder{Order: toOrderProto(o)}.Build(), nil
+}
+
+func (h *Handler) ListOrders(
+	ctx context.Context, req *orderv1.ListOrdersRequest,
+) (*orderv1.ListOrdersResponse, error) {
+	userID, err := h.callerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cursor, err := domain.ParseCursor(req.GetCursor())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	page, err := h.processor.FindOrders(ctx, userID, cursor, domain.NormalizePageSize(int(req.GetLimit())))
+	if err != nil {
+		return nil, h.toStatus(err, "list orders")
+	}
+	return orderv1.ListOrdersResponse_builder{
+		Orders:     mapSlice(page.Items, toOrderProto),
+		NextCursor: page.NextCursor(),
+	}.Build(), nil
 }

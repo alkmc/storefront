@@ -10,6 +10,7 @@ import (
 	"time"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
+	orderv1 "github.com/alkmc/storefront/api/gen/order/v1"
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/domain"
@@ -130,14 +131,22 @@ func TestHandler_DeleteProduct(t *testing.T) {
 
 func TestHandler_PurchaseProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
+	sub := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
 	client := newTestClient(t, stubProcessor{
-		PurchaseFn: func(_ context.Context, pid uuid.UUID, _ int64) (domain.Product, error) {
-			return domain.Product{ID: pid, Stock: 8}, nil
+		PurchaseFn: func(_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64,
+		) (domain.Product, domain.Order, error) {
+			if userID != domain.UserID(sub) {
+				t.Errorf("got user %v, want %v", userID, sub)
+			}
+			p := domain.Product{ID: pid, Stock: 8}
+			o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: pid, Quantity: qty}
+			return p, o, nil
 		},
 	})
 
 	resp, err := client.PurchaseProduct(
-		authCtx(t, uuid.New()), catalogv1.PurchaseProductRequest_builder{
+		authCtx(t, sub), catalogv1.PurchaseProductRequest_builder{
 			Id: id.String(), Quantity: 2,
 		}.Build(),
 	)
@@ -152,6 +161,9 @@ func TestHandler_PurchaseProduct(t *testing.T) {
 	}
 	if got := resp.GetRemainingStock(); got != 8 {
 		t.Errorf("got remainingStock %d, want 8", got)
+	}
+	if got := resp.GetOrderId(); got != orderID.String() {
+		t.Errorf("got orderId %q, want %q", got, orderID.String())
 	}
 }
 
@@ -200,8 +212,9 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		{
 			name: "insufficient stock",
 			proc: stubProcessor{
-				PurchaseFn: func(context.Context, uuid.UUID, int64) (domain.Product, error) {
-					return domain.Product{}, domain.ErrInsufficientStock
+				PurchaseFn: func(context.Context, domain.UserID, uuid.UUID, int64,
+				) (domain.Product, domain.Order, error) {
+					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
 				},
 			},
 			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
@@ -277,6 +290,12 @@ func newTestClient(t *testing.T, p processor) catalogv1.ProductServiceClient {
 	return catalogv1.NewProductServiceClient(conn)
 }
 
+func newOrderClient(t *testing.T, p processor) orderv1.OrderServiceClient {
+	t.Helper()
+	conn, _ := newTestConn(t, p)
+	return orderv1.NewOrderServiceClient(conn)
+}
+
 // newTestConn serves the real newServer chain, auth included, over bufconn.
 func newTestConn(t *testing.T, p processor) (*grpc.ClientConn, *grpc.Server) {
 	t.Helper()
@@ -310,33 +329,26 @@ func newTestConn(t *testing.T, p processor) (*grpc.ClientConn, *grpc.Server) {
 // TestAuthDeniesByDefault proves every registered unary RPC outside the public list needs a token,
 // so a future method cannot ship open by omission.
 func TestAuthDeniesByDefault(t *testing.T) {
-	conn, srv := newTestConn(t, stubProcessor{
-		FindAllFn: func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error) {
-			return domain.ProductPage{}, nil
-		},
-	})
+	conn, srv := newTestConn(t, stubProcessor{})
 
-	var protected int
+	var visited int
 	for name, info := range srv.GetServiceInfo() {
 		if strings.HasPrefix(name, "grpc.") {
 			continue
 		}
 		for _, m := range info.Methods {
 			full := "/" + name + "/" + m.Name
-			err := conn.Invoke(t.Context(), full, &emptypb.Empty{}, &emptypb.Empty{})
 			if _, ok := publicMethods[full]; ok {
-				if status.Code(err) == codes.Unauthenticated {
-					t.Errorf("%s: public method blocked without a token", full)
-				}
 				continue
 			}
-			protected++
+			visited++
+			err := conn.Invoke(t.Context(), full, &emptypb.Empty{}, &emptypb.Empty{})
 			if status.Code(err) != codes.Unauthenticated {
 				t.Errorf("%s: got %v, want Unauthenticated without a token", full, status.Code(err))
 			}
 		}
 	}
-	if protected == 0 {
+	if visited == 0 {
 		t.Fatal("no protected methods visited, the canary is vacuous")
 	}
 }
@@ -348,6 +360,98 @@ func authCtx(t *testing.T, sub uuid.UUID) context.Context {
 	return metadata.AppendToOutgoingContext(t.Context(), "authorization", "Bearer "+token)
 }
 
+func TestHandler_GetOrder(t *testing.T) {
+	sub := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
+	productID := uuid.Must(uuid.NewV7())
+	created := time.Now().UTC().Truncate(time.Second)
+
+	client := newOrderClient(t, stubProcessor{
+		FindOrderFn: func(_ context.Context, userID domain.UserID, id domain.OrderID) (domain.Order, error) {
+			if userID != domain.UserID(sub) {
+				t.Errorf("got user %v, want %v", userID, sub)
+			}
+			return domain.Order{
+				ID: id, UserID: userID, ProductID: productID, Quantity: 2,
+				UnitPrice: domain.Money{MinorAmount: 999, Currency: domain.CurrencyPLN},
+				CreatedAt: created,
+			}, nil
+		},
+	})
+
+	resp, err := client.GetOrder(authCtx(t, sub), orderv1.GetOrderRequest_builder{
+		Id: orderID.String(),
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	o := resp.GetOrder()
+	if o.GetId() != orderID.String() || o.GetProductId() != productID.String() || o.GetQuantity() != 2 {
+		t.Errorf("got %v, want id %v productId %v quantity 2", o, orderID, productID)
+	}
+	if got := o.GetUnitPrice().GetMinorAmount(); got != 999 {
+		t.Errorf("got unit price %d, want 999", got)
+	}
+	if got := o.GetCreatedAt().AsTime(); !got.Equal(created) {
+		t.Errorf("got createdAt %v, want %v", got, created)
+	}
+}
+
+func TestHandler_GetOrder_NotFound(t *testing.T) {
+	client := newOrderClient(t, stubProcessor{
+		FindOrderFn: func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error) {
+			return domain.Order{}, domain.ErrNotFound
+		},
+	})
+
+	_, err := client.GetOrder(authCtx(t, uuid.New()), orderv1.GetOrderRequest_builder{
+		Id: uuid.NewString(),
+	}.Build())
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("got code %v, want NotFound", status.Code(err))
+	}
+	if got, want := status.Convert(err).Message(), "order not found"; got != want {
+		t.Errorf("got msg %q, want %q", got, want)
+	}
+}
+
+func TestHandler_ListOrders(t *testing.T) {
+	sub := uuid.Must(uuid.NewV7())
+	price := domain.Money{MinorAmount: 500, Currency: domain.CurrencyPLN}
+	o1 := domain.Order{
+		ID: domain.OrderID(uuid.Must(uuid.NewV7())), UserID: domain.UserID(sub), Quantity: 1, UnitPrice: price,
+	}
+	o2 := domain.Order{
+		ID: domain.OrderID(uuid.Must(uuid.NewV7())), UserID: domain.UserID(sub), Quantity: 2, UnitPrice: price,
+	}
+
+	client := newOrderClient(t, stubProcessor{
+		FindOrdersFn: func(_ context.Context, userID domain.UserID, _ uuid.NullUUID, _ int,
+		) (domain.OrderPage, error) {
+			if userID != domain.UserID(sub) {
+				t.Errorf("got user %v, want %v", userID, sub)
+			}
+			return domain.OrderPage{Items: []domain.Order{o2, o1}, HasMore: true}, nil
+		},
+	})
+
+	resp, err := client.ListOrders(authCtx(t, sub), orderv1.ListOrdersRequest_builder{
+		Limit: 2,
+	}.Build())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := len(resp.GetOrders()); got != 2 {
+		t.Fatalf("got %d orders, want 2", got)
+	}
+	if got := resp.GetOrders()[0].GetId(); got != o2.ID.String() {
+		t.Errorf("got first order %q, want the newest %q", got, o2.ID.String())
+	}
+	if got := resp.GetNextCursor(); got != o1.ID.String() {
+		t.Errorf("got next cursor %q, want %q", got, o1.ID.String())
+	}
+}
+
 func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 	conn, _ := newTestConn(t, stubProcessor{
 		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
@@ -355,11 +459,22 @@ func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 		},
 	})
 	products := catalogv1.NewProductServiceClient(conn)
+	orders := orderv1.NewOrderServiceClient(conn)
 
 	if _, err := products.PurchaseProduct(t.Context(), catalogv1.PurchaseProductRequest_builder{
 		Id: uuid.NewString(), Quantity: 1,
 	}.Build()); status.Code(err) != codes.Unauthenticated {
 		t.Errorf("purchase: got %v, want Unauthenticated", status.Code(err))
+	}
+	if _, err := orders.ListOrders(
+		t.Context(), orderv1.ListOrdersRequest_builder{}.Build(),
+	); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("list orders: got %v, want Unauthenticated", status.Code(err))
+	}
+	if _, err := orders.GetOrder(t.Context(), orderv1.GetOrderRequest_builder{
+		Id: uuid.NewString(),
+	}.Build()); status.Code(err) != codes.Unauthenticated {
+		t.Errorf("get order: got %v, want Unauthenticated", status.Code(err))
 	}
 
 	// the catalog stays public, no token needed
