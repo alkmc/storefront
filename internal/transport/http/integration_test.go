@@ -111,7 +111,7 @@ func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID
 	body := fmt.Sprintf(`{"name":"Widget","stock":%d,"price":{"minorAmount":%d,"currency":"PLN"}}`,
 		stock, price)
 	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/product", strings.NewReader(body),
+		t.Context(), http.MethodPost, "/v1/products", strings.NewReader(body),
 	)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
@@ -125,7 +125,7 @@ func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty in
 	t.Helper()
 	body := fmt.Sprintf(`{"quantity":%d}`, qty)
 	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/product/"+productID.String()+"/purchase",
+		t.Context(), http.MethodPost, "/v1/products/"+productID.String()+"/purchase",
 		strings.NewReader(body),
 	)
 	req.Header.Set("Authorization", bearer(t, sub))
@@ -241,7 +241,7 @@ func TestIntegration_DeleteBlockedByOrders(t *testing.T) {
 
 	del := func(id uuid.UUID) *httptest.ResponseRecorder {
 		req := httptest.NewRequestWithContext(
-			t.Context(), http.MethodDelete, "/v1/product/"+id.String(), nil,
+			t.Context(), http.MethodDelete, "/v1/products/"+id.String(), nil,
 		)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
@@ -268,7 +268,7 @@ func TestIntegration_PurchaseRequiresToken(t *testing.T) {
 	productID := createProduct(t, mux, 5, 100)
 
 	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/product/"+productID.String()+"/purchase",
+		t.Context(), http.MethodPost, "/v1/products/"+productID.String()+"/purchase",
 		strings.NewReader(`{"quantity":1}`),
 	)
 	rec := httptest.NewRecorder()

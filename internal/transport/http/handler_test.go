@@ -76,7 +76,7 @@ func TestGetProductByID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/product/"+tt.id, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/products/"+tt.id, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -145,7 +145,7 @@ func TestGetProducts(t *testing.T) {
 		},
 		{
 			name: "explicit limit and cursor",
-			url:  "/v1/product?limit=10&cursor=" + cursorID.String(),
+			url:  "/v1/products?limit=10&cursor=" + cursorID.String(),
 			setupMock: func() {
 				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
@@ -159,7 +159,7 @@ func TestGetProducts(t *testing.T) {
 		},
 		{
 			name: "limit clamped to max",
-			url:  "/v1/product?limit=500",
+			url:  "/v1/products?limit=500",
 			setupMock: func() {
 				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 200 {
@@ -173,7 +173,7 @@ func TestGetProducts(t *testing.T) {
 		},
 		{
 			name: "negative limit falls back to default",
-			url:  "/v1/product?limit=-5",
+			url:  "/v1/products?limit=-5",
 			setupMock: func() {
 				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
 					if limit != 50 {
@@ -201,14 +201,14 @@ func TestGetProducts(t *testing.T) {
 		},
 		{
 			name:           "invalid limit",
-			url:            "/v1/product?limit=abc",
+			url:            "/v1/products?limit=abc",
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "invalid limit: \"abc\"",
 		},
 		{
 			name:           "invalid cursor",
-			url:            "/v1/product?cursor=xyz",
+			url:            "/v1/products?cursor=xyz",
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
 			expectedMsg:    "invalid cursor: \"xyz\"",
@@ -220,7 +220,7 @@ func TestGetProducts(t *testing.T) {
 			tt.setupMock()
 			url := tt.url
 			if url == "" {
-				url = "/v1/product"
+				url = "/v1/products"
 			}
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
 			resp := httptest.NewRecorder()
@@ -318,7 +318,7 @@ func TestAddProduct(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product", bytes.NewReader(b))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/products", bytes.NewReader(b))
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -349,7 +349,7 @@ func TestServiceUnavailable(t *testing.T) {
 	}
 
 	id := uuid.Must(uuid.NewV7()).String()
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/product/"+id, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/products/"+id, nil)
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
 
@@ -367,7 +367,7 @@ func TestAddProductBodyTooLarge(t *testing.T) {
 	mux := bodyLimit(limit)(NewMux(h, Auth(auth.NewVerifier(testJWTSecret))))
 
 	body := []byte(`{"name":"a long enough name","price":{"minorAmount":100,"currency":"PLN"}}`)
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/product", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/products", bytes.NewReader(body))
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
 
@@ -416,7 +416,7 @@ func TestDeleteProduct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/v1/product/"+tt.id, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/v1/products/"+tt.id, nil)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -480,7 +480,7 @@ func TestUpdateProduct(t *testing.T) {
 			}
 
 			req := httptest.NewRequestWithContext(
-				t.Context(), http.MethodPut, "/v1/product/"+tt.id, bytes.NewReader(b),
+				t.Context(), http.MethodPut, "/v1/products/"+tt.id, bytes.NewReader(b),
 			)
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
@@ -581,7 +581,7 @@ func TestPurchaseProduct(t *testing.T) {
 			}
 
 			req := httptest.NewRequestWithContext(
-				t.Context(), http.MethodPost, "/v1/product/"+id.String()+"/purchase", bytes.NewReader(b),
+				t.Context(), http.MethodPost, "/v1/products/"+id.String()+"/purchase", bytes.NewReader(b),
 			)
 			req.Header.Set("Authorization", bearer(t, userID))
 			resp := httptest.NewRecorder()
@@ -621,7 +621,7 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		{
 			name:   "purchase",
 			method: http.MethodPost,
-			url:    "/v1/product/" + uuid.NewString() + "/purchase",
+			url:    "/v1/products/" + uuid.NewString() + "/purchase",
 			body:   `{"quantity":1}`,
 		},
 		{
