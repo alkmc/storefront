@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -36,6 +37,22 @@ func NewPostgres(pool *pgxpool.Pool) *Postgres {
 
 func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.pool.Ping(ctx)
+}
+
+// withTx wraps fn in a transaction and maps its error so callers never leak a raw DB error.
+func (pg *Postgres) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
+	tx, err := pg.pool.Begin(ctx)
+	if err != nil {
+		return mapDBError(err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if err := fn(tx); err != nil {
+		return mapDBError(err)
+	}
+	return mapDBError(tx.Commit(ctx))
 }
 
 // mapDBError tags connection-class failures as domain.ErrUnavailable.

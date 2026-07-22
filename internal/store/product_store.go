@@ -15,25 +15,16 @@ import (
 func (pg *Postgres) Save(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
-	tx, err := pg.pool.Begin(ctx)
+	err := pg.withTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
+			ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
+		).Scan(&p.Version); err != nil {
+			return err
+		}
+		return emitProductEvent(ctx, tx, event.TypeCreated, p)
+	})
 	if err != nil {
-		return domain.Product{}, mapDBError(err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	row := tx.QueryRow(
-		ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
-	)
-	if err := row.Scan(&p.Version); err != nil {
-		return domain.Product{}, mapDBError(err)
-	}
-	if err := emitProductEvent(ctx, tx, event.TypeCreated, p); err != nil {
-		return domain.Product{}, mapDBError(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Product{}, mapDBError(err)
+		return domain.Product{}, err
 	}
 	return p, nil
 }
@@ -97,111 +88,76 @@ func (pg *Postgres) FindAll(
 func (pg *Postgres) Update(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
-	tx, err := pg.pool.Begin(ctx)
-	if err != nil {
-		return domain.Product{}, mapDBError(err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	if err := tx.QueryRow(
-		ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
-	).Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Product{}, domain.ErrNotFound
+	err := pg.withTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(
+			ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
+		).Scan(
+			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+		); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrNotFound
+			}
+			return err
 		}
-		return domain.Product{}, mapDBError(err)
-	}
-
-	if err := emitProductEvent(ctx, tx, event.TypeUpdated, p); err != nil {
-		return domain.Product{}, mapDBError(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return domain.Product{}, mapDBError(err)
+		return emitProductEvent(ctx, tx, event.TypeUpdated, p)
+	})
+	if err != nil {
+		return domain.Product{}, err
 	}
 	return p, nil
 }
 
 // Delete removes the product and stores its deleted event in one tx.
 func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
-	tx, err := pg.pool.Begin(ctx)
-	if err != nil {
-		return mapDBError(err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	var version int64
-	if err := tx.QueryRow(ctx, queryDelete, id).Scan(&version); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.ErrNotFound
+	return pg.withTx(ctx, func(tx pgx.Tx) error {
+		var version int64
+		if err := tx.QueryRow(ctx, queryDelete, id).Scan(&version); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return domain.ErrNotFound
+			}
+			if isProductInUse(err) {
+				return domain.ErrProductInUse
+			}
+			return err
 		}
-		if isProductInUse(err) {
-			return domain.ErrProductInUse
-		}
-		return mapDBError(err)
-	}
-	deleted := domain.Product{ID: id, Version: version}
-	if err := emitProductEvent(ctx, tx, event.TypeDeleted, deleted); err != nil {
-		return mapDBError(err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return mapDBError(err)
-	}
-	return nil
+		deleted := domain.Product{ID: id, Version: version}
+		return emitProductEvent(ctx, tx, event.TypeDeleted, deleted)
+	})
 }
 
 // Purchase atomically decrements stock, records the order, and stores the purchased event in one tx.
 func (pg *Postgres) Purchase(
 	ctx context.Context, o domain.Order,
 ) (domain.Product, domain.Order, error) {
-	fail := func(err error) (domain.Product, domain.Order, error) {
+	var p domain.Product
+	err := pg.withTx(ctx, func(tx pgx.Tx) error {
+		if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
+			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+		); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return purchaseNoRowError(ctx, tx, o.ProductID)
+			}
+			return err
+		}
+
+		// the order snapshots the unit price returned by the decrement
+		o.UnitPrice = p.Price
+		if err := tx.QueryRow(
+			ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), o.ProductID, o.Quantity,
+			o.UnitPrice.MinorAmount, string(o.UnitPrice.Currency),
+		).Scan(&o.CreatedAt); err != nil {
+			return err
+		}
+
+		e, err := event.NewPurchased(p, o.Quantity)
+		if err != nil {
+			return err
+		}
+		return insertOutbox(ctx, tx, e)
+	})
+	if err != nil {
 		return domain.Product{}, domain.Order{}, err
 	}
-
-	tx, err := pg.pool.Begin(ctx)
-	if err != nil {
-		return fail(mapDBError(err))
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	var p domain.Product
-	if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-	); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return fail(purchaseNoRowError(ctx, tx, o.ProductID))
-		}
-		return fail(mapDBError(err))
-	}
-
-	// the order snapshots the unit price returned by the decrement
-	o.UnitPrice = p.Price
-	if err := tx.QueryRow(
-		ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), o.ProductID, o.Quantity,
-		o.UnitPrice.MinorAmount, string(o.UnitPrice.Currency),
-	).Scan(&o.CreatedAt); err != nil {
-		return fail(mapDBError(err))
-	}
-
-	e, err := event.NewPurchased(p, o.Quantity)
-	if err != nil {
-		return fail(err)
-	}
-	if err := insertOutbox(ctx, tx, e); err != nil {
-		return fail(mapDBError(err))
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return fail(mapDBError(err))
-	}
-
 	return p, o, nil
 }
 
@@ -209,7 +165,7 @@ func (pg *Postgres) Purchase(
 func purchaseNoRowError(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	var exists bool
 	if err := tx.QueryRow(ctx, queryProductExists, id).Scan(&exists); err != nil {
-		return mapDBError(err)
+		return err
 	}
 	if !exists {
 		return domain.ErrNotFound
