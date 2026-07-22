@@ -125,8 +125,8 @@ func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// Purchase atomically decrements stock, records the order, and stores the purchased event in one tx.
-func (pg *Postgres) Purchase(
+// CreateOrder atomically decrements stock, records the order, and stores the purchased event in one tx.
+func (pg *Postgres) CreateOrder(
 	ctx context.Context, o domain.Order,
 ) (domain.Product, domain.Order, error) {
 	var p domain.Product

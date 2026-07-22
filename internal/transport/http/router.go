@@ -13,7 +13,7 @@ func NewMux(h *Handler, requireAuth func(http.HandlerFunc) http.HandlerFunc) htt
 	mux.HandleFunc("GET /v1/products", h.Get)
 	mux.HandleFunc("GET /v1/products/{id}", h.GetByID)
 	mux.HandleFunc("DELETE /v1/products/{id}", h.Delete)
-	mux.HandleFunc("POST /v1/products/{id}/purchase", requireAuth(h.Purchase))
+	mux.HandleFunc("POST /v1/orders", requireAuth(h.CreateOrder))
 	mux.HandleFunc("GET /v1/orders", requireAuth(h.ListOrders))
 	mux.HandleFunc("GET /v1/orders/{id}", requireAuth(h.GetOrder))
 

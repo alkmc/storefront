@@ -121,20 +121,19 @@ func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID
 	return decodeJSON[productResponse](t, rec.Body).ID
 }
 
-func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64) purchaseResponse {
+func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64) createOrderResponse {
 	t.Helper()
-	body := fmt.Sprintf(`{"quantity":%d}`, qty)
+	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
 	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/products/"+productID.String()+"/purchase",
-		strings.NewReader(body),
+		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
 	)
 	req.Header.Set("Authorization", bearer(t, sub))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("purchase: got %d: %s", rec.Code, rec.Body)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create order: got %d: %s", rec.Code, rec.Body)
 	}
-	return decodeJSON[purchaseResponse](t, rec.Body)
+	return decodeJSON[createOrderResponse](t, rec.Body)
 }
 
 func doGet[T any](t *testing.T, mux http.Handler, sub uuid.UUID, url string, wantStatus int) T {
@@ -157,15 +156,15 @@ func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {
 	productID := createProduct(t, mux, 5, 999)
 
 	pr := doPurchase(t, mux, userA, productID, 2)
-	if pr.OrderID == uuid.Nil {
-		t.Fatal("purchase response has no orderId")
+	if pr.ID == uuid.Nil {
+		t.Fatal("create order response has no id")
 	}
 	if pr.RemainingStock != 3 {
 		t.Errorf("got remaining stock %d, want 3", pr.RemainingStock)
 	}
 
 	// the owner reads the order back with the price snapshot
-	o := doGet[orderResponse](t, mux, userA, "/v1/orders/"+pr.OrderID.String(), http.StatusOK)
+	o := doGet[orderResponse](t, mux, userA, "/v1/orders/"+pr.ID.String(), http.StatusOK)
 	if o.ProductID != productID || o.Quantity != 2 {
 		t.Errorf("got %+v, want productId %v quantity 2", o, productID)
 	}
@@ -177,7 +176,7 @@ func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {
 	}
 
 	// a foreign order is a 404, not a 403, so its existence stays hidden
-	msg := doGet[messageResponse](t, mux, userB, "/v1/orders/"+pr.OrderID.String(), http.StatusNotFound)
+	msg := doGet[messageResponse](t, mux, userB, "/v1/orders/"+pr.ID.String(), http.StatusNotFound)
 	if msg.Message != "order not found" {
 		t.Errorf("got msg %q, want %q", msg.Message, "order not found")
 	}
@@ -192,9 +191,9 @@ func TestIntegration_ListOrdersIsOwnerScoped(t *testing.T) {
 
 	aOrders := make([]uuid.UUID, 0, 3)
 	for range 3 {
-		aOrders = append(aOrders, doPurchase(t, mux, userA, productID, 1).OrderID)
+		aOrders = append(aOrders, doPurchase(t, mux, userA, productID, 1).ID)
 	}
-	bOrder := doPurchase(t, mux, userB, productID, 1).OrderID
+	bOrder := doPurchase(t, mux, userB, productID, 1).ID
 
 	// first page: newest first, only A's orders
 	first := doGet[ordersPage](t, mux, userA, "/v1/orders?limit=2", http.StatusOK)
@@ -268,8 +267,8 @@ func TestIntegration_PurchaseRequiresToken(t *testing.T) {
 	productID := createProduct(t, mux, 5, 100)
 
 	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/products/"+productID.String()+"/purchase",
-		strings.NewReader(`{"quantity":1}`),
+		t.Context(), http.MethodPost, "/v1/orders",
+		strings.NewReader(fmt.Sprintf(`{"productId":%q,"quantity":1}`, productID.String())),
 	)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)

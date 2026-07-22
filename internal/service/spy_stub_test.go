@@ -60,12 +60,12 @@ func (c *SpyCache) Invalidate(ctx context.Context, key string) error {
 }
 
 type SpyStore struct {
-	SaveFn     func(context.Context, domain.Product) (domain.Product, error)
-	FindByIDFn func(context.Context, uuid.UUID) (domain.Product, error)
-	FindAllFn  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
-	UpdateFn   func(context.Context, domain.Product) (domain.Product, error)
-	DeleteFn   func(context.Context, uuid.UUID) error
-	PurchaseFn func(context.Context, domain.Order) (domain.Product, domain.Order, error)
+	SaveFn        func(context.Context, domain.Product) (domain.Product, error)
+	FindByIDFn    func(context.Context, uuid.UUID) (domain.Product, error)
+	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
+	DeleteFn      func(context.Context, uuid.UUID) error
+	CreateOrderFn func(context.Context, domain.Order) (domain.Product, domain.Order, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
@@ -98,9 +98,9 @@ func (s *SpyStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *SpyStore) Purchase(ctx context.Context, o domain.Order) (domain.Product, domain.Order, error) {
-	if s.PurchaseFn != nil {
-		return s.PurchaseFn(ctx, o)
+func (s *SpyStore) CreateOrder(ctx context.Context, o domain.Order) (domain.Product, domain.Order, error) {
+	if s.CreateOrderFn != nil {
+		return s.CreateOrderFn(ctx, o)
 	}
 	return domain.Product{}, domain.Order{}, nil
 }

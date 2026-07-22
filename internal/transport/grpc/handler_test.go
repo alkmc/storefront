@@ -129,12 +129,12 @@ func TestHandler_DeleteProduct(t *testing.T) {
 	}
 }
 
-func TestHandler_PurchaseProduct(t *testing.T) {
+func TestHandler_CreateOrder(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 	sub := uuid.Must(uuid.NewV7())
 	orderID := uuid.Must(uuid.NewV7())
-	client := newTestClient(t, stubProcessor{
-		PurchaseFn: func(_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64,
+	client := newOrderClient(t, stubProcessor{
+		CreateOrderFn: func(_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64,
 		) (domain.Product, domain.Order, error) {
 			if userID != domain.UserID(sub) {
 				t.Errorf("got user %v, want %v", userID, sub)
@@ -145,25 +145,26 @@ func TestHandler_PurchaseProduct(t *testing.T) {
 		},
 	})
 
-	resp, err := client.PurchaseProduct(
-		authCtx(t, sub), catalogv1.PurchaseProductRequest_builder{
-			Id: id.String(), Quantity: 2,
+	resp, err := client.CreateOrder(
+		authCtx(t, sub), orderv1.CreateOrderRequest_builder{
+			ProductId: id.String(), Quantity: 2,
 		}.Build(),
 	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got := resp.GetProductId(); got != id.String() {
+	o := resp.GetOrder()
+	if got := o.GetId(); got != orderID.String() {
+		t.Errorf("got order id %q, want %q", got, orderID.String())
+	}
+	if got := o.GetProductId(); got != id.String() {
 		t.Errorf("got productId %q, want %q", got, id.String())
 	}
-	if got := resp.GetQuantity(); got != 2 {
+	if got := o.GetQuantity(); got != 2 {
 		t.Errorf("got quantity %d, want 2", got)
 	}
 	if got := resp.GetRemainingStock(); got != 8 {
 		t.Errorf("got remainingStock %d, want 8", got)
-	}
-	if got := resp.GetOrderId(); got != orderID.String() {
-		t.Errorf("got orderId %q, want %q", got, orderID.String())
 	}
 }
 
@@ -210,33 +211,6 @@ func TestHandler_ErrorMapping(t *testing.T) {
 			want: codes.NotFound,
 		},
 		{
-			name: "insufficient stock",
-			proc: stubProcessor{
-				PurchaseFn: func(context.Context, domain.UserID, uuid.UUID, int64,
-				) (domain.Product, domain.Order, error) {
-					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
-				},
-			},
-			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
-				_, err := c.PurchaseProduct(ctx, catalogv1.PurchaseProductRequest_builder{
-					Id: id.String(), Quantity: 2,
-				}.Build())
-				return err
-			},
-			want: codes.FailedPrecondition,
-		},
-		{
-			name: "invalid quantity",
-			proc: stubProcessor{},
-			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
-				_, err := c.PurchaseProduct(ctx, catalogv1.PurchaseProductRequest_builder{
-					Id: id.String(), Quantity: 0,
-				}.Build())
-				return err
-			},
-			want: codes.InvalidArgument,
-		},
-		{
 			name: "unavailable",
 			proc: stubProcessor{
 				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
@@ -273,6 +247,45 @@ func TestHandler_ErrorMapping(t *testing.T) {
 			client := newTestClient(t, tt.proc)
 			// the token is inert on public methods and lets the protected ones reach the handler
 			if got := status.Code(tt.call(authCtx(t, uuid.New()), client)); got != tt.want {
+				t.Errorf("got code %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+
+	tests := []struct {
+		name string
+		proc stubProcessor
+		req  *orderv1.CreateOrderRequest
+		want codes.Code
+	}{
+		{
+			name: "insufficient stock",
+			proc: stubProcessor{
+				CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64,
+				) (domain.Product, domain.Order, error) {
+					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
+				},
+			},
+			req:  orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+			want: codes.FailedPrecondition,
+		},
+		{
+			name: "invalid quantity",
+			proc: stubProcessor{},
+			req:  orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 0}.Build(),
+			want: codes.InvalidArgument,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := newOrderClient(t, tt.proc)
+			_, err := client.CreateOrder(authCtx(t, uuid.New()), tt.req)
+			if got := status.Code(err); got != tt.want {
 				t.Errorf("got code %v, want %v", got, tt.want)
 			}
 		})
@@ -461,10 +474,10 @@ func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 	products := catalogv1.NewProductServiceClient(conn)
 	orders := orderv1.NewOrderServiceClient(conn)
 
-	if _, err := products.PurchaseProduct(t.Context(), catalogv1.PurchaseProductRequest_builder{
-		Id: uuid.NewString(), Quantity: 1,
+	if _, err := orders.CreateOrder(t.Context(), orderv1.CreateOrderRequest_builder{
+		ProductId: uuid.NewString(), Quantity: 1,
 	}.Build()); status.Code(err) != codes.Unauthenticated {
-		t.Errorf("purchase: got %v, want Unauthenticated", status.Code(err))
+		t.Errorf("create order: got %v, want Unauthenticated", status.Code(err))
 	}
 	if _, err := orders.ListOrders(
 		t.Context(), orderv1.ListOrdersRequest_builder{}.Build(),

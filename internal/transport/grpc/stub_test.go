@@ -8,12 +8,12 @@ import (
 )
 
 type stubProcessor struct {
-	CreateFn   func(context.Context, domain.Product) (domain.Product, error)
-	FindByIDFn func(context.Context, uuid.UUID) (domain.Product, error)
-	FindAllFn  func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
-	UpdateFn   func(context.Context, domain.Product) (domain.Product, error)
-	DeleteFn   func(context.Context, uuid.UUID) error
-	PurchaseFn func(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+	CreateFn      func(context.Context, domain.Product) (domain.Product, error)
+	FindByIDFn    func(context.Context, uuid.UUID) (domain.Product, error)
+	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
+	DeleteFn      func(context.Context, uuid.UUID) error
+	CreateOrderFn func(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
@@ -41,9 +41,9 @@ func (s stubProcessor) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.DeleteFn(ctx, id)
 }
 
-func (s stubProcessor) Purchase(ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64,
+func (s stubProcessor) CreateOrder(ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64,
 ) (domain.Product, domain.Order, error) {
-	return s.PurchaseFn(ctx, userID, id, qty)
+	return s.CreateOrderFn(ctx, userID, id, qty)
 }
 
 func (s stubProcessor) FindOrder(ctx context.Context, userID domain.UserID, orderID domain.OrderID,
