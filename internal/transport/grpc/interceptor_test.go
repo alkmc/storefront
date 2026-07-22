@@ -76,7 +76,7 @@ func TestRequireAuth(t *testing.T) {
 	}{
 		{
 			name:     "protected without metadata",
-			method:   catalogv1.ProductService_PurchaseProduct_FullMethodName,
+			method:   orderv1.OrderService_CreateOrder_FullMethodName,
 			wantCode: codes.Unauthenticated,
 		},
 		{

@@ -32,7 +32,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 	); err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if _, _, err := repo.Purchase(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 2)); err != nil {
+	if _, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 2)); err != nil {
 		t.Fatalf("purchase: %v", err)
 	}
 	// the FK from orders blocks the delete, clear the order first to keep the full lifecycle
@@ -88,7 +88,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 	}
 
 	// A rolled-back write leaves no event behind.
-	if _, _, err := repo.Purchase(
+	if _, _, err := repo.CreateOrder(
 		ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1),
 	); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("purchase after delete: got %v, want ErrNotFound", err)

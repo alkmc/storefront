@@ -282,18 +282,18 @@ func TestService_Delete(t *testing.T) {
 	}
 }
 
-func TestService_Purchase(t *testing.T) {
+func TestService_CreateOrder(t *testing.T) {
 	ctx := t.Context()
 	id := uuid.Must(uuid.NewV7())
 	userID := domain.UserID(uuid.Must(uuid.NewV7()))
 
 	spyStore := new(SpyStore{})
-	spyStore.PurchaseFn = func(_ context.Context, o domain.Order) (domain.Product, domain.Order, error) {
+	spyStore.CreateOrderFn = func(_ context.Context, o domain.Order) (domain.Product, domain.Order, error) {
 		return domain.Product{ID: o.ProductID, Stock: 3}, o, nil
 	}
 	srv := newTestService(spyStore)
 
-	p, o, err := srv.Purchase(ctx, userID, id, 2)
+	p, o, err := srv.CreateOrder(ctx, userID, id, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -335,9 +335,9 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 			call: func(s *Service) error { return s.Delete(t.Context(), id) },
 		},
 		{
-			name: "purchase",
+			name: "create order",
 			call: func(s *Service) error {
-				_, _, err := s.Purchase(t.Context(), domain.UserID(uuid.New()), id, 1)
+				_, _, err := s.CreateOrder(t.Context(), domain.UserID(uuid.New()), id, 1)
 				return err
 			},
 		},

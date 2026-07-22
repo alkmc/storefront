@@ -8,6 +8,8 @@ option features.field_presence = IMPLICIT;
 
 // OrderService exposes the authenticated caller's own orders.
 service OrderService {
+  // CreateOrder purchases a product for the caller and returns the order with the remaining stock.
+  rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse);
   // ListOrders returns a keyset page of the caller's orders, newest first.
   rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
   // GetOrder returns one of the caller's orders by id.
@@ -27,6 +29,16 @@ message Order {
   int64 quantity = 3;
   Money unit_price = 4;
   google.protobuf.Timestamp created_at = 5;
+}
+
+message CreateOrderRequest {
+  string product_id = 1;
+  int64 quantity = 2;
+}
+
+message CreateOrderResponse {
+  Order order = 1;
+  int64 remaining_stock = 2;
 }
 
 message ListOrdersRequest {

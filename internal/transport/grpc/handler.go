@@ -22,7 +22,7 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		Purchase(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -116,10 +116,14 @@ func (h *Handler) DeleteProduct(
 	return catalogv1.DeleteProductResponse_builder{}.Build(), nil
 }
 
-func (h *Handler) PurchaseProduct(
-	ctx context.Context, req *catalogv1.PurchaseProductRequest,
-) (*catalogv1.PurchaseProductResponse, error) {
-	id, err := uuid.Parse(req.GetId())
+func (h *Handler) CreateOrder(
+	ctx context.Context, req *orderv1.CreateOrderRequest,
+) (*orderv1.CreateOrderResponse, error) {
+	userID, err := h.callerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	productID, err := uuid.Parse(req.GetProductId())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -127,19 +131,13 @@ func (h *Handler) PurchaseProduct(
 	if !domain.ValidPurchaseQuantity(qty) {
 		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
 	}
-	userID, err := h.callerID(ctx)
+	p, o, err := h.processor.CreateOrder(ctx, userID, productID, qty)
 	if err != nil {
-		return nil, err
+		return nil, h.toStatus(err, "create order")
 	}
-	p, o, err := h.processor.Purchase(ctx, userID, id, qty)
-	if err != nil {
-		return nil, h.toStatus(err, "purchase product")
-	}
-	return catalogv1.PurchaseProductResponse_builder{
-		ProductId:      p.ID.String(),
-		Quantity:       qty,
+	return orderv1.CreateOrderResponse_builder{
+		Order:          toOrderProto(o),
 		RemainingStock: p.Stock,
-		OrderId:        o.ID.String(),
 	}.Build(), nil
 }
 
