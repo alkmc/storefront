@@ -521,13 +521,12 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64,
-				) (domain.Product, domain.Order, error) {
+				) (domain.Order, error) {
 					if gotUser != domain.UserID(userID) {
 						t.Errorf("got user %v, want %v", gotUser, userID)
 					}
-					p := domain.Product{ID: pid, Name: "Car", Price: testMoney(), Stock: 5}
 					o := domain.Order{ID: domain.OrderID(orderID), UserID: gotUser, ProductID: pid, Quantity: qty}
-					return p, o, nil
+					return o, nil
 				}
 			},
 			expectedStatus: http.StatusCreated,
@@ -551,8 +550,8 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
-				) (domain.Product, domain.Order, error) {
-					return domain.Product{}, domain.Order{}, domain.ErrNotFound
+				) (domain.Order, error) {
+					return domain.Order{}, domain.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -563,8 +562,8 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
-				) (domain.Product, domain.Order, error) {
-					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
+				) (domain.Order, error) {
+					return domain.Order{}, domain.ErrInsufficientStock
 				}
 			},
 			expectedStatus: http.StatusConflict,
@@ -593,8 +592,8 @@ func TestCreateOrder(t *testing.T) {
 
 			if tt.expectedStatus == http.StatusCreated {
 				pr := decodeJSON[createOrderResponse](t, resp.Body)
-				if pr.ProductID != id || pr.Quantity != 2 || pr.RemainingStock != 5 {
-					t.Errorf("got %+v, want productId=%v quantity=2 remainingStock=5", pr, id)
+				if pr.ProductID != id || pr.Quantity != 2 {
+					t.Errorf("got %+v, want productId=%v quantity=2", pr, id)
 				}
 				if pr.ID != orderID {
 					t.Errorf("got id %v, want %v", pr.ID, orderID)

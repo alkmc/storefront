@@ -65,7 +65,7 @@ type SpyStore struct {
 	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn      func(context.Context, uuid.UUID) error
-	CreateOrderFn func(context.Context, domain.Order) (domain.Product, domain.Order, error)
+	CreateOrderFn func(context.Context, domain.Order) (domain.Order, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
@@ -98,11 +98,11 @@ func (s *SpyStore) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *SpyStore) CreateOrder(ctx context.Context, o domain.Order) (domain.Product, domain.Order, error) {
+func (s *SpyStore) CreateOrder(ctx context.Context, o domain.Order) (domain.Order, error) {
 	if s.CreateOrderFn != nil {
 		return s.CreateOrderFn(ctx, o)
 	}
-	return domain.Product{}, domain.Order{}, nil
+	return domain.Order{}, nil
 }
 
 func (s *SpyStore) FindOrder(

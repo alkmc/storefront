@@ -23,12 +23,11 @@ type (
 		NextCursor string            `json:"nextCursor,omitempty"`
 	}
 	createOrderResponse struct {
-		ID             uuid.UUID `json:"id"`
-		ProductID      uuid.UUID `json:"productId"`
-		Quantity       int64     `json:"quantity"`
-		UnitPrice      moneyDTO  `json:"unitPrice"`
-		RemainingStock int64     `json:"remainingStock"`
-		CreatedAt      time.Time `json:"createdAt"`
+		ID        uuid.UUID `json:"id"`
+		ProductID uuid.UUID `json:"productId"`
+		Quantity  int64     `json:"quantity"`
+		UnitPrice moneyDTO  `json:"unitPrice"`
+		CreatedAt time.Time `json:"createdAt"`
 	}
 	orderResponse struct {
 		ID        uuid.UUID `json:"id"`
@@ -47,14 +46,13 @@ func toProductResponse(p domain.Product) productResponse {
 	return productResponse{ID: p.ID, Name: p.Name, Stock: p.Stock, Price: toMoneyDTO(p.Price)}
 }
 
-func toCreateOrderResponse(p domain.Product, o domain.Order) createOrderResponse {
+func toCreateOrderResponse(o domain.Order) createOrderResponse {
 	return createOrderResponse{
-		ID:             uuid.UUID(o.ID),
-		ProductID:      o.ProductID,
-		Quantity:       o.Quantity,
-		UnitPrice:      toMoneyDTO(o.UnitPrice),
-		RemainingStock: p.Stock,
-		CreatedAt:      o.CreatedAt,
+		ID:        uuid.UUID(o.ID),
+		ProductID: o.ProductID,
+		Quantity:  o.Quantity,
+		UnitPrice: toMoneyDTO(o.UnitPrice),
+		CreatedAt: o.CreatedAt,
 	}
 }
 

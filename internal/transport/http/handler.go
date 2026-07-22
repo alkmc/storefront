@@ -21,7 +21,7 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Order, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -239,7 +239,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	p, o, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity)
+	o, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
@@ -255,7 +255,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Location", "/v1/orders/"+o.ID.String())
-	respond(w, http.StatusCreated, toCreateOrderResponse(p, o))
+	respond(w, http.StatusCreated, toCreateOrderResponse(o))
 }
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.

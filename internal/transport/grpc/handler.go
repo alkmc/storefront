@@ -22,7 +22,7 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Order, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -131,13 +131,12 @@ func (h *Handler) CreateOrder(
 	if !domain.ValidPurchaseQuantity(qty) {
 		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
 	}
-	p, o, err := h.processor.CreateOrder(ctx, userID, productID, qty)
+	o, err := h.processor.CreateOrder(ctx, userID, productID, qty)
 	if err != nil {
 		return nil, h.toStatus(err, "create order")
 	}
 	return orderv1.CreateOrderResponse_builder{
-		Order:          toOrderProto(o),
-		RemainingStock: p.Stock,
+		Order: toOrderProto(o),
 	}.Build(), nil
 }
 

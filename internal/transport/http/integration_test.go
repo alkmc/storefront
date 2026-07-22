@@ -159,9 +159,6 @@ func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {
 	if pr.ID == uuid.Nil {
 		t.Fatal("create order response has no id")
 	}
-	if pr.RemainingStock != 3 {
-		t.Errorf("got remaining stock %d, want 3", pr.RemainingStock)
-	}
 
 	// the owner reads the order back with the price snapshot
 	o := doGet[orderResponse](t, mux, userA, "/v1/orders/"+pr.ID.String(), http.StatusOK)
