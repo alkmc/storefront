@@ -14,6 +14,7 @@ import (
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/outbox"
+	"github.com/alkmc/storefront/internal/pg"
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
 	grpcsrv "github.com/alkmc/storefront/internal/transport/grpc"
@@ -116,7 +117,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		srv, verifier, logger,
 	)
 
-	listener := store.NewListener(pool, store.OutboxChannel)
+	listener := pg.NewListener(pool, store.OutboxChannel)
 	relay := outbox.New(repo, listener, pub, outbox.Config{
 		BatchSize:      cfg.Outbox.BatchSize,
 		PollInterval:   cfg.Outbox.PollInterval,
