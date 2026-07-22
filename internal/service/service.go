@@ -21,8 +21,8 @@ type (
 		Delete(context.Context, uuid.UUID) error
 	}
 	orderStorer interface {
-		// CreateOrder records an order and decrements the product stock in one tx.
-		CreateOrder(context.Context, domain.Order) (domain.Product, domain.Order, error)
+		// CreateOrder also decrements the product stock in one tx.
+		CreateOrder(context.Context, domain.Order) (domain.Order, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -131,19 +131,19 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 // CreateOrder decrements stock and records an order owned by userID in one store tx.
 func (s *Service) CreateOrder(
 	ctx context.Context, userID domain.UserID, productID uuid.UUID, qty int64,
-) (domain.Product, domain.Order, error) {
+) (domain.Order, error) {
 	orderID, err := uuid.NewV7()
 	if err != nil {
-		return domain.Product{}, domain.Order{}, fmt.Errorf("failed to generate uuid: %w", err)
+		return domain.Order{}, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: productID, Quantity: qty}
 
-	p, placed, err := s.store.CreateOrder(ctx, o)
+	placed, err := s.store.CreateOrder(ctx, o)
 	if err != nil {
-		return domain.Product{}, domain.Order{}, err
+		return domain.Order{}, err
 	}
 	s.invalidate(ctx, productID)
-	return p, placed, nil
+	return placed, nil
 }
 
 func (s *Service) fill(

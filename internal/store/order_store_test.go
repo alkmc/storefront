@@ -24,7 +24,7 @@ func TestPostgres_FindOrder(t *testing.T) {
 	}
 	owner := uuid.Must(uuid.NewV7())
 	stranger := uuid.Must(uuid.NewV7())
-	_, placed, err := repo.CreateOrder(ctx, testOrder(owner, productID, 2))
+	placed, err := repo.CreateOrder(ctx, testOrder(owner, productID, 2))
 	if err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestPostgres_FindOrders(t *testing.T) {
 
 func purchaseOrder(t *testing.T, repo *Postgres, userID domain.UserID, productID uuid.UUID) domain.OrderID {
 	t.Helper()
-	_, o, err := repo.CreateOrder(t.Context(), testOrder(uuid.UUID(userID), productID, 1))
+	o, err := repo.CreateOrder(t.Context(), testOrder(uuid.UUID(userID), productID, 1))
 	if err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}

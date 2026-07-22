@@ -135,13 +135,12 @@ func TestHandler_CreateOrder(t *testing.T) {
 	orderID := uuid.Must(uuid.NewV7())
 	client := newOrderClient(t, stubProcessor{
 		CreateOrderFn: func(_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64,
-		) (domain.Product, domain.Order, error) {
+		) (domain.Order, error) {
 			if userID != domain.UserID(sub) {
 				t.Errorf("got user %v, want %v", userID, sub)
 			}
-			p := domain.Product{ID: pid, Stock: 8}
 			o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: pid, Quantity: qty}
-			return p, o, nil
+			return o, nil
 		},
 	})
 
@@ -162,9 +161,6 @@ func TestHandler_CreateOrder(t *testing.T) {
 	}
 	if got := o.GetQuantity(); got != 2 {
 		t.Errorf("got quantity %d, want 2", got)
-	}
-	if got := resp.GetRemainingStock(); got != 8 {
-		t.Errorf("got remainingStock %d, want 8", got)
 	}
 }
 
@@ -266,8 +262,8 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 			name: "insufficient stock",
 			proc: stubProcessor{
 				CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64,
-				) (domain.Product, domain.Order, error) {
-					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
+				) (domain.Order, error) {
+					return domain.Order{}, domain.ErrInsufficientStock
 				},
 			},
 			req:  orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),

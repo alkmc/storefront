@@ -128,7 +128,7 @@ func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 // CreateOrder atomically decrements stock, records the order, and stores the purchased event in one tx.
 func (pg *Postgres) CreateOrder(
 	ctx context.Context, o domain.Order,
-) (domain.Product, domain.Order, error) {
+) (domain.Order, error) {
 	var p domain.Product
 	err := pg.withTx(ctx, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
@@ -156,9 +156,9 @@ func (pg *Postgres) CreateOrder(
 		return insertOutbox(ctx, tx, e)
 	})
 	if err != nil {
-		return domain.Product{}, domain.Order{}, err
+		return domain.Order{}, err
 	}
-	return p, o, nil
+	return o, nil
 }
 
 // purchaseNoRowError tells a missing product apart from insufficient stock.

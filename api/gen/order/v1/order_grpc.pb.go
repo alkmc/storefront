@@ -30,7 +30,7 @@ const (
 //
 // OrderService exposes the authenticated caller's own orders.
 type OrderServiceClient interface {
-	// CreateOrder purchases a product for the caller and returns the order with the remaining stock.
+	// CreateOrder purchases a product for the caller and returns the order.
 	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
 	// ListOrders returns a keyset page of the caller's orders, newest first.
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
@@ -82,7 +82,7 @@ func (c *orderServiceClient) GetOrder(ctx context.Context, in *GetOrderRequest, 
 //
 // OrderService exposes the authenticated caller's own orders.
 type OrderServiceServer interface {
-	// CreateOrder purchases a product for the caller and returns the order with the remaining stock.
+	// CreateOrder purchases a product for the caller and returns the order.
 	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
 	// ListOrders returns a keyset page of the caller's orders, newest first.
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)

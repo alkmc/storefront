@@ -301,11 +301,10 @@ func (b0 CreateOrderRequest_builder) Build() *CreateOrderRequest {
 }
 
 type CreateOrderResponse struct {
-	state                     protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Order          *Order                 `protobuf:"bytes,1,opt,name=order"`
-	xxx_hidden_RemainingStock int64                  `protobuf:"varint,2,opt,name=remaining_stock,json=remainingStock"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Order *Order                 `protobuf:"bytes,1,opt,name=order"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateOrderResponse) Reset() {
@@ -340,19 +339,8 @@ func (x *CreateOrderResponse) GetOrder() *Order {
 	return nil
 }
 
-func (x *CreateOrderResponse) GetRemainingStock() int64 {
-	if x != nil {
-		return x.xxx_hidden_RemainingStock
-	}
-	return 0
-}
-
 func (x *CreateOrderResponse) SetOrder(v *Order) {
 	x.xxx_hidden_Order = v
-}
-
-func (x *CreateOrderResponse) SetRemainingStock(v int64) {
-	x.xxx_hidden_RemainingStock = v
 }
 
 func (x *CreateOrderResponse) HasOrder() bool {
@@ -369,8 +357,7 @@ func (x *CreateOrderResponse) ClearOrder() {
 type CreateOrderResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	Order          *Order
-	RemainingStock int64
+	Order *Order
 }
 
 func (b0 CreateOrderResponse_builder) Build() *CreateOrderResponse {
@@ -378,7 +365,6 @@ func (b0 CreateOrderResponse_builder) Build() *CreateOrderResponse {
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_Order = b.Order
-	x.xxx_hidden_RemainingStock = b.RemainingStock
 	return m0
 }
 
@@ -671,10 +657,9 @@ const file_order_v1_order_proto_rawDesc = "" +
 	"\x12CreateOrderRequest\x12\x1d\n" +
 	"\n" +
 	"product_id\x18\x01 \x01(\tR\tproductId\x12\x1a\n" +
-	"\bquantity\x18\x02 \x01(\x03R\bquantity\"e\n" +
+	"\bquantity\x18\x02 \x01(\x03R\bquantity\"<\n" +
 	"\x13CreateOrderResponse\x12%\n" +
-	"\x05order\x18\x01 \x01(\v2\x0f.order.v1.OrderR\x05order\x12'\n" +
-	"\x0fremaining_stock\x18\x02 \x01(\x03R\x0eremainingStock\"A\n" +
+	"\x05order\x18\x01 \x01(\v2\x0f.order.v1.OrderR\x05order\"A\n" +
 	"\x11ListOrdersRequest\x12\x14\n" +
 	"\x05limit\x18\x01 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"^\n" +

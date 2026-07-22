@@ -328,7 +328,7 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
-	if _, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1)); err != nil {
+	if _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1)); err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}
 
@@ -379,7 +379,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 			}
 
 			order := testOrder(uuid.Must(uuid.NewV7()), id, tt.qty)
-			p, placed, err := repo.CreateOrder(ctx, order)
+			placed, err := repo.CreateOrder(ctx, order)
 			if tt.wantErrIs != nil {
 				if !errors.Is(err, tt.wantErrIs) {
 					t.Fatalf("got %v, want %v", err, tt.wantErrIs)
@@ -401,11 +401,15 @@ func TestPostgres_CreateOrder(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if p.Stock != tt.wantRemaining {
-				t.Errorf("got remaining stock %d, want %d", p.Stock, tt.wantRemaining)
+			got, err := repo.FindByID(ctx, id)
+			if err != nil {
+				t.Fatalf("failed to reload product: %v", err)
 			}
-			if p.Version != tt.wantVersion {
-				t.Errorf("got version %d, want %d", p.Version, tt.wantVersion)
+			if got.Stock != tt.wantRemaining {
+				t.Errorf("got remaining stock %d, want %d", got.Stock, tt.wantRemaining)
+			}
+			if got.Version != tt.wantVersion {
+				t.Errorf("got version %d, want %d", got.Version, tt.wantVersion)
 			}
 			if placed.ID != order.ID || placed.UserID != order.UserID ||
 				placed.ProductID != id || placed.Quantity != tt.qty {
@@ -421,7 +425,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 	}
 
 	t.Run("non-existing product", func(t *testing.T) {
-		_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1))
+		_, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1))
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("got %v, want domain.ErrNotFound", err)
 		}
@@ -455,7 +459,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 	for range concurrentBuyers {
 		wg.Go(func() {
 			<-start
-			_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1))
+			_, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1))
 			switch {
 			case err == nil:
 				successes.Add(1)
