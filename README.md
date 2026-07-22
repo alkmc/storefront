@@ -60,12 +60,12 @@ curl -s 'http://localhost:8080/v1/products?limit=10'
 # next page: pass the nextCursor from the previous response
 curl -s 'http://localhost:8080/v1/products?limit=10&cursor={nextCursor}'
 
-# purchase units, decrementing stock atomically (requires a bearer token)
+# create an order, decrementing stock atomically (requires a bearer token)
 TOKEN=$(make -s token)
-curl -s -X POST http://localhost:8080/v1/products/{id}/purchase \
+curl -s -X POST http://localhost:8080/v1/orders \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"quantity":2}'
+  -d '{"productId":"{id}","quantity":2}'
 
 # list your own orders (keyset pagination, newest first)
 curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:8080/v1/orders?limit=10'
@@ -79,13 +79,14 @@ A missing `nextCursor` means the last page.
 
 Stock is set at creation and changed only through purchase.  
 `PUT` does not accept a `stock` field.  
-Purchase returns `{"productId":"<id>","quantity":2,"remainingStock":8,"orderId":"<id>"}`.  
+`POST /v1/orders` answers `201 Created` with a `Location` header and returns the order with its
+`remainingStock`: `{"id":"<id>","productId":"<id>","quantity":2,"unitPrice":{"minorAmount":999,"currency":"PLN"},"remainingStock":8,"createdAt":"<ts>"}`.  
 A `409 Conflict` signals insufficient stock.  
 See `api.rest` for the full set of example requests.
 
 ### Auth & orders
 
-Purchase and the `/v1/orders*` endpoints require a bearer token, catalog reads stay public.  
+The `/v1/orders*` endpoints require a bearer token, catalog reads stay public.  
 Tokens are HS256 JWTs verified against `AUTH_JWT_SECRET`,
 `make token` prints a dev token.  
 Verification uses [golang-jwt](https://github.com/golang-jwt/jwt) pinned to HS256 through its `alg`
@@ -111,8 +112,8 @@ with a registered gRPC health service.
 The contract lives in `api/proto` as two packages, `catalog.v1` and `order.v1` (Protobuf edition 2024),
 mirroring the aggregate split of the HTTP paths.  
 Code is generated with [buf](https://buf.build) into `api/gen` (`make proto`).  
-The same bearer token guards the same operations: `PurchaseProduct` and `order.v1.OrderService`
-require an `authorization` metadata entry, catalog reads stay public.
+The same bearer token guards the same operations: `order.v1.OrderService`
+requires an `authorization` metadata entry, catalog reads stay public.
 
 Server reflection is off by default.  
 Set `GRPC_REFLECTION=true` (dev only) and [grpcurl](https://github.com/fullstorydev/grpcurl) discovers the API without the proto:
@@ -133,10 +134,10 @@ grpcurl -plaintext -d '{"id":"<id>"}' \
 grpcurl -plaintext -d '{"limit":10}' \
   localhost:9090 catalog.v1.ProductService/ListProducts
 
-# purchase units (FAILED_PRECONDITION on insufficient stock, requires a bearer token)
+# create an order (FAILED_PRECONDITION on insufficient stock, requires a bearer token)
 grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
-  -d '{"id":"<id>","quantity":2}' \
-  localhost:9090 catalog.v1.ProductService/PurchaseProduct
+  -d '{"productId":"<id>","quantity":2}' \
+  localhost:9090 order.v1.OrderService/CreateOrder
 
 # list your own orders (newest first)
 grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
