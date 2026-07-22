@@ -46,17 +46,18 @@ Content-Type: {{json}}
     }
 }
 
-### PURCHASE PRODUCT
-# @name purchase
-POST {{apiBase}}/products/{{prodID}}/purchase
+### CREATE ORDER
+# @name createOrder
+POST {{apiBase}}/orders
 Content-Type: {{json}}
 Authorization: Bearer {{token}}
 
 {
+    "productId": "{{prodID}}",
     "quantity": 2
 }
 
-@orderID = {{purchase.response.body.$.orderId}}
+@orderID = {{createOrder.response.body.$.id}}
 
 ### GET MY ORDER
 GET {{apiBase}}/orders/{{orderID}}
@@ -71,11 +72,12 @@ Authorization: Bearer {{token}}
 GET {{apiBase}}/orders?limit=10&cursor=
 Authorization: Bearer {{token}}
 
-### PURCHASE WITHOUT TOKEN (401)
-POST {{apiBase}}/products/{{prodID}}/purchase
+### CREATE ORDER WITHOUT TOKEN (401)
+POST {{apiBase}}/orders
 Content-Type: {{json}}
 
 {
+    "productId": "{{prodID}}",
     "quantity": 2
 }
 

@@ -502,7 +502,7 @@ func TestUpdateProduct(t *testing.T) {
 	}
 }
 
-func TestPurchaseProduct(t *testing.T) {
+func TestCreateOrder(t *testing.T) {
 	mux, proc := setupTest(t)
 
 	id := uuid.Must(uuid.NewV7())
@@ -520,7 +520,7 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "success",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64,
+				proc.createOrder = func(_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64,
 				) (domain.Product, domain.Order, error) {
 					if gotUser != domain.UserID(userID) {
 						t.Errorf("got user %v, want %v", gotUser, userID)
@@ -530,7 +530,7 @@ func TestPurchaseProduct(t *testing.T) {
 					return p, o, nil
 				}
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusCreated,
 		},
 		{
 			name:           "quantity below min",
@@ -550,7 +550,7 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "product not found",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
+				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
 				) (domain.Product, domain.Order, error) {
 					return domain.Product{}, domain.Order{}, domain.ErrNotFound
 				}
@@ -562,7 +562,7 @@ func TestPurchaseProduct(t *testing.T) {
 			name:     "insufficient stock",
 			quantity: 2,
 			setupMock: func() {
-				proc.purchase = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
+				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
 				) (domain.Product, domain.Order, error) {
 					return domain.Product{}, domain.Order{}, domain.ErrInsufficientStock
 				}
@@ -575,13 +575,13 @@ func TestPurchaseProduct(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setupMock()
-			b, err := json.Marshal(purchaseInput{Quantity: tt.quantity})
+			b, err := json.Marshal(createOrderInput{ProductID: id.String(), Quantity: tt.quantity})
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
 			req := httptest.NewRequestWithContext(
-				t.Context(), http.MethodPost, "/v1/products/"+id.String()+"/purchase", bytes.NewReader(b),
+				t.Context(), http.MethodPost, "/v1/orders", bytes.NewReader(b),
 			)
 			req.Header.Set("Authorization", bearer(t, userID))
 			resp := httptest.NewRecorder()
@@ -591,13 +591,13 @@ func TestPurchaseProduct(t *testing.T) {
 				t.Errorf("got status %d, want %d", resp.Code, tt.expectedStatus)
 			}
 
-			if tt.expectedStatus == http.StatusOK {
-				pr := decodeJSON[purchaseResponse](t, resp.Body)
+			if tt.expectedStatus == http.StatusCreated {
+				pr := decodeJSON[createOrderResponse](t, resp.Body)
 				if pr.ProductID != id || pr.Quantity != 2 || pr.RemainingStock != 5 {
 					t.Errorf("got %+v, want productId=%v quantity=2 remainingStock=5", pr, id)
 				}
-				if pr.OrderID != orderID {
-					t.Errorf("got orderId %v, want %v", pr.OrderID, orderID)
+				if pr.ID != orderID {
+					t.Errorf("got id %v, want %v", pr.ID, orderID)
 				}
 				return
 			}
@@ -619,9 +619,9 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		body   string
 	}{
 		{
-			name:   "purchase",
+			name:   "create order",
 			method: http.MethodPost,
-			url:    "/v1/products/" + uuid.NewString() + "/purchase",
+			url:    "/v1/orders",
 			body:   `{"quantity":1}`,
 		},
 		{

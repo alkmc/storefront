@@ -19,8 +19,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	OrderService_ListOrders_FullMethodName = "/order.v1.OrderService/ListOrders"
-	OrderService_GetOrder_FullMethodName   = "/order.v1.OrderService/GetOrder"
+	OrderService_CreateOrder_FullMethodName = "/order.v1.OrderService/CreateOrder"
+	OrderService_ListOrders_FullMethodName  = "/order.v1.OrderService/ListOrders"
+	OrderService_GetOrder_FullMethodName    = "/order.v1.OrderService/GetOrder"
 )
 
 // OrderServiceClient is the client API for OrderService service.
@@ -29,6 +30,8 @@ const (
 //
 // OrderService exposes the authenticated caller's own orders.
 type OrderServiceClient interface {
+	// CreateOrder purchases a product for the caller and returns the order with the remaining stock.
+	CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error)
 	// ListOrders returns a keyset page of the caller's orders, newest first.
 	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
 	// GetOrder returns one of the caller's orders by id.
@@ -41,6 +44,16 @@ type orderServiceClient struct {
 
 func NewOrderServiceClient(cc grpc.ClientConnInterface) OrderServiceClient {
 	return &orderServiceClient{cc}
+}
+
+func (c *orderServiceClient) CreateOrder(ctx context.Context, in *CreateOrderRequest, opts ...grpc.CallOption) (*CreateOrderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateOrderResponse)
+	err := c.cc.Invoke(ctx, OrderService_CreateOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *orderServiceClient) ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error) {
@@ -69,6 +82,8 @@ func (c *orderServiceClient) GetOrder(ctx context.Context, in *GetOrderRequest, 
 //
 // OrderService exposes the authenticated caller's own orders.
 type OrderServiceServer interface {
+	// CreateOrder purchases a product for the caller and returns the order with the remaining stock.
+	CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error)
 	// ListOrders returns a keyset page of the caller's orders, newest first.
 	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	// GetOrder returns one of the caller's orders by id.
@@ -83,6 +98,9 @@ type OrderServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedOrderServiceServer struct{}
 
+func (UnimplementedOrderServiceServer) CreateOrder(context.Context, *CreateOrderRequest) (*CreateOrderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateOrder not implemented")
+}
 func (UnimplementedOrderServiceServer) ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListOrders not implemented")
 }
@@ -108,6 +126,24 @@ func RegisterOrderServiceServer(s grpc.ServiceRegistrar, srv OrderServiceServer)
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&OrderService_ServiceDesc, srv)
+}
+
+func _OrderService_CreateOrder_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateOrderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(OrderServiceServer).CreateOrder(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: OrderService_CreateOrder_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(OrderServiceServer).CreateOrder(ctx, req.(*CreateOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _OrderService_ListOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -153,6 +189,10 @@ var OrderService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "order.v1.OrderService",
 	HandlerType: (*OrderServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateOrder",
+			Handler:    _OrderService_CreateOrder_Handler,
+		},
 		{
 			MethodName: "ListOrders",
 			Handler:    _OrderService_ListOrders_Handler,

@@ -21,7 +21,7 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		Purchase(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
+		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Product, domain.Order, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -43,8 +43,9 @@ type (
 		Name  string     `json:"name"`
 		Price moneyInput `json:"price"`
 	}
-	purchaseInput struct {
-		Quantity int64 `json:"quantity"`
+	createOrderInput struct {
+		ProductID string `json:"productId"`
+		Quantity  int64  `json:"quantity"`
 	}
 )
 
@@ -207,10 +208,9 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusOK, toProductResponse(updated))
 }
 
-func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
-	id, err := uuid.Parse(r.PathValue("id"))
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	userID, ok := h.callerID(w, r)
+	if !ok {
 		return
 	}
 
@@ -219,10 +219,16 @@ func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var in purchaseInput
+	var in createOrderInput
 	if err := decodeBody(r.Body, &in); err != nil {
 		h.logger.Warn("decode body failed", slog.Any("error", err))
 		respondDecodeError(w, err)
+		return
+	}
+
+	productID, err := uuid.Parse(in.ProductID)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	if !domain.ValidPurchaseQuantity(in.Quantity) {
@@ -230,15 +236,10 @@ func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, ok := h.callerID(w, r)
-	if !ok {
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	p, o, err := h.processor.Purchase(ctx, userID, id, in.Quantity)
+	p, o, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
@@ -247,13 +248,14 @@ func (h *Handler) Purchase(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusConflict, "insufficient stock")
 		default:
 			h.respondServerError(
-				w, err, "failed to purchase product",
-				slog.Any("error", err), slog.String("id", id.String()),
+				w, err, "failed to create order",
+				slog.Any("error", err), slog.String("productId", productID.String()),
 			)
 		}
 		return
 	}
-	respond(w, http.StatusOK, toPurchaseResponse(p, o))
+	w.Header().Set("Location", "/v1/orders/"+o.ID.String())
+	respond(w, http.StatusCreated, toCreateOrderResponse(p, o))
 }
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.

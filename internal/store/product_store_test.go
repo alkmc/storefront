@@ -328,7 +328,7 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
-	if _, _, err := repo.Purchase(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1)); err != nil {
+	if _, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1)); err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}
 
@@ -341,7 +341,7 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 	}
 }
 
-func TestPostgres_Purchase(t *testing.T) {
+func TestPostgres_CreateOrder(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -379,7 +379,7 @@ func TestPostgres_Purchase(t *testing.T) {
 			}
 
 			order := testOrder(uuid.Must(uuid.NewV7()), id, tt.qty)
-			p, placed, err := repo.Purchase(ctx, order)
+			p, placed, err := repo.CreateOrder(ctx, order)
 			if tt.wantErrIs != nil {
 				if !errors.Is(err, tt.wantErrIs) {
 					t.Fatalf("got %v, want %v", err, tt.wantErrIs)
@@ -421,14 +421,14 @@ func TestPostgres_Purchase(t *testing.T) {
 	}
 
 	t.Run("non-existing product", func(t *testing.T) {
-		_, _, err := repo.Purchase(ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1))
+		_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1))
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("got %v, want domain.ErrNotFound", err)
 		}
 	})
 }
 
-func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
+func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
 	ctx := t.Context()
@@ -455,7 +455,7 @@ func TestPostgres_Purchase_OversellInvariant(t *testing.T) {
 	for range concurrentBuyers {
 		wg.Go(func() {
 			<-start
-			_, _, err := repo.Purchase(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1))
+			_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1))
 			switch {
 			case err == nil:
 				successes.Add(1)
