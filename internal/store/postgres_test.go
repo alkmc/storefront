@@ -4,6 +4,8 @@ package store
 
 import (
 	"context"
+	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -12,12 +14,15 @@ import (
 	"github.com/alkmc/storefront/migrations"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+const testIdempotencyTTL = time.Hour
 
 func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 	t.Helper()
@@ -99,7 +104,72 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 	return repo, cleanup
 }
 
-const testIdempotencyTTL = time.Hour
+func TestMapDBError(t *testing.T) {
+	tests := []struct {
+		name            string
+		err             error
+		wantUnavailable bool
+	}{
+		{
+			name:            "nil",
+			err:             nil,
+			wantUnavailable: false,
+		},
+		{
+			name:            "context canceled",
+			err:             context.Canceled,
+			wantUnavailable: false,
+		},
+		{
+			name:            "context deadline",
+			err:             context.DeadlineExceeded,
+			wantUnavailable: false,
+		},
+		{
+			name:            "pg connection failure",
+			err:             &pgconn.PgError{Code: "08006"},
+			wantUnavailable: true,
+		},
+		{
+			name:            "pg insufficient resources",
+			err:             &pgconn.PgError{Code: "53300"},
+			wantUnavailable: true,
+		},
+		{
+			name:            "pg admin shutdown",
+			err:             &pgconn.PgError{Code: "57P01"},
+			wantUnavailable: true,
+		},
+		{
+			name:            "pg unique violation",
+			err:             &pgconn.PgError{Code: "23505"},
+			wantUnavailable: false,
+		},
+		{
+			name:            "net error",
+			err:             &net.OpError{Op: "dial", Err: errors.New("connection refused")},
+			wantUnavailable: true,
+		},
+		{
+			name:            "plain error",
+			err:             errors.New("boom"),
+			wantUnavailable: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := mapDBError(tt.err)
+			gotUnavail := errors.Is(got, domain.ErrUnavailable)
+			if gotUnavail != tt.wantUnavailable {
+				t.Fatalf("mapDBError(%v): got unavailable=%v, want %v", tt.err, gotUnavail, tt.wantUnavailable)
+			}
+			if tt.err != nil && !errors.Is(got, tt.err) {
+				t.Errorf("original error not preserved in chain: %v", got)
+			}
+		})
+	}
+}
 
 func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
