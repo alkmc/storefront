@@ -28,7 +28,7 @@ func (f *fakePurger) PurgeIdempotencyKeys(context.Context) (int64, error) {
 func TestJanitor_PurgesEachInterval(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fp := &fakePurger{}
-		j := NewJanitor(fp, testInterval, slog.New(slog.DiscardHandler))
+		j := newTestJanitor(fp)
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		go func() { _ = j.Run(ctx) }()
@@ -54,7 +54,7 @@ func TestJanitor_PurgesEachInterval(t *testing.T) {
 
 func TestJanitor_StopsOnContextCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		j := NewJanitor(&fakePurger{}, testInterval, slog.New(slog.DiscardHandler))
+		j := newTestJanitor(&fakePurger{})
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan error, 1)
 		go func() { done <- j.Run(ctx) }()
@@ -77,7 +77,7 @@ func TestJanitor_StopsOnContextCancel(t *testing.T) {
 func TestJanitor_ContinuesAfterError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		fp := &fakePurger{failing: true} // purge fails, the loop must keep going
-		j := NewJanitor(fp, testInterval, slog.New(slog.DiscardHandler))
+		j := newTestJanitor(fp)
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		go func() { _ = j.Run(ctx) }()
@@ -93,4 +93,8 @@ func TestJanitor_ContinuesAfterError(t *testing.T) {
 			t.Errorf("after an error the loop stopped: calls = %d, want 2", got)
 		}
 	})
+}
+
+func newTestJanitor(p purger) *Janitor {
+	return NewJanitor(p, testInterval, slog.New(slog.DiscardHandler))
 }

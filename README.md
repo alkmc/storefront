@@ -85,7 +85,8 @@ A `409 Conflict` signals insufficient stock.
 `POST /v1/orders` **requires** an `Idempotency-Key` header, an opaque string of up to 255 bytes,
 so a retry is safe: a missing or over-long key answers `400`, the first call runs, a repeat with the
 same key and body replays the stored result with `Idempotency-Replayed: true`, and the same key with
-a different body answers `422`. gRPC carries the key in the `idempotency-key` metadata.  
+a different body answers `422`.  
+gRPC carries the key in the `idempotency-key` metadata.  
 See `api.rest` for the full set of example requests.
 
 ### Auth & orders

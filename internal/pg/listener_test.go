@@ -28,7 +28,7 @@ func TestListener_BuffersNotifyBetweenWaits(t *testing.T) {
 		t.Fatalf("await before notify: %v", err)
 	}
 
-	if _, err := pool.Exec(ctx, "SELECT pg_notify('"+testChannel+"', '')"); err != nil {
+	if _, err := pool.Exec(ctx, "SELECT pg_notify($1, '')", testChannel); err != nil {
 		t.Fatalf("notify: %v", err)
 	}
 
