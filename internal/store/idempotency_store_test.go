@@ -142,6 +142,66 @@ func TestPostgres_CreateOrder_KeyReusableAfterFailure(t *testing.T) {
 	}
 }
 
+func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
+	repo, cleanup := setupTestContainerDB(t)
+	defer cleanup()
+	ctx := t.Context()
+
+	productID := uuid.Must(uuid.NewV7())
+	if _, err := repo.Save(
+		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
+	); err != nil {
+		t.Fatalf("seed product: %v", err)
+	}
+	userID := uuid.Must(uuid.NewV7())
+	idem := domain.IdempotencyKey("expiring-key")
+
+	first, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	// force the key past its TTL so the next call reclaims it instead of replaying
+	if _, err := repo.pool.Exec(
+		ctx,
+		`UPDATE idempotency_keys SET expires_at = now() - interval '1 hour' WHERE user_id = $1 AND key = $2`,
+		userID, string(idem),
+	); err != nil {
+		t.Fatalf("expire key: %v", err)
+	}
+
+	// same key and payload, but a reclaimed key buys anew
+	second, replayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
+	if err != nil {
+		t.Fatalf("reclaim call: %v", err)
+	}
+	if replayed {
+		t.Error("expired key must reexecute, not replay")
+	}
+	if second.ID == first.ID {
+		t.Error("reclaim must create a new order")
+	}
+	got, err := repo.FindByID(ctx, productID)
+	if err != nil {
+		t.Fatalf("reload product: %v", err)
+	}
+	if got.Stock != 1 {
+		t.Errorf("stock %d, want 1 (two decrements)", got.Stock)
+	}
+
+	// the reclaimed key now replays the second order, not the first
+	replay, replayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
+	if err != nil {
+		t.Fatalf("replay call: %v", err)
+	}
+	if !replayed {
+		t.Error("third call must replay the reclaimed order")
+	}
+	if replay.ID != second.ID {
+		t.Errorf("replay id %v, want second order %v", replay.ID, second.ID)
+	}
+}
+
 func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()

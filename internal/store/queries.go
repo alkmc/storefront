@@ -85,7 +85,11 @@ const (
 	queryInsertIdempotency = `
 		INSERT INTO idempotency_keys (user_id, key, request_hash, expires_at)
 		VALUES ($1, $2, $3, now() + make_interval(secs => $4))
-		ON CONFLICT DO NOTHING;`
+		ON CONFLICT (user_id, key) DO UPDATE
+		SET request_hash = EXCLUDED.request_hash,
+		    order_id = NULL,
+		    expires_at = EXCLUDED.expires_at
+		WHERE idempotency_keys.expires_at < now();`
 	querySelectIdempotency = `
 		SELECT ik.request_hash, o.id, o.product_id, o.quantity, o.unit_price_minor, o.currency, o.created_at
 		FROM idempotency_keys ik
