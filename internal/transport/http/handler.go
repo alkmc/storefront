@@ -270,17 +270,16 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusCreated, toCreateOrderResponse(order))
 }
 
-// idempotencyFromHeader reads the required Idempotency-Key header: an opaque string of at most
-// domain.MaxIdempotencyKeyLen characters. A missing, empty, or over-long key is a client error.
+// idempotencyFromHeader reads the required Idempotency-Key header.
+// A missing, empty, or over-long key is a client error.
 func idempotencyFromHeader(r *http.Request) (domain.IdempotencyKey, error) {
 	key := r.Header.Get(headerIdempotencyKey)
 	if key == "" {
 		return "", errors.New(msgIdempotencyRequired)
 	}
-	maxKeyLen := domain.MaxIdempotencyKeyLen
-	if len(key) > maxKeyLen {
+	if len(key) > domain.MaxIdempotencyKeyLen {
 		return "", fmt.Errorf(
-			"%s must be at most %d characters", headerIdempotencyKey, maxKeyLen,
+			"%s must be at most %d bytes", headerIdempotencyKey, domain.MaxIdempotencyKeyLen,
 		)
 	}
 	return domain.IdempotencyKey(key), nil
