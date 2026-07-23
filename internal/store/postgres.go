@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -27,12 +28,14 @@ const (
 )
 
 type Postgres struct {
-	pool *pgxpool.Pool
+	pool           *pgxpool.Pool
+	idempotencyTTL time.Duration
 }
 
 // NewPostgres wraps an open connection pool in a Postgres store.
-func NewPostgres(pool *pgxpool.Pool) *Postgres {
-	return new(Postgres{pool: pool})
+// idempotencyTTL is how long a stored order-creation result stays replayable.
+func NewPostgres(pool *pgxpool.Pool, idempotencyTTL time.Duration) *Postgres {
+	return new(Postgres{pool: pool, idempotencyTTL: idempotencyTTL})
 }
 
 func (pg *Postgres) Ping(ctx context.Context) error {

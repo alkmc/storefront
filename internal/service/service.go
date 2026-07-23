@@ -22,7 +22,7 @@ type (
 	}
 	orderStorer interface {
 		// CreateOrder also decrements the product stock in one tx.
-		CreateOrder(context.Context, domain.Order) (domain.Order, error)
+		CreateOrder(context.Context, domain.Order, domain.IdempotencyKey) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -129,21 +129,24 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // CreateOrder decrements stock and records an order owned by userID in one store tx.
+// A replay changes nothing in the store, so it skips the cache invalidation.
 func (s *Service) CreateOrder(
-	ctx context.Context, userID domain.UserID, productID uuid.UUID, qty int64,
-) (domain.Order, error) {
+	ctx context.Context, userID domain.UserID, productID uuid.UUID, qty int64, idem domain.IdempotencyKey,
+) (domain.Order, bool, error) {
 	orderID, err := uuid.NewV7()
 	if err != nil {
-		return domain.Order{}, fmt.Errorf("failed to generate uuid: %w", err)
+		return domain.Order{}, false, fmt.Errorf("failed to generate uuid: %w", err)
 	}
 	o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: productID, Quantity: qty}
 
-	placed, err := s.store.CreateOrder(ctx, o)
+	order, replayed, err := s.store.CreateOrder(ctx, o, idem)
 	if err != nil {
-		return domain.Order{}, err
+		return domain.Order{}, false, err
 	}
-	s.invalidate(ctx, productID)
-	return placed, nil
+	if !replayed {
+		s.invalidate(ctx, productID)
+	}
+	return order, replayed, nil
 }
 
 func (s *Service) fill(

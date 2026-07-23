@@ -87,7 +87,7 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 		pool.Close()
 		t.Fatalf("failed to ping db: %v", err)
 	}
-	repo := NewPostgres(pool)
+	repo := NewPostgres(pool, testIdempotencyTTL)
 
 	cleanup := func() {
 		pool.Close()
@@ -98,6 +98,8 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 
 	return repo, cleanup
 }
+
+const testIdempotencyTTL = time.Hour
 
 func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
@@ -110,4 +112,31 @@ func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 		ProductID: productID,
 		Quantity:  qty,
 	}
+}
+
+// freshIdem returns a unique idempotency key so independent orders never collide on the key.
+func freshIdem() domain.IdempotencyKey {
+	return domain.IdempotencyKey(uuid.Must(uuid.NewV7()).String())
+}
+
+// seedProduct saves a product with the given stock and returns its id.
+func seedProduct(t *testing.T, repo *Postgres, stock int64) uuid.UUID {
+	t.Helper()
+	id := uuid.Must(uuid.NewV7())
+	if _, err := repo.Save(
+		t.Context(), domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: stock},
+	); err != nil {
+		t.Fatalf("seed product: %v", err)
+	}
+	return id
+}
+
+// productStock reloads the product and returns its current stock.
+func productStock(t *testing.T, repo *Postgres, id uuid.UUID) int64 {
+	t.Helper()
+	got, err := repo.FindByID(t.Context(), id)
+	if err != nil {
+		t.Fatalf("reload product: %v", err)
+	}
+	return got.Stock
 }

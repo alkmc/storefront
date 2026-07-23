@@ -134,18 +134,22 @@ func TestHandler_CreateOrder(t *testing.T) {
 	sub := uuid.Must(uuid.NewV7())
 	orderID := uuid.Must(uuid.NewV7())
 	client := newOrderClient(t, stubProcessor{
-		CreateOrderFn: func(_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64,
-		) (domain.Order, error) {
+		CreateOrderFn: func(
+			_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64, _ domain.IdempotencyKey,
+		) (domain.Order, bool, error) {
 			if userID != domain.UserID(sub) {
 				t.Errorf("got user %v, want %v", userID, sub)
 			}
 			o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: pid, Quantity: qty}
-			return o, nil
+			return o, false, nil
 		},
 	})
 
+	ctx := metadata.AppendToOutgoingContext(
+		authCtx(t, sub), metaIdempotencyKey, uuid.Must(uuid.NewV7()).String(),
+	)
 	resp, err := client.CreateOrder(
-		authCtx(t, sub), orderv1.CreateOrderRequest_builder{
+		ctx, orderv1.CreateOrderRequest_builder{
 			ProductId: id.String(), Quantity: 2,
 		}.Build(),
 	)
@@ -261,9 +265,9 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 		{
 			name: "insufficient stock",
 			proc: stubProcessor{
-				CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64,
-				) (domain.Order, error) {
-					return domain.Order{}, domain.ErrInsufficientStock
+				CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+				) (domain.Order, bool, error) {
+					return domain.Order{}, false, domain.ErrInsufficientStock
 				},
 			},
 			req:  orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
@@ -280,12 +284,105 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			client := newOrderClient(t, tt.proc)
-			_, err := client.CreateOrder(authCtx(t, uuid.New()), tt.req)
+			ctx := metadata.AppendToOutgoingContext(
+				authCtx(t, uuid.New()), metaIdempotencyKey, uuid.Must(uuid.NewV7()).String(),
+			)
+			_, err := client.CreateOrder(ctx, tt.req)
 			if got := status.Code(err); got != tt.want {
 				t.Errorf("got code %v, want %v", got, tt.want)
 			}
 		})
 	}
+}
+
+func TestHandler_CreateOrder_Idempotency(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	sub := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
+	idemKey := uuid.Must(uuid.NewV7()).String()
+
+	t.Run("replay sets the replayed metadata", func(t *testing.T) {
+		client := newOrderClient(t, stubProcessor{
+			CreateOrderFn: func(
+				_ context.Context, _ domain.UserID, pid uuid.UUID, qty int64, idem domain.IdempotencyKey,
+			) (domain.Order, bool, error) {
+				if idem == "" {
+					t.Error("idempotency key not read from metadata")
+				}
+				o := domain.Order{ID: domain.OrderID(orderID), ProductID: pid, Quantity: qty}
+				return o, true, nil
+			},
+		})
+		ctx := metadata.AppendToOutgoingContext(authCtx(t, sub), metaIdempotencyKey, idemKey)
+		var header metadata.MD
+		if _, err := client.CreateOrder(
+			ctx, orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+			grpc.Header(&header),
+		); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := header.Get(metaIdempotencyReplayed); len(got) == 0 || got[0] != "true" {
+			t.Errorf("got %s %v, want [true]", metaIdempotencyReplayed, got)
+		}
+	})
+
+	t.Run("mismatch is InvalidArgument", func(t *testing.T) {
+		client := newOrderClient(t, stubProcessor{
+			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			) (domain.Order, bool, error) {
+				return domain.Order{}, false, domain.ErrIdempotencyMismatch
+			},
+		})
+		ctx := metadata.AppendToOutgoingContext(authCtx(t, sub), metaIdempotencyKey, idemKey)
+		_, err := client.CreateOrder(
+			ctx, orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+		)
+		if got := status.Code(err); got != codes.InvalidArgument {
+			t.Errorf("got code %v, want %v", got, codes.InvalidArgument)
+		}
+	})
+
+	t.Run("missing key is InvalidArgument", func(t *testing.T) {
+		called := false
+		client := newOrderClient(t, stubProcessor{
+			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			) (domain.Order, bool, error) {
+				called = true
+				return domain.Order{}, false, nil
+			},
+		})
+		_, err := client.CreateOrder(
+			authCtx(t, sub), orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+		)
+		if got := status.Code(err); got != codes.InvalidArgument {
+			t.Errorf("got code %v, want %v", got, codes.InvalidArgument)
+		}
+		if called {
+			t.Error("processor called despite missing key")
+		}
+	})
+
+	t.Run("over-long key is InvalidArgument", func(t *testing.T) {
+		called := false
+		client := newOrderClient(t, stubProcessor{
+			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			) (domain.Order, bool, error) {
+				called = true
+				return domain.Order{}, false, nil
+			},
+		})
+		key := strings.Repeat("k", domain.MaxIdempotencyKeyLen+1)
+		ctx := metadata.AppendToOutgoingContext(authCtx(t, sub), metaIdempotencyKey, key)
+		_, err := client.CreateOrder(
+			ctx, orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+		)
+		if got := status.Code(err); got != codes.InvalidArgument {
+			t.Errorf("got code %v, want %v", got, codes.InvalidArgument)
+		}
+		if called {
+			t.Error("processor called despite over-long key")
+		}
+	})
 }
 
 func testMoney(amount int64) *catalogv1.Money {

@@ -83,7 +83,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	}
 	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "event publisher", pub.Close, logger)
 
-	repo := store.NewPostgres(pool)
+	repo := store.NewPostgres(pool, cfg.Idempotency.TTL)
 
 	rCache := cache.New(client, cfg.Redis.TTL, cfg.Redis.NegTTL)
 	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
@@ -124,12 +124,14 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		PublishTimeout: cfg.Outbox.PublishTimeout,
 		MaxAttempts:    cfg.Outbox.MaxAttempts,
 	}, logger)
+	janitor := pg.NewJanitor(repo, cfg.Idempotency.PurgeInterval, logger)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error { return apiSrv.Run(ctx) })
 	eg.Go(func() error { return internalSrv.Run(ctx) })
 	eg.Go(func() error { return grpcSrv.Run(ctx) })
 	eg.Go(func() error { return relay.Run(ctx) })
+	eg.Go(func() error { return janitor.Run(ctx) })
 
 	if err := eg.Wait(); err != nil {
 		return err

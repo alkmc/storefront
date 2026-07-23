@@ -46,8 +46,45 @@ Content-Type: {{json}}
     }
 }
 
+@idemKey = 11111111-1111-1111-1111-111111111111
+
 ### CREATE ORDER
 # @name createOrder
+POST {{apiBase}}/orders
+Content-Type: {{json}}
+Authorization: Bearer {{token}}
+Idempotency-Key: {{idemKey}}
+
+{
+    "productId": "{{prodID}}",
+    "quantity": 2
+}
+
+@orderID = {{createOrder.response.body.$.id}}
+
+### CREATE ORDER (idempotent replay: same key + body, answers Idempotency-Replayed: true)
+POST {{apiBase}}/orders
+Content-Type: {{json}}
+Authorization: Bearer {{token}}
+Idempotency-Key: {{idemKey}}
+
+{
+    "productId": "{{prodID}}",
+    "quantity": 2
+}
+
+### CREATE ORDER (idempotency mismatch: same key, different body -> 422)
+POST {{apiBase}}/orders
+Content-Type: {{json}}
+Authorization: Bearer {{token}}
+Idempotency-Key: {{idemKey}}
+
+{
+    "productId": "{{prodID}}",
+    "quantity": 3
+}
+
+### CREATE ORDER WITHOUT IDEMPOTENCY KEY (400)
 POST {{apiBase}}/orders
 Content-Type: {{json}}
 Authorization: Bearer {{token}}
@@ -56,8 +93,6 @@ Authorization: Bearer {{token}}
     "productId": "{{prodID}}",
     "quantity": 2
 }
-
-@orderID = {{createOrder.response.body.$.id}}
 
 ### GET MY ORDER
 GET {{apiBase}}/orders/{{orderID}}

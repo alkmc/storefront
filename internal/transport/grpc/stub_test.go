@@ -13,7 +13,9 @@ type stubProcessor struct {
 	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn      func(context.Context, uuid.UUID) error
-	CreateOrderFn func(context.Context, domain.UserID, uuid.UUID, int64) (domain.Order, error)
+	CreateOrderFn func(
+		context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+	) (domain.Order, bool, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
@@ -41,9 +43,10 @@ func (s stubProcessor) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.DeleteFn(ctx, id)
 }
 
-func (s stubProcessor) CreateOrder(ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64,
-) (domain.Order, error) {
-	return s.CreateOrderFn(ctx, userID, id, qty)
+func (s stubProcessor) CreateOrder(
+	ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64, idem domain.IdempotencyKey,
+) (domain.Order, bool, error) {
+	return s.CreateOrderFn(ctx, userID, id, qty, idem)
 }
 
 func (s stubProcessor) FindOrder(ctx context.Context, userID domain.UserID, orderID domain.OrderID,
