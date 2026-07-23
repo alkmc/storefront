@@ -16,12 +16,7 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	productID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
-	); err != nil {
-		t.Fatalf("seed product: %v", err)
-	}
+	productID := seedProduct(t, repo, 5)
 	userID := uuid.Must(uuid.NewV7())
 	idem := domain.IdempotencyKey("key-1")
 
@@ -51,12 +46,8 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 	}
 
 	// stock decremented exactly once and only one order exists
-	got, err := repo.FindByID(ctx, productID)
-	if err != nil {
-		t.Fatalf("reload product: %v", err)
-	}
-	if got.Stock != 3 {
-		t.Errorf("stock %d, want 3 (single decrement)", got.Stock)
+	if s := productStock(t, repo, productID); s != 3 {
+		t.Errorf("stock %d, want 3 (single decrement)", s)
 	}
 	page, err := repo.FindOrders(ctx, domain.UserID(userID), uuid.NullUUID{}, 10)
 	if err != nil {
@@ -72,34 +63,24 @@ func TestPostgres_CreateOrder_IdempotencyMismatch(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	productID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
-	); err != nil {
-		t.Fatalf("seed product: %v", err)
-	}
+	productID := seedProduct(t, repo, 5)
 	userID := uuid.Must(uuid.NewV7())
+	key := domain.IdempotencyKey("key-x")
 
-	first := domain.IdempotencyKey("key-x")
-	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), first); err != nil {
+	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), key); err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
 	// same key, different payload
-	mismatch := domain.IdempotencyKey("key-x")
-	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 3), mismatch); !errors.Is(
+	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 3), key); !errors.Is(
 		err, domain.ErrIdempotencyMismatch,
 	) {
 		t.Fatalf("got %v, want domain.ErrIdempotencyMismatch", err)
 	}
 
 	// the rejected mismatch changed nothing
-	got, err := repo.FindByID(ctx, productID)
-	if err != nil {
-		t.Fatalf("reload product: %v", err)
-	}
-	if got.Stock != 3 {
-		t.Errorf("stock %d, want 3 (mismatch must not decrement)", got.Stock)
+	if s := productStock(t, repo, productID); s != 3 {
+		t.Errorf("stock %d, want 3 (mismatch must not decrement)", s)
 	}
 }
 
@@ -108,37 +89,27 @@ func TestPostgres_CreateOrder_KeyReusableAfterFailure(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	productID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 1},
-	); err != nil {
-		t.Fatalf("seed product: %v", err)
-	}
+	productID := seedProduct(t, repo, 1)
 	userID := uuid.Must(uuid.NewV7())
+	key := domain.IdempotencyKey("retry-key")
 
 	// a failed purchase must not persist the key
-	failed := domain.IdempotencyKey("retry-key")
-	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), failed); !errors.Is(
+	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), key); !errors.Is(
 		err, domain.ErrInsufficientStock,
 	) {
 		t.Fatalf("got %v, want domain.ErrInsufficientStock", err)
 	}
 
 	// same key, satisfiable payload: a leftover row would have made this a mismatch, not a success
-	retry := domain.IdempotencyKey("retry-key")
-	_, replayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), retry)
+	_, replayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), key)
 	if err != nil {
 		t.Fatalf("retry: %v", err)
 	}
 	if replayed {
 		t.Error("retry after a failed purchase must not replay")
 	}
-	got, err := repo.FindByID(ctx, productID)
-	if err != nil {
-		t.Fatalf("reload product: %v", err)
-	}
-	if got.Stock != 0 {
-		t.Errorf("stock %d, want 0", got.Stock)
+	if s := productStock(t, repo, productID); s != 0 {
+		t.Errorf("stock %d, want 0", s)
 	}
 }
 
@@ -147,12 +118,7 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 	defer cleanup()
 	ctx := t.Context()
 
-	productID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
-	); err != nil {
-		t.Fatalf("seed product: %v", err)
-	}
+	productID := seedProduct(t, repo, 5)
 	userID := uuid.Must(uuid.NewV7())
 	idem := domain.IdempotencyKey("expiring-key")
 
@@ -161,14 +127,7 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 		t.Fatalf("first call: %v", err)
 	}
 
-	// force the key past its TTL so the next call reclaims it instead of replaying
-	if _, err := repo.pool.Exec(
-		ctx,
-		`UPDATE idempotency_keys SET expires_at = now() - interval '1 hour' WHERE user_id = $1 AND key = $2`,
-		userID, string(idem),
-	); err != nil {
-		t.Fatalf("expire key: %v", err)
-	}
+	expireKey(t, repo, userID, idem)
 
 	// same key and payload, but a reclaimed key buys anew
 	second, replayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
@@ -181,12 +140,8 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 	if second.ID == first.ID {
 		t.Error("reclaim must create a new order")
 	}
-	got, err := repo.FindByID(ctx, productID)
-	if err != nil {
-		t.Fatalf("reload product: %v", err)
-	}
-	if got.Stock != 1 {
-		t.Errorf("stock %d, want 1 (two decrements)", got.Stock)
+	if s := productStock(t, repo, productID); s != 1 {
+		t.Errorf("stock %d, want 1 (two decrements)", s)
 	}
 
 	// the reclaimed key now replays the second order, not the first
@@ -205,53 +160,47 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
 	repo, cleanup := setupTestContainerDB(t)
 	defer cleanup()
-	ctx := t.Context()
 
 	const buyers = 10
-	productID := uuid.Must(uuid.NewV7())
-	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
-	); err != nil {
-		t.Fatalf("seed product: %v", err)
-	}
+	productID := seedProduct(t, repo, 5)
 	userID := uuid.Must(uuid.NewV7())
 	idem := domain.IdempotencyKey("same-key")
 
-	var (
-		wg    sync.WaitGroup
-		mu    sync.Mutex
-		ids   = make(map[uuid.UUID]struct{})
-		fails int
-	)
-	start := make(chan struct{})
-	for range buyers {
-		wg.Go(func() {
-			<-start
-			order, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), idem)
-			mu.Lock()
-			defer mu.Unlock()
-			if err != nil {
-				fails++
-				return
-			}
-			ids[uuid.UUID(order.ID)] = struct{}{}
-		})
-	}
-	close(start)
-	wg.Wait()
-
-	if fails != 0 {
-		t.Fatalf("got %d failures, want 0", fails)
-	}
+	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, idem)
 	if len(ids) != 1 {
 		t.Errorf("got %d distinct order ids, want 1 (all replay one order)", len(ids))
 	}
-	got, err := repo.FindByID(ctx, productID)
-	if err != nil {
-		t.Fatalf("reload product: %v", err)
+	if s := productStock(t, repo, productID); s != 4 {
+		t.Errorf("stock %d, want 4 (exactly one decrement)", s)
 	}
-	if got.Stock != 4 {
-		t.Errorf("stock %d, want 4 (exactly one decrement)", got.Stock)
+}
+
+func TestPostgres_CreateOrder_ConcurrentReclaim(t *testing.T) {
+	repo, cleanup := setupTestContainerDB(t)
+	defer cleanup()
+	ctx := t.Context()
+
+	const buyers = 10
+	productID := seedProduct(t, repo, 5)
+	userID := uuid.Must(uuid.NewV7())
+	idem := domain.IdempotencyKey("reclaim-key")
+
+	first, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), idem)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+
+	expireKey(t, repo, userID, idem)
+
+	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, idem)
+	if len(ids) != 1 {
+		t.Fatalf("got %d distinct order ids, want 1 (one reclaims, the rest replay it)", len(ids))
+	}
+	if _, replayedOld := ids[uuid.UUID(first.ID)]; replayedOld {
+		t.Error("burst replayed the expired order instead of reclaiming")
+	}
+	if s := productStock(t, repo, productID); s != 3 {
+		t.Errorf("stock %d, want 3 (initial plus exactly one reclaim decrement)", s)
 	}
 }
 
@@ -281,4 +230,47 @@ func TestPostgres_PurgeIdempotencyKeys(t *testing.T) {
 	if n != 1 {
 		t.Errorf("purged %d rows, want 1", n)
 	}
+}
+
+// expireKey backdates the key TTL so the next CreateOrder reclaims it instead of replaying.
+func expireKey(t *testing.T, repo *Postgres, userID uuid.UUID, idem domain.IdempotencyKey) {
+	t.Helper()
+	if _, err := repo.pool.Exec(
+		t.Context(),
+		`UPDATE idempotency_keys SET expires_at = now() - interval '1 hour' WHERE user_id = $1 AND key = $2`,
+		userID, string(idem),
+	); err != nil {
+		t.Fatalf("expire key: %v", err)
+	}
+}
+
+// concurrentCreateOrders fires n CreateOrder calls with the same key at once and returns the distinct
+// order ids they produce, so a test can assert they all resolve to a single order.
+func concurrentCreateOrders(
+	t *testing.T, repo *Postgres, n int, userID, productID uuid.UUID, idem domain.IdempotencyKey,
+) map[uuid.UUID]struct{} {
+	t.Helper()
+	ctx := t.Context()
+	var (
+		wg  sync.WaitGroup
+		mu  sync.Mutex
+		ids = make(map[uuid.UUID]struct{})
+	)
+	start := make(chan struct{})
+	for range n {
+		wg.Go(func() {
+			<-start
+			order, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), idem)
+			if err != nil {
+				t.Errorf("concurrent CreateOrder: %v", err)
+				return
+			}
+			mu.Lock()
+			ids[uuid.UUID(order.ID)] = struct{}{}
+			mu.Unlock()
+		})
+	}
+	close(start)
+	wg.Wait()
+	return ids
 }
