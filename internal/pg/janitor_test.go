@@ -13,21 +13,21 @@ import (
 const testInterval = time.Hour
 
 type fakePurger struct {
-	calls atomic.Int64
-	n     int64
-	errOn int64 // fail on this call number, 0 = never
+	calls   atomic.Int64
+	failing bool
 }
 
 func (f *fakePurger) PurgeIdempotencyKeys(context.Context) (int64, error) {
-	if c := f.calls.Add(1); c == f.errOn {
+	f.calls.Add(1)
+	if f.failing {
 		return 0, errors.New("purge boom")
 	}
-	return f.n, nil
+	return 0, nil
 }
 
 func TestJanitor_PurgesEachInterval(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		fp := &fakePurger{n: 3}
+		fp := &fakePurger{}
 		j := NewJanitor(fp, testInterval, slog.New(slog.DiscardHandler))
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
@@ -76,7 +76,7 @@ func TestJanitor_StopsOnContextCancel(t *testing.T) {
 
 func TestJanitor_ContinuesAfterError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		fp := &fakePurger{n: 1, errOn: 1} // first purge fails, the loop must keep going
+		fp := &fakePurger{failing: true} // purge fails, the loop must keep going
 		j := NewJanitor(fp, testInterval, slog.New(slog.DiscardHandler))
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
