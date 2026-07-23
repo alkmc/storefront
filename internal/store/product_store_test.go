@@ -328,7 +328,9 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
-	if _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1)); err != nil {
+	if _, _, err := repo.CreateOrder(
+		ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1), freshIdem(),
+	); err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}
 
@@ -379,7 +381,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 			}
 
 			order := testOrder(uuid.Must(uuid.NewV7()), id, tt.qty)
-			placed, err := repo.CreateOrder(ctx, order)
+			placed, _, err := repo.CreateOrder(ctx, order, freshIdem())
 			if tt.wantErrIs != nil {
 				if !errors.Is(err, tt.wantErrIs) {
 					t.Fatalf("got %v, want %v", err, tt.wantErrIs)
@@ -401,15 +403,15 @@ func TestPostgres_CreateOrder(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			got, err := repo.FindByID(ctx, id)
+			reloaded, err := repo.FindByID(ctx, id)
 			if err != nil {
 				t.Fatalf("failed to reload product: %v", err)
 			}
-			if got.Stock != tt.wantRemaining {
-				t.Errorf("got remaining stock %d, want %d", got.Stock, tt.wantRemaining)
+			if reloaded.Stock != tt.wantRemaining {
+				t.Errorf("got remaining stock %d, want %d", reloaded.Stock, tt.wantRemaining)
 			}
-			if got.Version != tt.wantVersion {
-				t.Errorf("got version %d, want %d", got.Version, tt.wantVersion)
+			if reloaded.Version != tt.wantVersion {
+				t.Errorf("got version %d, want %d", reloaded.Version, tt.wantVersion)
 			}
 			if placed.ID != order.ID || placed.UserID != order.UserID ||
 				placed.ProductID != id || placed.Quantity != tt.qty {
@@ -425,7 +427,9 @@ func TestPostgres_CreateOrder(t *testing.T) {
 	}
 
 	t.Run("non-existing product", func(t *testing.T) {
-		_, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1))
+		_, _, err := repo.CreateOrder(
+			ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1), freshIdem(),
+		)
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("got %v, want domain.ErrNotFound", err)
 		}
@@ -459,7 +463,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 	for range concurrentBuyers {
 		wg.Go(func() {
 			<-start
-			_, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1))
+			_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1), freshIdem())
 			switch {
 			case err == nil:
 				successes.Add(1)

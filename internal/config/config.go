@@ -19,6 +19,7 @@ type (
 		RabbitMQ        RabbitMQ
 		Outbox          Outbox
 		Service         Service
+		Idempotency     Idempotency
 		Log             Log
 		Auth            Auth
 		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
@@ -32,6 +33,10 @@ type (
 	}
 	Service struct {
 		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`
+	}
+	Idempotency struct {
+		TTL           time.Duration `env:"IDEMPOTENCY_TTL" envDefault:"24h"`
+		PurgeInterval time.Duration `env:"IDEMPOTENCY_PURGE_INTERVAL" envDefault:"1h"`
 	}
 	HTTP struct {
 		Host           string        `env:"HTTP_HOST"`

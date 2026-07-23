@@ -87,7 +87,7 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 		pool.Close()
 		t.Fatalf("failed to ping db: %v", err)
 	}
-	repo := NewPostgres(pool)
+	repo := NewPostgres(pool, testIdempotencyTTL)
 
 	cleanup := func() {
 		pool.Close()
@@ -98,6 +98,8 @@ func setupTestContainerDB(t *testing.T) (*Postgres, func()) {
 
 	return repo, cleanup
 }
+
+const testIdempotencyTTL = time.Hour
 
 func testMoney(amount int64) domain.Money {
 	return domain.Money{MinorAmount: amount, Currency: domain.CurrencyPLN}
@@ -110,4 +112,9 @@ func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 		ProductID: productID,
 		Quantity:  qty,
 	}
+}
+
+// freshIdem returns a unique idempotency key so independent orders never collide on the key.
+func freshIdem() domain.IdempotencyKey {
+	return domain.IdempotencyKey(uuid.Must(uuid.NewV7()).String())
 }

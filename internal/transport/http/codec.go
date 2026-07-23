@@ -20,6 +20,11 @@ const (
 	msgInternalError   = "internal server error"
 	msgUnavailable     = "service temporarily unavailable"
 	msgInvalidQuantity = "quantity must be between 1 and 10000"
+
+	headerIdempotencyKey      = "Idempotency-Key"
+	headerIdempotencyReplayed = "Idempotency-Replayed"
+	msgIdempotencyMismatch    = "idempotency key reused with different payload"
+	msgIdempotencyRequired    = "Idempotency-Key header is required"
 )
 
 type messageResponse struct {

@@ -94,7 +94,7 @@ func setupIntegrationMux(t *testing.T) http.Handler {
 	t.Cleanup(pool.Close)
 
 	logger := slog.New(slog.DiscardHandler)
-	svc := service.NewService(store.NewPostgres(pool), nopCache{}, time.Second, logger)
+	svc := service.NewService(store.NewPostgres(pool, time.Hour), nopCache{}, time.Second, logger)
 	h := NewHandler(svc, 2*time.Second, logger)
 	mw, err := NewMiddleware(MiddlewareCfg{
 		MaxBodyBytes:     testMaxBodyBytes,
@@ -128,6 +128,7 @@ func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty in
 		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
 	)
 	req.Header.Set("Authorization", bearer(t, sub))
+	req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -146,6 +147,73 @@ func doGet[T any](t *testing.T, mux http.Handler, sub uuid.UUID, url string, wan
 		t.Fatalf("GET %s: got %d, want %d: %s", url, rec.Code, wantStatus, rec.Body)
 	}
 	return decodeJSON[T](t, rec.Body)
+}
+
+// postOrder issues a create-order request with a caller-chosen Idempotency-Key (empty omits the
+// header) and returns the raw recorder so the test can inspect status, headers, and body.
+func postOrder(
+	t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64, key string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
+	req := httptest.NewRequestWithContext(
+		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
+	)
+	req.Header.Set("Authorization", bearer(t, sub))
+	if key != "" {
+		req.Header.Set(headerIdempotencyKey, key)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestIntegration_OrderIdempotency drives the full request path against real Postgres: the same key
+// replays the stored result without a second decrement, a different payload on that key is a mismatch.
+func TestIntegration_OrderIdempotency(t *testing.T) {
+	mux := setupIntegrationMux(t)
+	user := uuid.Must(uuid.NewV7())
+	productID := createProduct(t, mux, 5, 999)
+	key := uuid.Must(uuid.NewV7()).String()
+
+	// first call runs the purchase and carries no replay marker
+	first := postOrder(t, mux, user, productID, 2, key)
+	if first.Code != http.StatusCreated {
+		t.Fatalf("first: got %d: %s", first.Code, first.Body)
+	}
+	if got := first.Header().Get(headerIdempotencyReplayed); got != "" {
+		t.Errorf("first call set %s = %q, want unset", headerIdempotencyReplayed, got)
+	}
+	firstOrder := decodeJSON[createOrderResponse](t, first.Body)
+
+	// same key and body replays the stored result verbatim
+	replay := postOrder(t, mux, user, productID, 2, key)
+	if replay.Code != http.StatusCreated {
+		t.Fatalf("replay: got %d: %s", replay.Code, replay.Body)
+	}
+	if got := replay.Header().Get(headerIdempotencyReplayed); got != "true" {
+		t.Errorf("replay %s = %q, want %q", headerIdempotencyReplayed, got, "true")
+	}
+	replayOrder := decodeJSON[createOrderResponse](t, replay.Body)
+	if replayOrder.ID != firstOrder.ID || replayOrder.ProductID != firstOrder.ProductID ||
+		replayOrder.Quantity != firstOrder.Quantity || !replayOrder.CreatedAt.Equal(firstOrder.CreatedAt) {
+		t.Errorf("replay diverged: first %+v, replay %+v", firstOrder, replayOrder)
+	}
+
+	// the replay decremented nothing: exactly one order exists end to end
+	page := doGet[ordersPage](t, mux, user, "/v1/orders", http.StatusOK)
+	if len(page.Items) != 1 {
+		t.Errorf("got %d orders, want 1 (single decrement)", len(page.Items))
+	}
+
+	// same key with a different payload is rejected as a mismatch
+	mismatch := postOrder(t, mux, user, productID, 3, key)
+	if mismatch.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("mismatch: got %d, want %d: %s", mismatch.Code, http.StatusUnprocessableEntity, mismatch.Body)
+	}
+	if msg := decodeJSON[messageResponse](t, mismatch.Body); msg.Message != msgIdempotencyMismatch {
+		t.Errorf("mismatch msg %q, want %q", msg.Message, msgIdempotencyMismatch)
+	}
 }
 
 func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {

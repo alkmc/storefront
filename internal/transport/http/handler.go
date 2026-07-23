@@ -21,7 +21,9 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Order, error)
+		CreateOrder(
+			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -231,6 +233,11 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	idem, err := idempotencyFromHeader(r)
+	if err != nil {
+		respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	if !domain.ValidPurchaseQuantity(in.Quantity) {
 		respondError(w, http.StatusUnprocessableEntity, msgInvalidQuantity)
 		return
@@ -239,13 +246,15 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	o, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity)
+	order, replayed, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity, idem)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrNotFound):
 			respondError(w, http.StatusNotFound, "product not found")
 		case errors.Is(err, domain.ErrInsufficientStock):
 			respondError(w, http.StatusConflict, "insufficient stock")
+		case errors.Is(err, domain.ErrIdempotencyMismatch):
+			respondError(w, http.StatusUnprocessableEntity, msgIdempotencyMismatch)
 		default:
 			h.respondServerError(
 				w, err, "failed to create order",
@@ -254,8 +263,27 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	w.Header().Set("Location", "/v1/orders/"+o.ID.String())
-	respond(w, http.StatusCreated, toCreateOrderResponse(o))
+	w.Header().Set("Location", "/v1/orders/"+order.ID.String())
+	if replayed {
+		w.Header().Set(headerIdempotencyReplayed, "true")
+	}
+	respond(w, http.StatusCreated, toCreateOrderResponse(order))
+}
+
+// idempotencyFromHeader reads the required Idempotency-Key header: an opaque string of at most
+// domain.MaxIdempotencyKeyLen characters. A missing, empty, or over-long key is a client error.
+func idempotencyFromHeader(r *http.Request) (domain.IdempotencyKey, error) {
+	key := r.Header.Get(headerIdempotencyKey)
+	if key == "" {
+		return "", errors.New(msgIdempotencyRequired)
+	}
+	maxKeyLen := domain.MaxIdempotencyKeyLen
+	if len(key) > maxKeyLen {
+		return "", fmt.Errorf(
+			"%s must be at most %d characters", headerIdempotencyKey, maxKeyLen,
+		)
+	}
+	return domain.IdempotencyKey(key), nil
 }
 
 // respondServerError maps infrastructure failures to 503 or 500 and logs them.

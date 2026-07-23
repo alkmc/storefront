@@ -82,4 +82,20 @@ const (
 		WHERE user_id = $1 AND id < $2
 		ORDER BY id DESC
 		LIMIT $3;`
+	queryInsertIdempotency = `
+		INSERT INTO idempotency_keys (user_id, key, request_hash, expires_at)
+		VALUES ($1, $2, $3, now() + make_interval(secs => $4))
+		ON CONFLICT DO NOTHING;`
+	querySelectIdempotency = `
+		SELECT ik.request_hash, o.id, o.product_id, o.quantity, o.unit_price_minor, o.currency, o.created_at
+		FROM idempotency_keys ik
+		JOIN orders o ON o.id = ik.order_id
+		WHERE ik.user_id = $1 AND ik.key = $2;`
+	queryUpdateIdempotencyResult = `
+		UPDATE idempotency_keys
+		SET order_id = $3
+		WHERE user_id = $1 AND key = $2;`
+	queryPurgeIdempotency = `
+		DELETE FROM idempotency_keys
+		WHERE expires_at < now();`
 )

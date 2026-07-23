@@ -520,13 +520,14 @@ func TestCreateOrder(t *testing.T) {
 			name:     "success",
 			quantity: 2,
 			setupMock: func() {
-				proc.createOrder = func(_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64,
-				) (domain.Order, error) {
+				proc.createOrder = func(
+					_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64, _ domain.IdempotencyKey,
+				) (domain.Order, bool, error) {
 					if gotUser != domain.UserID(userID) {
 						t.Errorf("got user %v, want %v", gotUser, userID)
 					}
 					o := domain.Order{ID: domain.OrderID(orderID), UserID: gotUser, ProductID: pid, Quantity: qty}
-					return o, nil
+					return o, false, nil
 				}
 			},
 			expectedStatus: http.StatusCreated,
@@ -549,9 +550,9 @@ func TestCreateOrder(t *testing.T) {
 			name:     "product not found",
 			quantity: 2,
 			setupMock: func() {
-				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
-				) (domain.Order, error) {
-					return domain.Order{}, domain.ErrNotFound
+				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+				) (domain.Order, bool, error) {
+					return domain.Order{}, false, domain.ErrNotFound
 				}
 			},
 			expectedStatus: http.StatusNotFound,
@@ -561,9 +562,9 @@ func TestCreateOrder(t *testing.T) {
 			name:     "insufficient stock",
 			quantity: 2,
 			setupMock: func() {
-				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64,
-				) (domain.Order, error) {
-					return domain.Order{}, domain.ErrInsufficientStock
+				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+				) (domain.Order, bool, error) {
+					return domain.Order{}, false, domain.ErrInsufficientStock
 				}
 			},
 			expectedStatus: http.StatusConflict,
@@ -583,6 +584,7 @@ func TestCreateOrder(t *testing.T) {
 				t.Context(), http.MethodPost, "/v1/orders", bytes.NewReader(b),
 			)
 			req.Header.Set("Authorization", bearer(t, userID))
+			req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -606,6 +608,101 @@ func TestCreateOrder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCreateOrder_Idempotency(t *testing.T) {
+	id := uuid.Must(uuid.NewV7())
+	userID := uuid.Must(uuid.NewV7())
+	orderID := uuid.Must(uuid.NewV7())
+	idemKey := uuid.Must(uuid.NewV7()).String()
+
+	send := func(t *testing.T, mux http.Handler, key string, qty int64) *httptest.ResponseRecorder {
+		t.Helper()
+		b, err := json.Marshal(createOrderInput{ProductID: id.String(), Quantity: qty})
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/orders", bytes.NewReader(b))
+		req.Header.Set("Authorization", bearer(t, userID))
+		if key != "" {
+			req.Header.Set(headerIdempotencyKey, key)
+		}
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("replay sets the replayed header", func(t *testing.T) {
+		mux, proc := setupTest(t)
+		proc.createOrder = func(
+			_ context.Context, u domain.UserID, pid uuid.UUID, qty int64, idem domain.IdempotencyKey,
+		) (domain.Order, bool, error) {
+			if idem == "" {
+				t.Error("idempotency key not propagated to processor")
+			}
+			o := domain.Order{ID: domain.OrderID(orderID), UserID: u, ProductID: pid, Quantity: qty}
+			return o, true, nil
+		}
+		rec := send(t, mux, idemKey, 2)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("got %d, want %d: %s", rec.Code, http.StatusCreated, rec.Body)
+		}
+		if got := rec.Header().Get(headerIdempotencyReplayed); got != "true" {
+			t.Errorf("got %s %q, want %q", headerIdempotencyReplayed, got, "true")
+		}
+	})
+
+	t.Run("mismatch is 422", func(t *testing.T) {
+		mux, proc := setupTest(t)
+		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		) (domain.Order, bool, error) {
+			return domain.Order{}, false, domain.ErrIdempotencyMismatch
+		}
+		rec := send(t, mux, idemKey, 2)
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Fatalf("got %d, want %d", rec.Code, http.StatusUnprocessableEntity)
+		}
+		if msg := decodeJSON[messageResponse](t, rec.Body); msg.Message != msgIdempotencyMismatch {
+			t.Errorf("got msg %q, want %q", msg.Message, msgIdempotencyMismatch)
+		}
+	})
+
+	t.Run("missing key is 400 and never calls the processor", func(t *testing.T) {
+		mux, proc := setupTest(t)
+		called := false
+		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		) (domain.Order, bool, error) {
+			called = true
+			return domain.Order{}, false, nil
+		}
+		rec := send(t, mux, "", 2)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if msg := decodeJSON[messageResponse](t, rec.Body); msg.Message != msgIdempotencyRequired {
+			t.Errorf("got msg %q, want %q", msg.Message, msgIdempotencyRequired)
+		}
+		if called {
+			t.Error("processor called despite missing key")
+		}
+	})
+
+	t.Run("over-long key is 400 and never calls the processor", func(t *testing.T) {
+		mux, proc := setupTest(t)
+		called := false
+		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		) (domain.Order, bool, error) {
+			called = true
+			return domain.Order{}, false, nil
+		}
+		rec := send(t, mux, strings.Repeat("k", domain.MaxIdempotencyKeyLen+1), 2)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("got %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if called {
+			t.Error("processor called despite over-long key")
+		}
+	})
 }
 
 func TestProtectedRoutesRequireToken(t *testing.T) {

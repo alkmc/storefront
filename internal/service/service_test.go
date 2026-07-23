@@ -288,14 +288,19 @@ func TestService_CreateOrder(t *testing.T) {
 	userID := domain.UserID(uuid.Must(uuid.NewV7()))
 
 	spyStore := new(SpyStore{})
-	spyStore.CreateOrderFn = func(_ context.Context, o domain.Order) (domain.Order, error) {
-		return o, nil
+	spyStore.CreateOrderFn = func(
+		_ context.Context, o domain.Order, _ domain.IdempotencyKey,
+	) (domain.Order, bool, error) {
+		return o, false, nil
 	}
 	srv := newTestService(spyStore)
 
-	o, err := srv.CreateOrder(ctx, userID, id, 2)
+	o, replayed, err := srv.CreateOrder(ctx, userID, id, 2, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if replayed {
+		t.Error("fresh create should not be a replay")
 	}
 	if o.UserID != userID || o.ProductID != id || o.Quantity != 2 {
 		t.Errorf("order fields not propagated: got %+v", o)
@@ -334,7 +339,7 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 		{
 			name: "create order",
 			call: func(s *Service) error {
-				_, err := s.CreateOrder(t.Context(), domain.UserID(uuid.New()), id, 1)
+				_, _, err := s.CreateOrder(t.Context(), domain.UserID(uuid.New()), id, 1, "")
 				return err
 			},
 		},

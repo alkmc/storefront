@@ -79,9 +79,13 @@ A missing `nextCursor` means the last page.
 
 Stock is set at creation and changed only through purchase.  
 `PUT` does not accept a `stock` field.  
-`POST /v1/orders` answers `201 Created` with a `Location` header and returns the order with its
-`remainingStock`: `{"id":"<id>","productId":"<id>","quantity":2,"unitPrice":{"minorAmount":999,"currency":"PLN"},"remainingStock":8,"createdAt":"<ts>"}`.  
+`POST /v1/orders` answers `201 Created` with a `Location` header and returns the created order:
+`{"id":"<id>","productId":"<id>","quantity":2,"unitPrice":{"minorAmount":999,"currency":"PLN"},"createdAt":"<ts>"}`.  
 A `409 Conflict` signals insufficient stock.  
+`POST /v1/orders` **requires** an `Idempotency-Key` header, an opaque string of up to 255 characters,
+so a retry is safe: a missing or over-long key answers `400`, the first call runs, a repeat with the
+same key and body replays the stored result with `Idempotency-Replayed: true`, and the same key with
+a different body answers `422`. gRPC carries the key in the `idempotency-key` metadata.  
 See `api.rest` for the full set of example requests.
 
 ### Auth & orders

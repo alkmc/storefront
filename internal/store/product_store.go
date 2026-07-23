@@ -126,36 +126,39 @@ func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
 }
 
 // CreateOrder atomically decrements stock, records the order, and stores the purchased event in one tx.
+// The idempotency key is mandatory (enforced by the transports); the call replays a known key.
 func (pg *Postgres) CreateOrder(
-	ctx context.Context, o domain.Order,
-) (domain.Order, error) {
+	ctx context.Context, o domain.Order, idem domain.IdempotencyKey,
+) (domain.Order, bool, error) {
+	return pg.createOrderIdempotent(ctx, o, idem)
+}
+
+// purchaseTx decrements stock, records the order, and stores the purchased event within the caller's tx.
+func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, error) {
 	var p domain.Product
-	err := pg.withTx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
-			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-		); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return purchaseNoRowError(ctx, tx, o.ProductID)
-			}
-			return err
+	if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
+		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Order{}, purchaseNoRowError(ctx, tx, o.ProductID)
 		}
+		return domain.Order{}, err
+	}
 
-		// the order snapshots the unit price returned by the decrement
-		o.UnitPrice = p.Price
-		if err := tx.QueryRow(
-			ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), o.ProductID, o.Quantity,
-			o.UnitPrice.MinorAmount, string(o.UnitPrice.Currency),
-		).Scan(&o.CreatedAt); err != nil {
-			return err
-		}
+	// the order snapshots the unit price returned by the decrement
+	o.UnitPrice = p.Price
+	if err := tx.QueryRow(
+		ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), o.ProductID, o.Quantity,
+		o.UnitPrice.MinorAmount, string(o.UnitPrice.Currency),
+	).Scan(&o.CreatedAt); err != nil {
+		return domain.Order{}, err
+	}
 
-		e, err := event.NewPurchased(p, o.Quantity)
-		if err != nil {
-			return err
-		}
-		return insertOutbox(ctx, tx, e)
-	})
+	e, err := event.NewPurchased(p, o.Quantity)
 	if err != nil {
+		return domain.Order{}, err
+	}
+	if err := insertOutbox(ctx, tx, e); err != nil {
 		return domain.Order{}, err
 	}
 	return o, nil

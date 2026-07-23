@@ -10,7 +10,9 @@ import (
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
 
@@ -22,7 +24,9 @@ type (
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, uuid.UUID) error
-		CreateOrder(context.Context, domain.UserID, uuid.UUID, int64) (domain.Order, error)
+		CreateOrder(
+			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
 	}
@@ -116,6 +120,11 @@ func (h *Handler) DeleteProduct(
 	return catalogv1.DeleteProductResponse_builder{}.Build(), nil
 }
 
+const (
+	metaIdempotencyKey      = "idempotency-key"
+	metaIdempotencyReplayed = "idempotency-replayed"
+)
+
 func (h *Handler) CreateOrder(
 	ctx context.Context, req *orderv1.CreateOrderRequest,
 ) (*orderv1.CreateOrderResponse, error) {
@@ -131,13 +140,48 @@ func (h *Handler) CreateOrder(
 	if !domain.ValidPurchaseQuantity(qty) {
 		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
 	}
-	o, err := h.processor.CreateOrder(ctx, userID, productID, qty)
+	idem, err := idempotencyFromMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	order, replayed, err := h.processor.CreateOrder(ctx, userID, productID, qty, idem)
 	if err != nil {
 		return nil, h.toStatus(err, "create order")
 	}
+	if replayed {
+		if err := grpc.SetHeader(ctx, metadata.Pairs(metaIdempotencyReplayed, "true")); err != nil {
+			h.logger.Warn("set idempotency-replayed header failed", slog.Any("error", err))
+		}
+	}
 	return orderv1.CreateOrderResponse_builder{
-		Order: toOrderProto(o),
+		Order: toOrderProto(order),
 	}.Build(), nil
+}
+
+// idempotencyFromMetadata reads the required idempotency-key metadata: an opaque string of at most
+// domain.MaxIdempotencyKeyLen characters. A missing, empty, or over-long key is a client error.
+func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Errorf(
+			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
+		)
+	}
+	vals := md.Get(metaIdempotencyKey)
+	if len(vals) == 0 || vals[0] == "" {
+		return "", status.Errorf(
+			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
+		)
+	}
+	key := vals[0]
+	maxKeyLen := domain.MaxIdempotencyKeyLen
+	if len(key) > maxKeyLen {
+		return "", status.Errorf(
+			codes.InvalidArgument, "%s must be at most %d characters", metaIdempotencyKey, maxKeyLen,
+		)
+	}
+	return domain.IdempotencyKey(key), nil
 }
 
 // toStatus maps domain errors to gRPC codes; unknown errors become Internal.
@@ -151,6 +195,8 @@ func (h *Handler) toStatus(err error, op string) error {
 		return status.Error(codes.NotFound, "product not found")
 	case errors.Is(err, domain.ErrInsufficientStock):
 		return status.Error(codes.FailedPrecondition, "insufficient stock")
+	case errors.Is(err, domain.ErrIdempotencyMismatch):
+		return status.Error(codes.InvalidArgument, "idempotency key reused with different payload")
 	case errors.Is(err, domain.ErrProductInUse):
 		return status.Error(codes.FailedPrecondition, "product has existing orders")
 	case errors.Is(err, domain.ErrUnavailable):
