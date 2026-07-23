@@ -521,7 +521,7 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(
-					_ context.Context, gotUser domain.UserID, pid uuid.UUID, qty int64, _ domain.IdempotencyKey,
+					_ context.Context, gotUser domain.UserID, pid domain.ProductID, qty int64, _ domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					if gotUser != domain.UserID(userID) {
 						t.Errorf("got user %v, want %v", gotUser, userID)
@@ -551,7 +551,7 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(
-					_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+					_ context.Context, _ domain.UserID, _ domain.ProductID, _ int64, _ domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					return domain.Order{}, false, domain.ErrNotFound
 				}
@@ -564,7 +564,7 @@ func TestCreateOrder(t *testing.T) {
 			quantity: 2,
 			setupMock: func() {
 				proc.createOrder = func(
-					_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+					_ context.Context, _ domain.UserID, _ domain.ProductID, _ int64, _ domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					return domain.Order{}, false, domain.ErrInsufficientStock
 				}
@@ -637,7 +637,7 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 	t.Run("replay sets the replayed header", func(t *testing.T) {
 		mux, proc := setupTest(t)
 		proc.createOrder = func(
-			_ context.Context, u domain.UserID, pid uuid.UUID, qty int64, idem domain.IdempotencyKey,
+			_ context.Context, u domain.UserID, pid domain.ProductID, qty int64, idem domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			if idem == "" {
 				t.Error("idempotency key not propagated to processor")
@@ -657,7 +657,7 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 	t.Run("mismatch is 422", func(t *testing.T) {
 		mux, proc := setupTest(t)
 		proc.createOrder = func(
-			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			return domain.Order{}, false, domain.ErrIdempotencyMismatch
 		}
@@ -674,7 +674,7 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 		mux, proc := setupTest(t)
 		called := false
 		proc.createOrder = func(
-			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			called = true
 			return domain.Order{}, false, nil
@@ -695,7 +695,7 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 		mux, proc := setupTest(t)
 		called := false
 		proc.createOrder = func(
-			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			called = true
 			return domain.Order{}, false, nil
@@ -779,7 +779,7 @@ func TestGetOrder(t *testing.T) {
 						t.Errorf("got user %v, want %v", gotUser, userID)
 					}
 					return domain.Order{
-						ID: id, UserID: gotUser, ProductID: productID, Quantity: 2, UnitPrice: testMoney(),
+						ID: id, UserID: gotUser, ProductID: domain.ProductID(productID), Quantity: 2, UnitPrice: testMoney(),
 					}, nil
 				}
 			},
@@ -853,7 +853,7 @@ func TestListOrders(t *testing.T) {
 				{
 					ID:        domain.OrderID(lastID),
 					UserID:    gotUser,
-					ProductID: uuid.Must(uuid.NewV7()),
+					ProductID: domain.ProductID(uuid.Must(uuid.NewV7())),
 					Quantity:  1,
 					UnitPrice: testMoney(),
 				},

@@ -59,11 +59,12 @@ func replayIdempotent(
 	var (
 		hash    []byte
 		orderID uuid.UUID
+		pid     uuid.UUID
 	)
 	if err := tx.QueryRow(
 		ctx, querySelectIdempotency, uuid.UUID(o.UserID), string(idem),
 	).Scan(
-		&hash, &orderID, &o.ProductID, &o.Quantity,
+		&hash, &orderID, &pid, &o.Quantity,
 		&o.UnitPrice.MinorAmount, &o.UnitPrice.Currency, &o.CreatedAt,
 	); err != nil {
 		return domain.Order{}, false, err
@@ -72,6 +73,7 @@ func replayIdempotent(
 		return domain.Order{}, false, domain.ErrIdempotencyMismatch
 	}
 	o.ID = domain.OrderID(orderID)
+	o.ProductID = domain.ProductID(pid)
 	return o, true, nil
 }
 

@@ -65,16 +65,18 @@ func scanOrder(row pgx.Row) (domain.Order, error) {
 	var (
 		id     uuid.UUID
 		userID uuid.UUID
+		pid    uuid.UUID
 		o      domain.Order
 	)
 	if err := row.Scan(
-		&id, &userID, &o.ProductID, &o.Quantity,
+		&id, &userID, &pid, &o.Quantity,
 		&o.UnitPrice.MinorAmount, &o.UnitPrice.Currency, &o.CreatedAt,
 	); err != nil {
 		return domain.Order{}, err
 	}
 	o.ID = domain.OrderID(id)
 	o.UserID = domain.UserID(userID)
+	o.ProductID = domain.ProductID(pid)
 	return o, nil
 }
 

@@ -131,7 +131,7 @@ func (s *Service) Delete(ctx context.Context, id domain.ProductID) error {
 // CreateOrder decrements stock and records an order owned by userID in one store tx.
 // A replay changes nothing in the store, so it skips the cache invalidation.
 func (s *Service) CreateOrder(
-	ctx context.Context, userID domain.UserID, productID uuid.UUID, qty int64, idem domain.IdempotencyKey,
+	ctx context.Context, userID domain.UserID, productID domain.ProductID, qty int64, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
 	orderID, err := uuid.NewV7()
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *Service) CreateOrder(
 		return domain.Order{}, false, err
 	}
 	if !replayed {
-		s.invalidate(ctx, productID)
+		s.invalidate(ctx, uuid.UUID(productID))
 	}
 	return order, replayed, nil
 }

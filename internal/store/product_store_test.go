@@ -422,7 +422,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 				t.Errorf("got version %d, want %d", reloaded.Version, tt.wantVersion)
 			}
 			if placed.ID != order.ID || placed.UserID != order.UserID ||
-				placed.ProductID != id || placed.Quantity != tt.qty {
+				placed.ProductID != domain.ProductID(id) || placed.Quantity != tt.qty {
 				t.Errorf("order fields not preserved: got %+v", placed)
 			}
 			if placed.UnitPrice != testMoney(1000) {

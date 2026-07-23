@@ -15,7 +15,7 @@ type (
 	Order struct {
 		ID        OrderID
 		UserID    UserID
-		ProductID uuid.UUID
+		ProductID ProductID
 		Quantity  int64
 		UnitPrice Money
 		CreatedAt time.Time

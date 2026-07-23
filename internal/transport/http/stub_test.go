@@ -24,7 +24,7 @@ type stubProcessor struct {
 	findAll     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	update      func(context.Context, domain.Product) (domain.Product, error)
 	delete      func(context.Context, domain.ProductID) error
-	createOrder func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+	createOrder func(context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 	) (domain.Order, bool, error)
 
 	findOrder  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
@@ -56,7 +56,7 @@ func (s *stubProcessor) Delete(ctx context.Context, id domain.ProductID) error {
 }
 
 func (s *stubProcessor) CreateOrder(
-	ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64, idem domain.IdempotencyKey,
+	ctx context.Context, userID domain.UserID, id domain.ProductID, qty int64, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
 	return s.createOrder(ctx, userID, id, qty, idem)
 }

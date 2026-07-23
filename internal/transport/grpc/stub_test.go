@@ -14,7 +14,7 @@ type stubProcessor struct {
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn      func(context.Context, domain.ProductID) error
 	CreateOrderFn func(
-		context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 	) (domain.Order, bool, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
@@ -44,7 +44,7 @@ func (s stubProcessor) Delete(ctx context.Context, id domain.ProductID) error {
 }
 
 func (s stubProcessor) CreateOrder(
-	ctx context.Context, userID domain.UserID, id uuid.UUID, qty int64, idem domain.IdempotencyKey,
+	ctx context.Context, userID domain.UserID, id domain.ProductID, qty int64, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
 	return s.CreateOrderFn(ctx, userID, id, qty, idem)
 }

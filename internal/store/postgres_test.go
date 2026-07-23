@@ -179,7 +179,7 @@ func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 	return domain.Order{
 		ID:        domain.OrderID(uuid.Must(uuid.NewV7())),
 		UserID:    domain.UserID(userID),
-		ProductID: productID,
+		ProductID: domain.ProductID(productID),
 		Quantity:  qty,
 	}
 }

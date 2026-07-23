@@ -129,10 +129,10 @@ func (pg *Postgres) CreateOrder(
 
 // purchaseTx decrements stock, records the order, and stores the purchased event within the caller's tx.
 func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, error) {
-	p, err := scanProduct(tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity))
+	p, err := scanProduct(tx.QueryRow(ctx, queryPurchase, uuid.UUID(o.ProductID), o.Quantity))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return domain.Order{}, purchaseNoRowError(ctx, tx, o.ProductID)
+			return domain.Order{}, purchaseNoRowError(ctx, tx, uuid.UUID(o.ProductID))
 		}
 		return domain.Order{}, err
 	}
@@ -140,7 +140,7 @@ func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, e
 	// the order snapshots the unit price returned by the decrement
 	o.UnitPrice = p.Price
 	if err := tx.QueryRow(
-		ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), o.ProductID, o.Quantity,
+		ctx, queryInsertOrder, uuid.UUID(o.ID), uuid.UUID(o.UserID), uuid.UUID(o.ProductID), o.Quantity,
 		o.UnitPrice.MinorAmount, string(o.UnitPrice.Currency),
 	).Scan(&o.CreatedAt); err != nil {
 		return domain.Order{}, err

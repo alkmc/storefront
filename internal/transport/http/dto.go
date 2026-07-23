@@ -49,7 +49,7 @@ func toProductResponse(p domain.Product) productResponse {
 func toCreateOrderResponse(o domain.Order) createOrderResponse {
 	return createOrderResponse{
 		ID:        uuid.UUID(o.ID),
-		ProductID: o.ProductID,
+		ProductID: uuid.UUID(o.ProductID),
 		Quantity:  o.Quantity,
 		UnitPrice: toMoneyDTO(o.UnitPrice),
 		CreatedAt: o.CreatedAt,
@@ -74,7 +74,7 @@ func toMoneyDTO(m domain.Money) moneyDTO {
 func toOrderResponse(o domain.Order) orderResponse {
 	return orderResponse{
 		ID:        uuid.UUID(o.ID),
-		ProductID: o.ProductID,
+		ProductID: uuid.UUID(o.ProductID),
 		Quantity:  o.Quantity,
 		UnitPrice: toMoneyDTO(o.UnitPrice),
 		CreatedAt: o.CreatedAt,

@@ -22,7 +22,7 @@ type (
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, domain.ProductID) error
 		CreateOrder(
-			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
 		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
@@ -246,7 +246,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	order, replayed, err := h.processor.CreateOrder(ctx, userID, productID, in.Quantity, idem)
+	order, replayed, err := h.processor.CreateOrder(ctx, userID, domain.ProductID(productID), in.Quantity, idem)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrNotFound):

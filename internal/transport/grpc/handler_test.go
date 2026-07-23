@@ -135,7 +135,7 @@ func TestHandler_CreateOrder(t *testing.T) {
 	orderID := uuid.Must(uuid.NewV7())
 	client := newOrderClient(t, stubProcessor{
 		CreateOrderFn: func(
-			_ context.Context, userID domain.UserID, pid uuid.UUID, qty int64, _ domain.IdempotencyKey,
+			_ context.Context, userID domain.UserID, pid domain.ProductID, qty int64, _ domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			if userID != domain.UserID(sub) {
 				t.Errorf("got user %v, want %v", userID, sub)
@@ -265,7 +265,7 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 		{
 			name: "insufficient stock",
 			proc: stubProcessor{
-				CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+				CreateOrderFn: func(context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					return domain.Order{}, false, domain.ErrInsufficientStock
 				},
@@ -304,7 +304,7 @@ func TestHandler_CreateOrder_Idempotency(t *testing.T) {
 	t.Run("replay sets the replayed metadata", func(t *testing.T) {
 		client := newOrderClient(t, stubProcessor{
 			CreateOrderFn: func(
-				_ context.Context, _ domain.UserID, pid uuid.UUID, qty int64, idem domain.IdempotencyKey,
+				_ context.Context, _ domain.UserID, pid domain.ProductID, qty int64, idem domain.IdempotencyKey,
 			) (domain.Order, bool, error) {
 				if idem == "" {
 					t.Error("idempotency key not read from metadata")
@@ -328,7 +328,7 @@ func TestHandler_CreateOrder_Idempotency(t *testing.T) {
 
 	t.Run("mismatch is InvalidArgument", func(t *testing.T) {
 		client := newOrderClient(t, stubProcessor{
-			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			CreateOrderFn: func(context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 			) (domain.Order, bool, error) {
 				return domain.Order{}, false, domain.ErrIdempotencyMismatch
 			},
@@ -345,7 +345,7 @@ func TestHandler_CreateOrder_Idempotency(t *testing.T) {
 	t.Run("missing key is InvalidArgument", func(t *testing.T) {
 		called := false
 		client := newOrderClient(t, stubProcessor{
-			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			CreateOrderFn: func(context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 			) (domain.Order, bool, error) {
 				called = true
 				return domain.Order{}, false, nil
@@ -365,7 +365,7 @@ func TestHandler_CreateOrder_Idempotency(t *testing.T) {
 	t.Run("over-long key is InvalidArgument", func(t *testing.T) {
 		called := false
 		client := newOrderClient(t, stubProcessor{
-			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			CreateOrderFn: func(context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 			) (domain.Order, bool, error) {
 				called = true
 				return domain.Order{}, false, nil
@@ -478,7 +478,7 @@ func TestHandler_GetOrder(t *testing.T) {
 				t.Errorf("got user %v, want %v", userID, sub)
 			}
 			return domain.Order{
-				ID: id, UserID: userID, ProductID: productID, Quantity: 2,
+				ID: id, UserID: userID, ProductID: domain.ProductID(productID), Quantity: 2,
 				UnitPrice: domain.Money{MinorAmount: 999, Currency: domain.CurrencyPLN},
 				CreatedAt: created,
 			}, nil
