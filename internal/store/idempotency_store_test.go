@@ -166,7 +166,7 @@ func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
 	userID := uuid.Must(uuid.NewV7())
 	idem := domain.IdempotencyKey("same-key")
 
-	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, idem)
+	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, 1, idem)
 	if len(ids) != 1 {
 		t.Errorf("got %d distinct order ids, want 1 (all replay one order)", len(ids))
 	}
@@ -192,7 +192,7 @@ func TestPostgres_CreateOrder_ConcurrentReclaim(t *testing.T) {
 
 	expireKey(t, repo, userID, idem)
 
-	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, idem)
+	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, 1, idem)
 	if len(ids) != 1 {
 		t.Fatalf("got %d distinct order ids, want 1 (one reclaims, the rest replay it)", len(ids))
 	}
@@ -247,7 +247,7 @@ func expireKey(t *testing.T, repo *Postgres, userID uuid.UUID, idem domain.Idemp
 // concurrentCreateOrders fires n CreateOrder calls with the same key at once and returns the distinct
 // order ids they produce, so a test can assert they all resolve to a single order.
 func concurrentCreateOrders(
-	t *testing.T, repo *Postgres, n int, userID, productID uuid.UUID, idem domain.IdempotencyKey,
+	t *testing.T, repo *Postgres, n int, userID, productID uuid.UUID, qty int64, idem domain.IdempotencyKey,
 ) map[uuid.UUID]struct{} {
 	t.Helper()
 	ctx := t.Context()
@@ -260,7 +260,7 @@ func concurrentCreateOrders(
 	for range n {
 		wg.Go(func() {
 			<-start
-			order, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), idem)
+			order, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, qty), idem)
 			if err != nil {
 				t.Errorf("concurrent CreateOrder: %v", err)
 				return
