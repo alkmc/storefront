@@ -136,13 +136,13 @@ func (h *Handler) CreateOrder(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	qty := req.GetQuantity()
-	if !domain.ValidPurchaseQuantity(qty) {
-		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
-	}
 	idem, err := idempotencyFromMetadata(ctx)
 	if err != nil {
 		return nil, err
+	}
+	qty := req.GetQuantity()
+	if !domain.ValidPurchaseQuantity(qty) {
+		return nil, status.Error(codes.InvalidArgument, "quantity must be between 1 and 10000")
 	}
 
 	order, replayed, err := h.processor.CreateOrder(ctx, userID, productID, qty, idem)
@@ -160,7 +160,7 @@ func (h *Handler) CreateOrder(
 }
 
 // idempotencyFromMetadata reads the required idempotency-key metadata: an opaque string of at most
-// domain.MaxIdempotencyKeyLen characters. A missing, empty, or over-long key is a client error.
+// domain.MaxIdempotencyKeyLen bytes. A missing, empty, or over-long key is a client error.
 func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -175,10 +175,10 @@ func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error)
 		)
 	}
 	key := vals[0]
-	maxKeyLen := domain.MaxIdempotencyKeyLen
-	if len(key) > maxKeyLen {
+	if len(key) > domain.MaxIdempotencyKeyLen {
 		return "", status.Errorf(
-			codes.InvalidArgument, "%s must be at most %d characters", metaIdempotencyKey, maxKeyLen,
+			codes.InvalidArgument,
+			"%s must be at most %d bytes", metaIdempotencyKey, domain.MaxIdempotencyKeyLen,
 		)
 	}
 	return domain.IdempotencyKey(key), nil
