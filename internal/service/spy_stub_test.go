@@ -61,10 +61,10 @@ func (c *SpyCache) Invalidate(ctx context.Context, key string) error {
 
 type SpyStore struct {
 	SaveFn        func(context.Context, domain.Product) (domain.Product, error)
-	FindByIDFn    func(context.Context, uuid.UUID) (domain.Product, error)
+	FindByIDFn    func(context.Context, domain.ProductID) (domain.Product, error)
 	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
-	DeleteFn      func(context.Context, uuid.UUID) error
+	DeleteFn      func(context.Context, domain.ProductID) error
 	CreateOrderFn func(context.Context, domain.Order, domain.IdempotencyKey) (domain.Order, bool, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
@@ -75,7 +75,7 @@ func (s *SpyStore) Save(ctx context.Context, p domain.Product) (domain.Product, 
 	return s.SaveFn(ctx, p)
 }
 
-func (s *SpyStore) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (s *SpyStore) FindByID(ctx context.Context, id domain.ProductID) (domain.Product, error) {
 	return s.FindByIDFn(ctx, id)
 }
 
@@ -91,7 +91,7 @@ func (s *SpyStore) Update(ctx context.Context, p domain.Product) (domain.Product
 	return domain.Product{}, nil
 }
 
-func (s *SpyStore) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *SpyStore) Delete(ctx context.Context, id domain.ProductID) error {
 	if s.DeleteFn != nil {
 		return s.DeleteFn(ctx, id)
 	}

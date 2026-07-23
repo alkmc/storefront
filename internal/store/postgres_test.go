@@ -194,7 +194,7 @@ func seedProduct(t *testing.T, repo *Postgres, stock int64) uuid.UUID {
 	t.Helper()
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		t.Context(), domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: stock},
+		t.Context(), domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: stock},
 	); err != nil {
 		t.Fatalf("seed product: %v", err)
 	}
@@ -204,7 +204,7 @@ func seedProduct(t *testing.T, repo *Postgres, stock int64) uuid.UUID {
 // productStock reloads the product and returns its current stock.
 func productStock(t *testing.T, repo *Postgres, id uuid.UUID) int64 {
 	t.Helper()
-	got, err := repo.FindByID(t.Context(), id)
+	got, err := repo.FindByID(t.Context(), domain.ProductID(id))
 	if err != nil {
 		t.Fatalf("reload product: %v", err)
 	}

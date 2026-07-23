@@ -17,10 +17,10 @@ import (
 type (
 	processor interface {
 		Create(context.Context, domain.Product) (domain.Product, error)
-		FindByID(context.Context, uuid.UUID) (domain.Product, error)
+		FindByID(context.Context, domain.ProductID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
-		Delete(context.Context, uuid.UUID) error
+		Delete(context.Context, domain.ProductID) error
 		CreateOrder(
 			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error)
@@ -70,7 +70,7 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	p, err := h.processor.FindByID(ctx, id)
+	p, err := h.processor.FindByID(ctx, domain.ProductID(id))
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "product not found")
@@ -149,7 +149,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), h.requestTimeout)
 	defer cancel()
 
-	if err := h.processor.Delete(ctx, id); err != nil {
+	if err := h.processor.Delete(ctx, domain.ProductID(id)); err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			respondError(w, http.StatusNotFound, "unable to delete product, which does not exist")
 			return
@@ -186,7 +186,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := domain.Product{ID: id, Name: in.Name, Price: toMoney(in.Price)}
+	p := domain.Product{ID: domain.ProductID(id), Name: in.Name, Price: toMoney(in.Price)}
 	if err := p.Validate(); err != nil {
 		respondError(w, http.StatusUnprocessableEntity, err.Error())
 		return

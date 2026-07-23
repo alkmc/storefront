@@ -29,7 +29,7 @@ const testJWTSecret = "test-secret"
 func TestHandler_CreateProduct(t *testing.T) {
 	client := newTestClient(t, stubProcessor{
 		CreateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
-			p.ID = uuid.Must(uuid.NewV7())
+			p.ID = domain.ProductID(uuid.Must(uuid.NewV7()))
 			return p, nil
 		},
 	})
@@ -54,7 +54,7 @@ func TestHandler_CreateProduct(t *testing.T) {
 func TestHandler_GetProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 	client := newTestClient(t, stubProcessor{
-		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+		FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 			return domain.Product{ID: id, Name: "Test"}, nil
 		},
 	})
@@ -71,8 +71,8 @@ func TestHandler_GetProduct(t *testing.T) {
 }
 
 func TestHandler_ListProducts(t *testing.T) {
-	p1 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1"}
-	p2 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2"}
+	p1 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P1"}
+	p2 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P2"}
 	client := newTestClient(t, stubProcessor{
 		FindAllFn: func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
 			return domain.ProductPage{Items: []domain.Product{p1, p2}, HasMore: true}, nil
@@ -119,7 +119,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 func TestHandler_DeleteProduct(t *testing.T) {
 	id := uuid.Must(uuid.NewV7())
 	client := newTestClient(t, stubProcessor{
-		DeleteFn: func(context.Context, uuid.UUID) error { return nil },
+		DeleteFn: func(context.Context, domain.ProductID) error { return nil },
 	})
 
 	if _, err := client.DeleteProduct(t.Context(), catalogv1.DeleteProductRequest_builder{
@@ -200,7 +200,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		{
 			name: "not found",
 			proc: stubProcessor{
-				FindByIDFn: func(context.Context, uuid.UUID) (domain.Product, error) {
+				FindByIDFn: func(context.Context, domain.ProductID) (domain.Product, error) {
 					return domain.Product{}, domain.ErrNotFound
 				},
 			},
@@ -560,7 +560,7 @@ func TestHandler_ListOrders(t *testing.T) {
 
 func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 	conn, _ := newTestConn(t, stubProcessor{
-		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+		FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 			return domain.Product{ID: id, Name: "Public"}, nil
 		},
 	})

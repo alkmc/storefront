@@ -73,7 +73,7 @@ func TestService_FindByID(t *testing.T) {
 			name: "success",
 			id:   id,
 			spySetup: func(s *SpyStore) {
-				s.FindByIDFn = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+				s.FindByIDFn = func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 					return domain.Product{ID: id, Name: "Test"}, nil
 				}
 			},
@@ -87,7 +87,7 @@ func TestService_FindByID(t *testing.T) {
 			tt.spySetup(spyStore)
 			srv := newTestService(spyStore)
 
-			res, err := srv.FindByID(ctx, tt.id)
+			res, err := srv.FindByID(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -97,7 +97,7 @@ func TestService_FindByID(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if res.ID != tt.id {
+			if res.ID != domain.ProductID(tt.id) {
 				t.Errorf("got %v, want %v", res.ID, tt.id)
 			}
 		})
@@ -120,12 +120,12 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				id := uuid.Must(uuid.NewV7())
+				id := domain.ProductID(uuid.Must(uuid.NewV7()))
 
 				var storeCalls atomic.Int32
 				release := make(chan struct{})
 				spyStore := &SpyStore{
-					FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+					FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 						storeCalls.Add(1)
 						<-release
 						return domain.Product{ID: id, Price: testMoney(100)}, nil
@@ -254,7 +254,7 @@ func TestService_Delete(t *testing.T) {
 			name: "success",
 			id:   id,
 			spySetup: func(s *SpyStore) {
-				s.DeleteFn = func(_ context.Context, _ uuid.UUID) error {
+				s.DeleteFn = func(_ context.Context, _ domain.ProductID) error {
 					return nil
 				}
 			},
@@ -268,7 +268,7 @@ func TestService_Delete(t *testing.T) {
 			tt.spySetup(spyStore)
 			srv := newTestService(spyStore)
 
-			err := srv.Delete(ctx, tt.id)
+			err := srv.Delete(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -328,13 +328,13 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 		{
 			name: "update",
 			call: func(s *Service) error {
-				_, err := s.Update(t.Context(), domain.Product{ID: id, Price: testMoney(100)})
+				_, err := s.Update(t.Context(), domain.Product{ID: domain.ProductID(id), Price: testMoney(100)})
 				return err
 			},
 		},
 		{
 			name: "delete",
-			call: func(s *Service) error { return s.Delete(t.Context(), id) },
+			call: func(s *Service) error { return s.Delete(t.Context(), domain.ProductID(id)) },
 		},
 		{
 			name: "create order",
@@ -385,7 +385,7 @@ func TestService_CreateLeavesCacheAlone(t *testing.T) {
 
 func TestService_FindByID_CachePaths(t *testing.T) {
 	id := uuid.New()
-	found := domain.Product{ID: id, Name: "Cached", Price: testMoney(100)}
+	found := domain.Product{ID: domain.ProductID(id), Name: "Cached", Price: testMoney(100)}
 
 	tests := []struct {
 		name           string
@@ -444,7 +444,7 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			var storeCalls atomic.Int32
 			spyCache := &SpyCache{GetFn: tt.getFn}
 			spyStore := &SpyStore{
-				FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+				FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 					storeCalls.Add(1)
 					if tt.findErr != nil {
 						return domain.Product{}, tt.findErr
@@ -454,7 +454,7 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			}
 			srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-			_, err := srv.FindByID(t.Context(), id)
+			_, err := srv.FindByID(t.Context(), domain.ProductID(id))
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("FindByID error = %v, want %v", err, tt.wantErr)
 			}
@@ -478,7 +478,7 @@ func TestService_InvalidateSurvivesCanceledRequest(t *testing.T) {
 	spyCache := &SpyCache{}
 	srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	if err := srv.Delete(ctx, uuid.New()); err != nil {
+	if err := srv.Delete(ctx, domain.ProductID(uuid.New())); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if spyCache.Invalidates != 1 {
@@ -502,14 +502,14 @@ func TestService_FindByID_FlightHonoursCachedAbsence(t *testing.T) {
 	}
 	var storeCalls atomic.Int32
 	spyStore := &SpyStore{
-		FindByIDFn: func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+		FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 			storeCalls.Add(1)
 			return domain.Product{ID: id}, nil
 		},
 	}
 	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	_, err := srv.FindByID(t.Context(), uuid.New())
+	_, err := srv.FindByID(t.Context(), domain.ProductID(uuid.New()))
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("FindByID error = %v, want %v", err, domain.ErrNotFound)
 	}

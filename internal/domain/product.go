@@ -18,9 +18,11 @@ var (
 )
 
 type (
+	// ProductID identifies a product.
+	ProductID uuid.UUID
 	// Product represents a purchasable item in the system
 	Product struct {
-		ID      uuid.UUID
+		ID      ProductID
 		Name    string
 		Price   Money
 		Stock   int64
@@ -32,6 +34,11 @@ type (
 		HasMore bool
 	}
 )
+
+// String returns the canonical UUID text of the product id.
+func (id ProductID) String() string {
+	return uuid.UUID(id).String()
+}
 
 const (
 	minPurchaseQuantity = 1

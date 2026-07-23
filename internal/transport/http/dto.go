@@ -43,7 +43,7 @@ type (
 )
 
 func toProductResponse(p domain.Product) productResponse {
-	return productResponse{ID: p.ID, Name: p.Name, Stock: p.Stock, Price: toMoneyDTO(p.Price)}
+	return productResponse{ID: uuid.UUID(p.ID), Name: p.Name, Stock: p.Stock, Price: toMoneyDTO(p.Price)}
 }
 
 func toCreateOrderResponse(o domain.Order) createOrderResponse {

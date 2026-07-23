@@ -150,7 +150,7 @@ func decodeProduct(raw []byte) (domain.Product, bool) {
 		return domain.Product{}, false
 	}
 	return domain.Product{
-		ID:      id,
+		ID:      domain.ProductID(id),
 		Name:    e.Name,
 		Stock:   e.Stock,
 		Version: e.Version,

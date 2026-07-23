@@ -18,7 +18,7 @@ func TestPostgres_FindOrder(t *testing.T) {
 
 	productID := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 5},
+		ctx, domain.Product{ID: domain.ProductID(productID), Name: "Widget", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestPostgres_FindOrders(t *testing.T) {
 
 	productID := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: productID, Name: "Widget", Price: testMoney(1000), Stock: 10},
+		ctx, domain.Product{ID: domain.ProductID(productID), Name: "Widget", Price: testMoney(1000), Stock: 10},
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}

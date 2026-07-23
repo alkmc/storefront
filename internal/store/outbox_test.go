@@ -23,12 +23,12 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "Car", Price: testMoney(1000), Stock: 5},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "Car", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("save: %v", err)
 	}
 	if _, err := repo.Update(
-		ctx, domain.Product{ID: id, Name: "Sedan", Price: testMoney(1200)},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "Sedan", Price: testMoney(1200)},
 	); err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 	if _, err := repo.pool.Exec(ctx, `DELETE FROM orders WHERE product_id = $1`, id); err != nil {
 		t.Fatalf("clear orders: %v", err)
 	}
-	if err := repo.Delete(ctx, id); err != nil {
+	if err := repo.Delete(ctx, domain.ProductID(id)); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 
@@ -96,7 +96,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 		t.Fatalf("purchase after delete: got %v, want ErrNotFound", err)
 	}
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: testMoney(-1)},
+		ctx, domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Bike", Price: testMoney(-1)},
 	); err == nil {
 		t.Fatal("save with negative price: expected error")
 	}
@@ -328,7 +328,7 @@ func seedProducts(t *testing.T, repo *Postgres, n int) {
 	t.Helper()
 	for i := range n {
 		if _, err := repo.Save(t.Context(), domain.Product{
-			ID: uuid.Must(uuid.NewV7()), Name: fmt.Sprintf("P%d", i), Price: testMoney(100),
+			ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: fmt.Sprintf("P%d", i), Price: testMoney(100),
 		}); err != nil {
 			t.Fatalf("seed product %d: %v", i, err)
 		}

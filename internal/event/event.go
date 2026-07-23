@@ -48,7 +48,7 @@ func New(eventType string, p domain.Product) (Event, error) {
 	return Event{
 		EventID:    id,
 		Type:       eventType,
-		ProductID:  p.ID,
+		ProductID:  uuid.UUID(p.ID),
 		Version:    p.Version,
 		OccurredAt: time.Now(),
 		Stock:      p.Stock,

@@ -47,7 +47,7 @@ func TestGetProductByID(t *testing.T) {
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.findByID = func(_ context.Context, id uuid.UUID) (domain.Product, error) {
+				proc.findByID = func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 					return domain.Product{ID: id, Name: "Car", Price: testMoney()}, nil
 				}
 			},
@@ -64,7 +64,7 @@ func TestGetProductByID(t *testing.T) {
 			name: "non-existing product",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.findByID = func(_ context.Context, _ uuid.UUID) (domain.Product, error) {
+				proc.findByID = func(_ context.Context, _ domain.ProductID) (domain.Product, error) {
 					return domain.Product{}, domain.ErrNotFound
 				}
 			},
@@ -190,7 +190,7 @@ func TestGetProducts(t *testing.T) {
 			setupMock: func() {
 				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{
-						Items:   []domain.Product{{ID: lastID, Name: "Car", Price: testMoney()}},
+						Items:   []domain.Product{{ID: domain.ProductID(lastID), Name: "Car", Price: testMoney()}},
 						HasMore: true,
 					}, nil
 				}
@@ -344,7 +344,7 @@ func TestAddProduct(t *testing.T) {
 
 func TestServiceUnavailable(t *testing.T) {
 	mux, proc := setupTest(t)
-	proc.findByID = func(_ context.Context, _ uuid.UUID) (domain.Product, error) {
+	proc.findByID = func(_ context.Context, _ domain.ProductID) (domain.Product, error) {
 		return domain.Product{}, fmt.Errorf("query failed: %w", domain.ErrUnavailable)
 	}
 
@@ -394,7 +394,7 @@ func TestDeleteProduct(t *testing.T) {
 			name: "not existing",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.delete = func(_ context.Context, _ uuid.UUID) error {
+				proc.delete = func(_ context.Context, _ domain.ProductID) error {
 					return domain.ErrNotFound
 				}
 			},
@@ -404,7 +404,7 @@ func TestDeleteProduct(t *testing.T) {
 			name: "success",
 			id:   uuid.Must(uuid.NewV7()).String(),
 			setupMock: func() {
-				proc.delete = func(_ context.Context, _ uuid.UUID) error {
+				proc.delete = func(_ context.Context, _ domain.ProductID) error {
 					return nil
 				}
 			},

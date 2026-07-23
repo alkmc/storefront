@@ -17,7 +17,7 @@ func (pg *Postgres) Save(
 ) (domain.Product, error) {
 	err := pg.withTx(ctx, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(
-			ctx, queryInsert, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
+			ctx, queryInsert, uuid.UUID(p.ID), p.Name, p.Price.MinorAmount, string(p.Price.Currency), p.Stock,
 		).Scan(&p.Version); err != nil {
 			return err
 		}
@@ -30,14 +30,10 @@ func (pg *Postgres) Save(
 }
 
 func (pg *Postgres) FindByID(
-	ctx context.Context, id uuid.UUID,
+	ctx context.Context, id domain.ProductID,
 ) (domain.Product, error) {
-	row := pg.pool.QueryRow(ctx, queryGetByID, id)
-
-	var p domain.Product
-	if err := row.Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-	); err != nil {
+	p, err := scanProduct(pg.pool.QueryRow(ctx, queryGetByID, uuid.UUID(id)))
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Product{}, domain.ErrNotFound
 		}
@@ -68,10 +64,8 @@ func (pg *Postgres) FindAll(
 
 	products := make([]domain.Product, 0, limit+1)
 	for rows.Next() {
-		var p domain.Product
-		if err := rows.Scan(
-			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-		); err != nil {
+		p, err := scanProduct(rows)
+		if err != nil {
 			return domain.ProductPage{}, mapDBError(err)
 		}
 		products = append(products, p)
@@ -89,16 +83,16 @@ func (pg *Postgres) Update(
 	ctx context.Context, p domain.Product,
 ) (domain.Product, error) {
 	err := pg.withTx(ctx, func(tx pgx.Tx) error {
-		if err := tx.QueryRow(
-			ctx, queryUpdate, p.ID, p.Name, p.Price.MinorAmount, string(p.Price.Currency),
-		).Scan(
-			&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-		); err != nil {
+		updated, err := scanProduct(tx.QueryRow(
+			ctx, queryUpdate, uuid.UUID(p.ID), p.Name, p.Price.MinorAmount, string(p.Price.Currency),
+		))
+		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return domain.ErrNotFound
 			}
 			return err
 		}
+		p = updated
 		return emitProductEvent(ctx, tx, event.TypeUpdated, p)
 	})
 	if err != nil {
@@ -108,10 +102,10 @@ func (pg *Postgres) Update(
 }
 
 // Delete removes the product and stores its deleted event in one tx.
-func (pg *Postgres) Delete(ctx context.Context, id uuid.UUID) error {
+func (pg *Postgres) Delete(ctx context.Context, id domain.ProductID) error {
 	return pg.withTx(ctx, func(tx pgx.Tx) error {
 		var version int64
-		if err := tx.QueryRow(ctx, queryDelete, id).Scan(&version); err != nil {
+		if err := tx.QueryRow(ctx, queryDelete, uuid.UUID(id)).Scan(&version); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return domain.ErrNotFound
 			}
@@ -135,10 +129,8 @@ func (pg *Postgres) CreateOrder(
 
 // purchaseTx decrements stock, records the order, and stores the purchased event within the caller's tx.
 func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, error) {
-	var p domain.Product
-	if err := tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity).Scan(
-		&p.ID, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
-	); err != nil {
+	p, err := scanProduct(tx.QueryRow(ctx, queryPurchase, o.ProductID, o.Quantity))
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Order{}, purchaseNoRowError(ctx, tx, o.ProductID)
 		}
@@ -181,6 +173,21 @@ func purchaseNoRowError(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 func isProductInUse(err error) bool {
 	pgErr, ok := errors.AsType[*pgconn.PgError](err)
 	return ok && (pgErr.Code == codeRestrictViolation || pgErr.Code == codeForeignKeyViolation)
+}
+
+// scanProduct reads one products row in the column order of the product queries.
+func scanProduct(row pgx.Row) (domain.Product, error) {
+	var (
+		id uuid.UUID
+		p  domain.Product
+	)
+	if err := row.Scan(
+		&id, &p.Name, &p.Price.MinorAmount, &p.Price.Currency, &p.Stock, &p.Version,
+	); err != nil {
+		return domain.Product{}, err
+	}
+	p.ID = domain.ProductID(id)
+	return p, nil
 }
 
 func productPage(products []domain.Product, limit int) domain.ProductPage {

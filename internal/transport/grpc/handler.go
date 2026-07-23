@@ -20,10 +20,10 @@ type (
 	// processor is the product business logic the gRPC handler depends on.
 	processor interface {
 		Create(context.Context, domain.Product) (domain.Product, error)
-		FindByID(context.Context, uuid.UUID) (domain.Product, error)
+		FindByID(context.Context, domain.ProductID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
-		Delete(context.Context, uuid.UUID) error
+		Delete(context.Context, domain.ProductID) error
 		CreateOrder(
 			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error)
@@ -65,7 +65,7 @@ func (h *Handler) GetProduct(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	p, err := h.processor.FindByID(ctx, id)
+	p, err := h.processor.FindByID(ctx, domain.ProductID(id))
 	if err != nil {
 		return nil, h.toStatus(err, "get product")
 	}
@@ -96,7 +96,7 @@ func (h *Handler) UpdateProduct(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	p := domain.Product{ID: id, Name: req.GetName(), Price: toDomainMoney(req.GetPrice())}
+	p := domain.Product{ID: domain.ProductID(id), Name: req.GetName(), Price: toDomainMoney(req.GetPrice())}
 	if err := p.Validate(); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -114,7 +114,7 @@ func (h *Handler) DeleteProduct(
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := h.processor.Delete(ctx, id); err != nil {
+	if err := h.processor.Delete(ctx, domain.ProductID(id)); err != nil {
 		return nil, h.toStatus(err, "delete product")
 	}
 	return catalogv1.DeleteProductResponse_builder{}.Build(), nil

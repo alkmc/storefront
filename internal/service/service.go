@@ -15,10 +15,10 @@ import (
 type (
 	productStorer interface {
 		Save(context.Context, domain.Product) (domain.Product, error)
-		FindByID(context.Context, uuid.UUID) (domain.Product, error)
+		FindByID(context.Context, domain.ProductID) (domain.Product, error)
 		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
-		Delete(context.Context, uuid.UUID) error
+		Delete(context.Context, domain.ProductID) error
 	}
 	orderStorer interface {
 		// CreateOrder also decrements the product stock in one tx.
@@ -64,12 +64,12 @@ func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product,
 	if err != nil {
 		return domain.Product{}, fmt.Errorf("failed to generate uuid: %w", err)
 	}
-	p.ID = id
+	p.ID = domain.ProductID(id)
 
 	return s.store.Save(ctx, p)
 }
 
-func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (s *Service) FindByID(ctx context.Context, id domain.ProductID) (domain.Product, error) {
 	key := id.String()
 	entry, err := s.cache.Get(ctx, key)
 	if err != nil {
@@ -82,7 +82,7 @@ func (s *Service) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, e
 }
 
 // loadProduct coalesces concurrent misses for id into a single DB load.
-func (s *Service) loadProduct(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (s *Service) loadProduct(ctx context.Context, id domain.ProductID) (domain.Product, error) {
 	key := id.String()
 	return s.loads.Do(ctx, key, func(ctx context.Context) (domain.Product, error) {
 		// re-read inside the flight, because the guard needs a token read from within it
@@ -116,15 +116,15 @@ func (s *Service) Update(ctx context.Context, p domain.Product) (domain.Product,
 	if err != nil {
 		return domain.Product{}, err
 	}
-	s.invalidate(ctx, p.ID)
+	s.invalidate(ctx, uuid.UUID(p.ID))
 	return updated, nil
 }
 
-func (s *Service) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *Service) Delete(ctx context.Context, id domain.ProductID) error {
 	if err := s.store.Delete(ctx, id); err != nil {
 		return err
 	}
-	s.invalidate(ctx, id)
+	s.invalidate(ctx, uuid.UUID(id))
 	return nil
 }
 

@@ -12,7 +12,7 @@ func TestClassifyStoredValue(t *testing.T) {
 	t.Parallel()
 
 	product := domain.Product{
-		ID:      uuid.MustParse("0199e1a0-0000-7000-8000-000000000001"),
+		ID:      domain.ProductID(uuid.MustParse("0199e1a0-0000-7000-8000-000000000001")),
 		Name:    "Keyboard",
 		Stock:   7,
 		Version: 3,

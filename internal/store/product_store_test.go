@@ -24,19 +24,23 @@ func TestPostgres_Save(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "success",
-			product: domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Car", Price: testMoney(1050)},
+			name: "success",
+			product: domain.Product{
+				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Car", Price: testMoney(1050),
+			},
 			wantErr: false,
 		},
 		{
-			name:    "negative price - fails check constraint",
-			product: domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Bike", Price: testMoney(-500)},
+			name: "negative price - fails check constraint",
+			product: domain.Product{
+				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Bike", Price: testMoney(-500),
+			},
 			wantErr: true,
 		},
 		{
 			name: "invalid currency - fails check constraint",
 			product: domain.Product{
-				ID:    uuid.Must(uuid.NewV7()),
+				ID:    domain.ProductID(uuid.Must(uuid.NewV7())),
 				Name:  "Bike",
 				Price: domain.Money{MinorAmount: 500, Currency: domain.Currency("XXX")},
 			},
@@ -62,13 +66,13 @@ func TestPostgres_Save(t *testing.T) {
 	t.Run("duplicate id", func(t *testing.T) {
 		seededID := uuid.Must(uuid.NewV7())
 		if _, err := repo.Save(
-			ctx, domain.Product{ID: seededID, Name: "Boat", Price: testMoney(1000)},
+			ctx, domain.Product{ID: domain.ProductID(seededID), Name: "Boat", Price: testMoney(1000)},
 		); err != nil {
 			t.Fatalf("failed to save setup product: %v", err)
 		}
 
 		if _, err := repo.Save(
-			ctx, domain.Product{ID: seededID, Name: "Plane", Price: testMoney(10000)},
+			ctx, domain.Product{ID: domain.ProductID(seededID), Name: "Plane", Price: testMoney(10000)},
 		); err == nil {
 			t.Fatal("expected error")
 		}
@@ -82,7 +86,7 @@ func TestPostgres_FindByID(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "Car", Price: testMoney(1050)},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "Car", Price: testMoney(1050)},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -106,7 +110,7 @@ func TestPostgres_FindByID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			p, err := repo.FindByID(ctx, tt.id)
+			p, err := repo.FindByID(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if !errors.Is(err, domain.ErrNotFound) {
 					t.Fatalf("expected domain.ErrNotFound, got %v", err)
@@ -117,7 +121,7 @@ func TestPostgres_FindByID(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if p.ID != tt.id {
+			if p.ID != domain.ProductID(tt.id) {
 				t.Errorf("got %v, want %v", p.ID, tt.id)
 			}
 		})
@@ -142,14 +146,14 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Fatalf("expected empty page on empty table, got %+v", page)
 	}
 
-	p1 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
-	p2 := domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "P2", Price: testMoney(200)}
+	p1 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P1", Price: testMoney(100)}
+	p2 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P2", Price: testMoney(200)}
 	for _, p := range []domain.Product{p1, p2} {
 		if _, err := repo.Save(ctx, p); err != nil {
 			t.Fatalf("failed to save product: %v", err)
 		}
 	}
-	want := []uuid.UUID{p1.ID, p2.ID}
+	want := []uuid.UUID{uuid.UUID(p1.ID), uuid.UUID(p2.ID)}
 
 	page, err = repo.FindAll(ctx, uuid.NullUUID{}, allLimit)
 	if err != nil {
@@ -173,7 +177,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Errorf("first page: got %v, want %v", got, want[:pageSize])
 	}
 
-	cursor := uuid.NullUUID{UUID: p1.ID, Valid: true}
+	cursor := uuid.NullUUID{UUID: uuid.UUID(p1.ID), Valid: true}
 	second, err := repo.FindAll(ctx, cursor, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -185,7 +189,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Errorf("second page: got %v, want %v", got, want[pageSize:])
 	}
 
-	cursor = uuid.NullUUID{UUID: p2.ID, Valid: true}
+	cursor = uuid.NullUUID{UUID: uuid.UUID(p2.ID), Valid: true}
 	tail, err := repo.FindAll(ctx, cursor, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -198,7 +202,7 @@ func TestPostgres_FindAll(t *testing.T) {
 func productIDs(products []domain.Product) []uuid.UUID {
 	ids := make([]uuid.UUID, len(products))
 	for i, p := range products {
-		ids[i] = p.ID
+		ids[i] = uuid.UUID(p.ID)
 	}
 	return ids
 }
@@ -210,7 +214,7 @@ func TestPostgres_Update(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "OldName", Price: testMoney(1000), Stock: 5},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "OldName", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -223,17 +227,19 @@ func TestPostgres_Update(t *testing.T) {
 	}{
 		{
 			name:    "success",
-			product: domain.Product{ID: id, Name: "NewName", Price: testMoney(2000)},
+			product: domain.Product{ID: domain.ProductID(id), Name: "NewName", Price: testMoney(2000)},
 			wantErr: false,
 		},
 		{
 			name:    "negative price - fails check constraint",
-			product: domain.Product{ID: id, Name: "NewName", Price: testMoney(-100)},
+			product: domain.Product{ID: domain.ProductID(id), Name: "NewName", Price: testMoney(-100)},
 			wantErr: true,
 		},
 		{
-			name:      "non-existing product returns ErrNotFound",
-			product:   domain.Product{ID: uuid.Must(uuid.NewV7()), Name: "Ghost", Price: testMoney(100)},
+			name: "non-existing product returns ErrNotFound",
+			product: domain.Product{
+				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Ghost", Price: testMoney(100),
+			},
 			wantErr:   true,
 			wantErrIs: domain.ErrNotFound,
 		},
@@ -275,7 +281,7 @@ func TestPostgres_Delete(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "ToDelete", Price: testMoney(1000)},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "ToDelete", Price: testMoney(1000)},
 	); err != nil {
 		t.Fatalf("failed to save product: %v", err)
 	}
@@ -299,7 +305,7 @@ func TestPostgres_Delete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := repo.Delete(ctx, tt.id)
+			err := repo.Delete(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if !errors.Is(err, domain.ErrNotFound) {
 					t.Fatalf("expected domain.ErrNotFound, got %v", err)
@@ -309,7 +315,7 @@ func TestPostgres_Delete(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			_, err = repo.FindByID(ctx, tt.id)
+			_, err = repo.FindByID(ctx, domain.ProductID(tt.id))
 			if !errors.Is(err, domain.ErrNotFound) {
 				t.Fatalf("expected domain.ErrNotFound after deletion, got %v", err)
 			}
@@ -324,7 +330,7 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: 5},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
@@ -334,11 +340,11 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 		t.Fatalf("failed to purchase: %v", err)
 	}
 
-	if err := repo.Delete(ctx, id); !errors.Is(err, domain.ErrProductInUse) {
+	if err := repo.Delete(ctx, domain.ProductID(id)); !errors.Is(err, domain.ErrProductInUse) {
 		t.Fatalf("got %v, want domain.ErrProductInUse", err)
 	}
 	// the product must survive the refused delete
-	if _, err := repo.FindByID(ctx, id); err != nil {
+	if _, err := repo.FindByID(ctx, domain.ProductID(id)); err != nil {
 		t.Errorf("product missing after refused delete: %v", err)
 	}
 }
@@ -375,7 +381,9 @@ func TestPostgres_CreateOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			id := uuid.Must(uuid.NewV7())
 			if _, err := repo.Save(
-				ctx, domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: tt.seedStock},
+				ctx, domain.Product{
+					ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: tt.seedStock,
+				},
 			); err != nil {
 				t.Fatalf("failed to seed product: %v", err)
 			}
@@ -386,7 +394,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 				if !errors.Is(err, tt.wantErrIs) {
 					t.Fatalf("got %v, want %v", err, tt.wantErrIs)
 				}
-				got, err := repo.FindByID(ctx, id)
+				got, err := repo.FindByID(ctx, domain.ProductID(id))
 				if err != nil {
 					t.Fatalf("failed to reload product: %v", err)
 				}
@@ -403,7 +411,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			reloaded, err := repo.FindByID(ctx, id)
+			reloaded, err := repo.FindByID(ctx, domain.ProductID(id))
 			if err != nil {
 				t.Fatalf("failed to reload product: %v", err)
 			}
@@ -449,7 +457,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 
 	id := uuid.Must(uuid.NewV7())
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: id, Name: "Widget", Price: testMoney(1000), Stock: initialStock},
+		ctx, domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: initialStock},
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
@@ -484,7 +492,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 		t.Errorf("got %d insufficient-stock errors, want %d", got, deniedBuyers)
 	}
 
-	final, err := repo.FindByID(ctx, id)
+	final, err := repo.FindByID(ctx, domain.ProductID(id))
 	if err != nil {
 		t.Fatalf("failed to reload product: %v", err)
 	}

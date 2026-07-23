@@ -9,10 +9,10 @@ import (
 
 type stubProcessor struct {
 	CreateFn      func(context.Context, domain.Product) (domain.Product, error)
-	FindByIDFn    func(context.Context, uuid.UUID) (domain.Product, error)
+	FindByIDFn    func(context.Context, domain.ProductID) (domain.Product, error)
 	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
-	DeleteFn      func(context.Context, uuid.UUID) error
+	DeleteFn      func(context.Context, domain.ProductID) error
 	CreateOrderFn func(
 		context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 	) (domain.Order, bool, error)
@@ -25,7 +25,7 @@ func (s stubProcessor) Create(ctx context.Context, p domain.Product) (domain.Pro
 	return s.CreateFn(ctx, p)
 }
 
-func (s stubProcessor) FindByID(ctx context.Context, id uuid.UUID) (domain.Product, error) {
+func (s stubProcessor) FindByID(ctx context.Context, id domain.ProductID) (domain.Product, error) {
 	return s.FindByIDFn(ctx, id)
 }
 
@@ -39,7 +39,7 @@ func (s stubProcessor) Update(ctx context.Context, p domain.Product) (domain.Pro
 	return s.UpdateFn(ctx, p)
 }
 
-func (s stubProcessor) Delete(ctx context.Context, id uuid.UUID) error {
+func (s stubProcessor) Delete(ctx context.Context, id domain.ProductID) error {
 	return s.DeleteFn(ctx, id)
 }
 
