@@ -361,6 +361,28 @@ func TestHandler_CreateOrder_Idempotency(t *testing.T) {
 			t.Error("processor called despite missing key")
 		}
 	})
+
+	t.Run("over-long key is InvalidArgument", func(t *testing.T) {
+		called := false
+		client := newOrderClient(t, stubProcessor{
+			CreateOrderFn: func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+			) (domain.Order, bool, error) {
+				called = true
+				return domain.Order{}, false, nil
+			},
+		})
+		key := strings.Repeat("k", domain.MaxIdempotencyKeyLen+1)
+		ctx := metadata.AppendToOutgoingContext(authCtx(t, sub), metaIdempotencyKey, key)
+		_, err := client.CreateOrder(
+			ctx, orderv1.CreateOrderRequest_builder{ProductId: id.String(), Quantity: 2}.Build(),
+		)
+		if got := status.Code(err); got != codes.InvalidArgument {
+			t.Errorf("got code %v, want %v", got, codes.InvalidArgument)
+		}
+		if called {
+			t.Error("processor called despite over-long key")
+		}
+	})
 }
 
 func testMoney(amount int64) *catalogv1.Money {
