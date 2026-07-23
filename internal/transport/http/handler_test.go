@@ -550,7 +550,8 @@ func TestCreateOrder(t *testing.T) {
 			name:     "product not found",
 			quantity: 2,
 			setupMock: func() {
-				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+				proc.createOrder = func(
+					_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					return domain.Order{}, false, domain.ErrNotFound
 				}
@@ -562,7 +563,8 @@ func TestCreateOrder(t *testing.T) {
 			name:     "insufficient stock",
 			quantity: 2,
 			setupMock: func() {
-				proc.createOrder = func(_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
+				proc.createOrder = func(
+					_ context.Context, _ domain.UserID, _ uuid.UUID, _ int64, _ domain.IdempotencyKey,
 				) (domain.Order, bool, error) {
 					return domain.Order{}, false, domain.ErrInsufficientStock
 				}
@@ -654,7 +656,8 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 
 	t.Run("mismatch is 422", func(t *testing.T) {
 		mux, proc := setupTest(t)
-		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		proc.createOrder = func(
+			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			return domain.Order{}, false, domain.ErrIdempotencyMismatch
 		}
@@ -670,7 +673,8 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 	t.Run("missing key is 400 and never calls the processor", func(t *testing.T) {
 		mux, proc := setupTest(t)
 		called := false
-		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		proc.createOrder = func(
+			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			called = true
 			return domain.Order{}, false, nil
@@ -690,7 +694,8 @@ func TestCreateOrder_Idempotency(t *testing.T) {
 	t.Run("over-long key is 400 and never calls the processor", func(t *testing.T) {
 		mux, proc := setupTest(t)
 		called := false
-		proc.createOrder = func(context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
+		proc.createOrder = func(
+			context.Context, domain.UserID, uuid.UUID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error) {
 			called = true
 			return domain.Order{}, false, nil
