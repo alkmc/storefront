@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alkmc/storefront/internal/auth/authtest"
+	"github.com/alkmc/storefront/internal/config"
 	"github.com/google/uuid"
 )
 
@@ -16,8 +17,11 @@ func main() {
 	ttl := flag.Duration("ttl", time.Hour, "token lifetime")
 	flag.Parse()
 
-	secret := os.Getenv("AUTH_JWT_SECRET")
-	if secret == "" {
+	cfg, err := config.LoadAuth()
+	if err != nil {
+		fail("unable to load auth: " + err.Error())
+	}
+	if cfg.JWTSecret == "" {
 		fail("AUTH_JWT_SECRET is empty, run via make token or export it first")
 	}
 
@@ -26,7 +30,7 @@ func main() {
 		fail("sub: " + err.Error())
 	}
 
-	_, _ = fmt.Fprintln(os.Stdout, authtest.Token(secret, id, time.Now().Add(*ttl)))
+	_, _ = fmt.Fprintln(os.Stdout, authtest.Token(cfg.JWTSecret.Reveal(), id, time.Now().Add(*ttl)))
 }
 
 func subID(sub string) (uuid.UUID, error) {

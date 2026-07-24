@@ -142,3 +142,7 @@ func Load() (Config, error) {
 func LoadPostgres() (Postgres, error) {
 	return env.ParseAs[Postgres]()
 }
+
+func LoadAuth() (Auth, error) {
+	return env.ParseAs[Auth]()
+}
