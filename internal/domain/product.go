@@ -65,3 +65,11 @@ func (p *Product) Validate() error {
 	}
 	return nil
 }
+
+// NextCursor returns the id to resume after, or "" when this is the last page.
+func (p ProductPage) NextCursor() string {
+	if !p.HasMore || len(p.Items) == 0 {
+		return ""
+	}
+	return p.Items[len(p.Items)-1].ID.String()
+}

@@ -74,7 +74,7 @@ func TestHandler_ListProducts(t *testing.T) {
 	p1 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P1"}
 	p2 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P2"}
 	client := newTestClient(t, stubProcessor{
-		FindAllFn: func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+		FindAllFn: func(_ context.Context, _ domain.Cursor, _ int) (domain.ProductPage, error) {
 			return domain.ProductPage{Items: []domain.Product{p1, p2}, HasMore: true}, nil
 		},
 	})
@@ -532,7 +532,7 @@ func TestHandler_ListOrders(t *testing.T) {
 	}
 
 	client := newOrderClient(t, stubProcessor{
-		FindOrdersFn: func(_ context.Context, userID domain.UserID, _ uuid.NullUUID, _ int,
+		FindOrdersFn: func(_ context.Context, userID domain.UserID, _ domain.Cursor, _ int,
 		) (domain.OrderPage, error) {
 			if userID != domain.UserID(sub) {
 				t.Errorf("got user %v, want %v", userID, sub)

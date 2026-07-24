@@ -138,7 +138,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		allLimit = 50
 	)
 
-	page, err := repo.FindAll(ctx, uuid.NullUUID{}, allLimit)
+	page, err := repo.FindAll(ctx, domain.Cursor{}, allLimit)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestPostgres_FindAll(t *testing.T) {
 	}
 	want := []uuid.UUID{uuid.UUID(p1.ID), uuid.UUID(p2.ID)}
 
-	page, err = repo.FindAll(ctx, uuid.NullUUID{}, allLimit)
+	page, err = repo.FindAll(ctx, domain.Cursor{}, allLimit)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Errorf("full page: got %v, want %v", got, want)
 	}
 
-	first, err := repo.FindAll(ctx, uuid.NullUUID{}, pageSize)
+	first, err := repo.FindAll(ctx, domain.Cursor{}, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Errorf("first page: got %v, want %v", got, want[:pageSize])
 	}
 
-	cursor := uuid.NullUUID{UUID: uuid.UUID(p1.ID), Valid: true}
+	cursor := domain.NewCursor(uuid.UUID(p1.ID))
 	second, err := repo.FindAll(ctx, cursor, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -189,7 +189,7 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Errorf("second page: got %v, want %v", got, want[pageSize:])
 	}
 
-	cursor = uuid.NullUUID{UUID: uuid.UUID(p2.ID), Valid: true}
+	cursor = domain.NewCursor(uuid.UUID(p2.ID))
 	tail, err := repo.FindAll(ctx, cursor, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -401,7 +401,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 				if got.Stock != tt.seedStock {
 					t.Errorf("stock changed on failed purchase: got %d, want %d", got.Stock, tt.seedStock)
 				}
-				page, ferr := repo.FindOrders(ctx, order.UserID, uuid.NullUUID{}, 10)
+				page, ferr := repo.FindOrders(ctx, order.UserID, domain.Cursor{}, 10)
 				if ferr != nil || len(page.Items) != 0 {
 					t.Errorf("failed purchase left an order: err %v, items %+v", ferr, page.Items)
 				}

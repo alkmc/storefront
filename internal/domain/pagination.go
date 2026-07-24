@@ -13,6 +13,18 @@ const (
 	MaxPageSize = 200
 )
 
+// Cursor is an optional keyset position: when valid, the page resumes strictly after id.
+type Cursor struct {
+	id    uuid.UUID
+	valid bool
+}
+
+// NewCursor returns a cursor that resumes after id.
+func NewCursor(id uuid.UUID) Cursor { return Cursor{id: id, valid: true} }
+
+// After returns the id to resume after and whether the cursor is set.
+func (c Cursor) After() (uuid.UUID, bool) { return c.id, c.valid }
+
 // NormalizePageSize bounds n into (0, MaxPageSize], defaulting non-positive values.
 func NormalizePageSize(n int) int {
 	if n <= 0 {
@@ -22,21 +34,13 @@ func NormalizePageSize(n int) int {
 }
 
 // ParseCursor turns an optional id string into a keyset cursor.
-func ParseCursor(raw string) (uuid.NullUUID, error) {
+func ParseCursor(raw string) (Cursor, error) {
 	if raw == "" {
-		return uuid.NullUUID{}, nil
+		return Cursor{}, nil
 	}
 	id, err := uuid.Parse(raw)
 	if err != nil {
-		return uuid.NullUUID{}, fmt.Errorf("invalid cursor: %q", raw)
+		return Cursor{}, fmt.Errorf("invalid cursor: %q", raw)
 	}
-	return uuid.NullUUID{UUID: id, Valid: true}, nil
-}
-
-// NextCursor returns the id to resume after, or "" when this is the last page.
-func (p ProductPage) NextCursor() string {
-	if !p.HasMore || len(p.Items) == 0 {
-		return ""
-	}
-	return p.Items[len(p.Items)-1].ID.String()
+	return NewCursor(id), nil
 }

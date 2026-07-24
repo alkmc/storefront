@@ -123,7 +123,7 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "empty",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ domain.Cursor, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{}, nil
 				}
 			},
@@ -133,8 +133,8 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "success with default pagination",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (domain.ProductPage, error) {
-					if limit != 50 || cursor.Valid {
+				proc.findAll = func(_ context.Context, cursor domain.Cursor, limit int) (domain.ProductPage, error) {
+					if _, ok := cursor.After(); limit != 50 || ok {
 						t.Errorf("got limit=%d cursor=%v, want 50/first-page", limit, cursor)
 					}
 					return domain.ProductPage{Items: []domain.Product{{Name: "Car", Price: testMoney()}}}, nil
@@ -147,8 +147,8 @@ func TestGetProducts(t *testing.T) {
 			name: "explicit limit and cursor",
 			url:  "/v1/products?limit=10&cursor=" + cursorID.String(),
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, cursor uuid.NullUUID, limit int) (domain.ProductPage, error) {
-					if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
+				proc.findAll = func(_ context.Context, cursor domain.Cursor, limit int) (domain.ProductPage, error) {
+					if id, ok := cursor.After(); limit != 10 || !ok || id != cursorID {
 						t.Errorf("got limit=%d cursor=%v, want 10/%s", limit, cursor, cursorID)
 					}
 					return domain.ProductPage{Items: []domain.Product{{Name: "Car", Price: testMoney()}}}, nil
@@ -161,7 +161,7 @@ func TestGetProducts(t *testing.T) {
 			name: "limit clamped to max",
 			url:  "/v1/products?limit=500",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ domain.Cursor, limit int) (domain.ProductPage, error) {
 					if limit != 200 {
 						t.Errorf("got limit=%d, want 200", limit)
 					}
@@ -175,7 +175,7 @@ func TestGetProducts(t *testing.T) {
 			name: "negative limit falls back to default",
 			url:  "/v1/products?limit=-5",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, limit int) (domain.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ domain.Cursor, limit int) (domain.ProductPage, error) {
 					if limit != 50 {
 						t.Errorf("got limit=%d, want 50", limit)
 					}
@@ -188,7 +188,7 @@ func TestGetProducts(t *testing.T) {
 		{
 			name: "more pages set next cursor",
 			setupMock: func() {
-				proc.findAll = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+				proc.findAll = func(_ context.Context, _ domain.Cursor, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{
 						Items:   []domain.Product{{ID: domain.ProductID(lastID), Name: "Car", Price: testMoney()}},
 						HasMore: true,
@@ -840,12 +840,12 @@ func TestListOrders(t *testing.T) {
 	cursorID := uuid.Must(uuid.NewV7())
 	lastID := uuid.Must(uuid.NewV7())
 
-	proc.findOrders = func(_ context.Context, gotUser domain.UserID, cursor uuid.NullUUID, limit int,
+	proc.findOrders = func(_ context.Context, gotUser domain.UserID, cursor domain.Cursor, limit int,
 	) (domain.OrderPage, error) {
 		if gotUser != domain.UserID(userID) {
 			t.Errorf("got user %v, want %v", gotUser, userID)
 		}
-		if limit != 10 || !cursor.Valid || cursor.UUID != cursorID {
+		if id, ok := cursor.After(); limit != 10 || !ok || id != cursorID {
 			t.Errorf("got limit %d cursor %v, want 10 %s", limit, cursor, cursorID)
 		}
 		return domain.OrderPage{

@@ -26,7 +26,7 @@ func (pg *Postgres) FindOrder(
 
 // FindOrders returns a keyset page of the user's own orders, newest first.
 func (pg *Postgres) FindOrders(
-	ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+	ctx context.Context, userID domain.UserID, cursor domain.Cursor, limit int,
 ) (domain.OrderPage, error) {
 	var (
 		rows      pgx.Rows
@@ -34,8 +34,8 @@ func (pg *Postgres) FindOrders(
 		pageLimit = limit + 1
 	)
 
-	if cursor.Valid {
-		rows, err = pg.pool.Query(ctx, queryGetOrdersAfterCursor, uuid.UUID(userID), cursor.UUID, pageLimit)
+	if id, ok := cursor.After(); ok {
+		rows, err = pg.pool.Query(ctx, queryGetOrdersAfterCursor, uuid.UUID(userID), id, pageLimit)
 	} else {
 		rows, err = pg.pool.Query(ctx, queryGetOrders, uuid.UUID(userID), pageLimit)
 	}

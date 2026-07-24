@@ -49,7 +49,7 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 	if s := productStock(t, repo, productID); s != 3 {
 		t.Errorf("stock %d, want 3 (single decrement)", s)
 	}
-	page, err := repo.FindOrders(ctx, domain.UserID(userID), uuid.NullUUID{}, 10)
+	page, err := repo.FindOrders(ctx, domain.UserID(userID), domain.Cursor{}, 10)
 	if err != nil {
 		t.Fatalf("list orders: %v", err)
 	}

@@ -80,7 +80,7 @@ func TestPostgres_FindOrders(t *testing.T) {
 
 	purchaseOrder(t, repo, bob, productID)
 
-	first, err := repo.FindOrders(ctx, alice, uuid.NullUUID{}, pageSize)
+	first, err := repo.FindOrders(ctx, alice, domain.Cursor{}, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestPostgres_FindOrders(t *testing.T) {
 		t.Errorf("first page: got %v, want %v", got, wantNewestFirst[:pageSize])
 	}
 
-	cursor := uuid.NullUUID{UUID: uuid.UUID(first.Items[len(first.Items)-1].ID), Valid: true}
+	cursor := domain.NewCursor(uuid.UUID(first.Items[len(first.Items)-1].ID))
 	second, err := repo.FindOrders(ctx, alice, cursor, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -103,7 +103,7 @@ func TestPostgres_FindOrders(t *testing.T) {
 		t.Errorf("second page: got %v, want %v", got, wantNewestFirst[pageSize:])
 	}
 
-	empty, err := repo.FindOrders(ctx, domain.UserID(uuid.Must(uuid.NewV7())), uuid.NullUUID{}, pageSize)
+	empty, err := repo.FindOrders(ctx, domain.UserID(uuid.Must(uuid.NewV7())), domain.Cursor{}, pageSize)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -44,7 +44,7 @@ func (pg *Postgres) FindByID(
 }
 
 func (pg *Postgres) FindAll(
-	ctx context.Context, cursor uuid.NullUUID, limit int,
+	ctx context.Context, cursor domain.Cursor, limit int,
 ) (domain.ProductPage, error) {
 	var (
 		rows      pgx.Rows
@@ -52,8 +52,8 @@ func (pg *Postgres) FindAll(
 		pageLimit = limit + 1
 	)
 
-	if cursor.Valid {
-		rows, err = pg.pool.Query(ctx, queryGetAllAfterCursor, cursor.UUID, pageLimit)
+	if id, ok := cursor.After(); ok {
+		rows, err = pg.pool.Query(ctx, queryGetAllAfterCursor, id, pageLimit)
 	} else {
 		rows, err = pg.pool.Query(ctx, queryGetAll, pageLimit)
 	}

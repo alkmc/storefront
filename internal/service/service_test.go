@@ -165,7 +165,7 @@ func TestService_FindAll(t *testing.T) {
 		{
 			name: "success",
 			spySetup: func(s *SpyStore) {
-				s.FindAllFn = func(_ context.Context, _ uuid.NullUUID, _ int) (domain.ProductPage, error) {
+				s.FindAllFn = func(_ context.Context, _ domain.Cursor, _ int) (domain.ProductPage, error) {
 					return domain.ProductPage{Items: []domain.Product{
 						{Name: "P1", Price: testMoney(100)}, {Name: "P2", Price: testMoney(200)},
 					}}, nil
@@ -182,7 +182,7 @@ func TestService_FindAll(t *testing.T) {
 			tt.spySetup(spyStore)
 			srv := newTestService(spyStore)
 
-			page, err := srv.FindAll(ctx, uuid.NullUUID{}, 50)
+			page, err := srv.FindAll(ctx, domain.Cursor{}, 50)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")

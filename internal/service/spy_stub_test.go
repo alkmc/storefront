@@ -5,7 +5,6 @@ import (
 
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 type stubCache struct{}
@@ -62,13 +61,13 @@ func (c *SpyCache) Invalidate(ctx context.Context, key string) error {
 type SpyStore struct {
 	SaveFn        func(context.Context, domain.Product) (domain.Product, error)
 	FindByIDFn    func(context.Context, domain.ProductID) (domain.Product, error)
-	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+	FindAllFn     func(context.Context, domain.Cursor, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn      func(context.Context, domain.ProductID) error
 	CreateOrderFn func(context.Context, domain.Order, domain.IdempotencyKey) (domain.Order, bool, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
-	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
+	FindOrdersFn func(context.Context, domain.UserID, domain.Cursor, int) (domain.OrderPage, error)
 }
 
 func (s *SpyStore) Save(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -79,7 +78,7 @@ func (s *SpyStore) FindByID(ctx context.Context, id domain.ProductID) (domain.Pr
 	return s.FindByIDFn(ctx, id)
 }
 
-func (s *SpyStore) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+func (s *SpyStore) FindAll(ctx context.Context, cursor domain.Cursor, limit int,
 ) (domain.ProductPage, error) {
 	return s.FindAllFn(ctx, cursor, limit)
 }
@@ -116,7 +115,7 @@ func (s *SpyStore) FindOrder(
 	return domain.Order{}, nil
 }
 
-func (s *SpyStore) FindOrders(ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+func (s *SpyStore) FindOrders(ctx context.Context, userID domain.UserID, cursor domain.Cursor, limit int,
 ) (domain.OrderPage, error) {
 	if s.FindOrdersFn != nil {
 		return s.FindOrdersFn(ctx, userID, cursor, limit)

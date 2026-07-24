@@ -21,14 +21,14 @@ type (
 	processor interface {
 		Create(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, domain.ProductID) (domain.Product, error)
-		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+		FindAll(context.Context, domain.Cursor, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, domain.ProductID) error
 		CreateOrder(
 			context.Context, domain.UserID, domain.ProductID, int64, domain.IdempotencyKey,
 		) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
-		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
+		FindOrders(context.Context, domain.UserID, domain.Cursor, int) (domain.OrderPage, error)
 	}
 	// Handler adapts the product service to the generated ProductServiceServer and OrderServiceServer.
 	Handler struct {

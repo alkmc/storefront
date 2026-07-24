@@ -4,13 +4,12 @@ import (
 	"context"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 type stubProcessor struct {
 	CreateFn      func(context.Context, domain.Product) (domain.Product, error)
 	FindByIDFn    func(context.Context, domain.ProductID) (domain.Product, error)
-	FindAllFn     func(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+	FindAllFn     func(context.Context, domain.Cursor, int) (domain.ProductPage, error)
 	UpdateFn      func(context.Context, domain.Product) (domain.Product, error)
 	DeleteFn      func(context.Context, domain.ProductID) error
 	CreateOrderFn func(
@@ -18,7 +17,7 @@ type stubProcessor struct {
 	) (domain.Order, bool, error)
 
 	FindOrderFn  func(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
-	FindOrdersFn func(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
+	FindOrdersFn func(context.Context, domain.UserID, domain.Cursor, int) (domain.OrderPage, error)
 }
 
 func (s stubProcessor) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
@@ -30,7 +29,7 @@ func (s stubProcessor) FindByID(ctx context.Context, id domain.ProductID) (domai
 }
 
 func (s stubProcessor) FindAll(
-	ctx context.Context, cursor uuid.NullUUID, limit int,
+	ctx context.Context, cursor domain.Cursor, limit int,
 ) (domain.ProductPage, error) {
 	return s.FindAllFn(ctx, cursor, limit)
 }
@@ -54,7 +53,7 @@ func (s stubProcessor) FindOrder(ctx context.Context, userID domain.UserID, orde
 	return s.FindOrderFn(ctx, userID, orderID)
 }
 
-func (s stubProcessor) FindOrders(ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+func (s stubProcessor) FindOrders(ctx context.Context, userID domain.UserID, cursor domain.Cursor, limit int,
 ) (domain.OrderPage, error) {
 	return s.FindOrdersFn(ctx, userID, cursor, limit)
 }

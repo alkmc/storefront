@@ -16,7 +16,7 @@ type (
 	productStorer interface {
 		Save(context.Context, domain.Product) (domain.Product, error)
 		FindByID(context.Context, domain.ProductID) (domain.Product, error)
-		FindAll(context.Context, uuid.NullUUID, int) (domain.ProductPage, error)
+		FindAll(context.Context, domain.Cursor, int) (domain.ProductPage, error)
 		Update(context.Context, domain.Product) (domain.Product, error)
 		Delete(context.Context, domain.ProductID) error
 	}
@@ -24,7 +24,7 @@ type (
 		// CreateOrder also decrements the product stock in one tx.
 		CreateOrder(context.Context, domain.Order, domain.IdempotencyKey) (domain.Order, bool, error)
 		FindOrder(context.Context, domain.UserID, domain.OrderID) (domain.Order, error)
-		FindOrders(context.Context, domain.UserID, uuid.NullUUID, int) (domain.OrderPage, error)
+		FindOrders(context.Context, domain.UserID, domain.Cursor, int) (domain.OrderPage, error)
 	}
 	storer interface {
 		productStorer
@@ -106,7 +106,7 @@ func (s *Service) loadProduct(ctx context.Context, id domain.ProductID) (domain.
 	})
 }
 
-func (s *Service) FindAll(ctx context.Context, cursor uuid.NullUUID, limit int,
+func (s *Service) FindAll(ctx context.Context, cursor domain.Cursor, limit int,
 ) (domain.ProductPage, error) {
 	return s.store.FindAll(ctx, cursor, limit)
 }
@@ -186,7 +186,7 @@ func (s *Service) FindOrder(
 
 // FindOrders returns a keyset page of the caller's own orders, newest first, uncached.
 func (s *Service) FindOrders(
-	ctx context.Context, userID domain.UserID, cursor uuid.NullUUID, limit int,
+	ctx context.Context, userID domain.UserID, cursor domain.Cursor, limit int,
 ) (domain.OrderPage, error) {
 	return s.store.FindOrders(ctx, userID, cursor, limit)
 }
