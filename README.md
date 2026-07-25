@@ -42,7 +42,11 @@ make up
 ## Setup
 
 Copy `.env.example` to `.env` and fill in the required values.  
-All available variables with their defaults are documented in `.env.example`.
+All available variables with their defaults are documented in `.env.example`.  
+Startup rejects settings that would fail silently:
+a zero timeout, a zero outbox batch size, a listen port of `0`.  
+Settings that fail loudly on their own, an invalid `PG_SSLMODE` or a `PG_PORT` nothing answers on,
+are left to their consumers, so no rule lives in two places.
 
 ## API
 
@@ -92,11 +96,13 @@ See `api.rest` for the full set of example requests.
 ### Auth & orders
 
 The `/v1/orders*` endpoints require a bearer token, catalog reads stay public.  
-Tokens are HS256 JWTs verified against `AUTH_JWT_SECRET`,
+Tokens are HS256 (HMAC-SHA256) JWTs verified against `AUTH_JWT_SECRET`,
 `make token` prints a dev token.  
+Startup rejects a secret shorter than the 32 bytes RFC 7518 requires.  
 Verification uses [golang-jwt](https://github.com/golang-jwt/jwt) pinned to HS256 through its `alg`
-allowlist, with `exp` required, and the test suite keeps the adversarial cases (`alg: none`,
-RS256 key confusion) as configuration regression guards.  
+allowlist, with `exp` required.  
+The test suite keeps the adversarial cases (`alg: none`, RS256 key confusion) as configuration
+regression guards.  
 There is intentionally no signup, refresh, or IdP integration, the showcase is object-level
 authorization, not identity management.  
 Both transports deny by default: a route or RPC serves anonymous callers only when it is

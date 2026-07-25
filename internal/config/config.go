@@ -56,18 +56,18 @@ type (
 		HSTSMaxAge         int      `env:"HSTS_MAX_AGE" envDefault:"31536000"`
 	}
 	Postgres struct {
-		Host            string        `env:"PG_HOST,required"`
+		Host            string        `env:"PG_HOST,required,notEmpty"`
 		Port            int           `env:"PG_PORT,required"`
-		User            string        `env:"PG_USER,required"`
+		User            string        `env:"PG_USER,required,notEmpty"`
 		Password        Secret        `env:"PG_PASSWORD,required,unset"`
-		Database        string        `env:"PG_DB,required"`
+		Database        string        `env:"PG_DB,required,notEmpty"`
 		SSLMode         string        `env:"PG_SSLMODE" envDefault:"disable"`
 		MaxOpenConns    int32         `env:"PG_MAX_OPEN_CONNS" envDefault:"25"`
 		MaxIdleConns    int32         `env:"PG_MAX_IDLE_CONNS" envDefault:"5"`
 		ConnMaxLifetime time.Duration `env:"PG_CONN_MAX_LIFETIME" envDefault:"30m"`
 	}
 	Redis struct {
-		Host     string        `env:"REDIS_HOST,required"`
+		Host     string        `env:"REDIS_HOST,required,notEmpty"`
 		Port     int           `env:"REDIS_PORT,required"`
 		Password Secret        `env:"REDIS_PASSWORD,required,unset"`
 		DB       int           `env:"REDIS_DB" envDefault:"0"`
@@ -75,9 +75,9 @@ type (
 		NegTTL   time.Duration `env:"REDIS_CACHE_NEG_TTL" envDefault:"1m"`
 	}
 	RabbitMQ struct {
-		Host     string `env:"RABBITMQ_HOST,required"`
+		Host     string `env:"RABBITMQ_HOST,required,notEmpty"`
 		Port     int    `env:"RABBITMQ_PORT,required"`
-		User     string `env:"RABBITMQ_USER,required"`
+		User     string `env:"RABBITMQ_USER,required,notEmpty"`
 		Password Secret `env:"RABBITMQ_PASSWORD,required,unset"`
 	}
 	Outbox struct {
@@ -135,14 +135,38 @@ func (p Postgres) DSN() string {
 	return u.String()
 }
 
+// Load parses the environment and refuses a configuration the process would misbehave on.
 func Load() (Config, error) {
-	return env.ParseAs[Config]()
+	cfg, err := env.ParseAs[Config]()
+	if err != nil {
+		return Config{}, err
+	}
+	if err := cfg.validate(); err != nil {
+		return Config{}, err
+	}
+	return cfg, nil
 }
 
+// LoadPostgres parses only the database settings, for the migration binary.
 func LoadPostgres() (Postgres, error) {
-	return env.ParseAs[Postgres]()
+	cfg, err := env.ParseAs[Postgres]()
+	if err != nil {
+		return Postgres{}, err
+	}
+	if err := cfg.validate(); err != nil {
+		return Postgres{}, err
+	}
+	return cfg, nil
 }
 
+// LoadAuth parses only the signing key, for the dev token binary.
 func LoadAuth() (Auth, error) {
-	return env.ParseAs[Auth]()
+	cfg, err := env.ParseAs[Auth]()
+	if err != nil {
+		return Auth{}, err
+	}
+	if err := cfg.validate(); err != nil {
+		return Auth{}, err
+	}
+	return cfg, nil
 }

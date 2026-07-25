@@ -19,10 +19,7 @@ func main() {
 
 	cfg, err := config.LoadAuth()
 	if err != nil {
-		fail("unable to load auth: " + err.Error())
-	}
-	if cfg.JWTSecret == "" {
-		fail("AUTH_JWT_SECRET is empty, run via make token or export it first")
+		fail("load auth: " + err.Error())
 	}
 
 	id, err := subID(*sub)
