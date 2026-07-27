@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -62,12 +63,12 @@ func Verify(ctx context.Context, dsn string) error {
 	if err != nil {
 		return err
 	}
-	current, target, err := p.GetVersions(ctx)
+	pending, err := p.HasPending(ctx)
 	if err != nil {
-		return fmt.Errorf("read schema version: %w", err)
+		return fmt.Errorf("check pending migrations: %w", err)
 	}
-	if current < target {
-		return fmt.Errorf("schema outdated: db at version: %d, expected: %d", current, target)
+	if pending {
+		return errors.New("schema outdated: run migrations")
 	}
 	return nil
 }
