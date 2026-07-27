@@ -10,13 +10,14 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 )
 
 //go:embed *.sql
 var sqlFiles embed.FS
 
 func Up(ctx context.Context, db *sql.DB) ([]*goose.MigrationResult, error) {
-	p, err := newProvider(db)
+	p, err := newLockingProvider(db)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +29,7 @@ func Up(ctx context.Context, db *sql.DB) ([]*goose.MigrationResult, error) {
 }
 
 func Down(ctx context.Context, db *sql.DB) (*goose.MigrationResult, error) {
-	p, err := newProvider(db)
+	p, err := newLockingProvider(db)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +74,14 @@ func Verify(ctx context.Context, dsn string) error {
 	return nil
 }
 
-func newProvider(db *sql.DB) (*goose.Provider, error) {
-	return goose.NewProvider(goose.DialectPostgres, db, sqlFiles)
+func newProvider(db *sql.DB, opts ...goose.ProviderOption) (*goose.Provider, error) {
+	return goose.NewProvider(goose.DialectPostgres, db, sqlFiles, opts...)
+}
+
+func newLockingProvider(db *sql.DB) (*goose.Provider, error) {
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return nil, fmt.Errorf("create session locker: %w", err)
+	}
+	return newProvider(db, goose.WithSessionLocker(locker))
 }
