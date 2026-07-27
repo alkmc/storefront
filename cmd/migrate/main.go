@@ -100,9 +100,11 @@ func openDB(ctx context.Context, dsn string) (*sql.DB, error) {
 func execCommand(ctx context.Context, logger *slog.Logger, cmd string, db *sql.DB) error {
 	switch cmd {
 	case "up":
-		if err := migrations.Up(ctx, db); err != nil {
+		results, err := migrations.Up(ctx, db)
+		if err != nil {
 			return err
 		}
+		logMigrations(logger, results...)
 		logger.Info("migrations applied")
 		return nil
 	case "status":
@@ -112,9 +114,11 @@ func execCommand(ctx context.Context, logger *slog.Logger, cmd string, db *sql.D
 		}
 		return printStatus(os.Stdout, rows)
 	case "down":
-		if err := migrations.Down(ctx, db); err != nil {
+		result, err := migrations.Down(ctx, db)
+		if err != nil {
 			return err
 		}
+		logMigrations(logger, result)
 		logger.Info("migration rolled back")
 		return nil
 	default:
@@ -133,4 +137,15 @@ func printStatus(w io.Writer, rows []*goose.MigrationStatus) error {
 		_, _ = fmt.Fprintf(tw, "%d\t%s\t%s\t%s\n", r.Source.Version, r.State, applied, r.Source.Path)
 	}
 	return tw.Flush()
+}
+
+func logMigrations(logger *slog.Logger, results ...*goose.MigrationResult) {
+	for _, r := range results {
+		logger.Info(
+			"ran migration",
+			slog.Int64("version", r.Source.Version),
+			slog.String("direction", r.Direction),
+			slog.Duration("took", r.Duration),
+		)
+	}
 }

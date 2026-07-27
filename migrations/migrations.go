@@ -14,30 +14,28 @@ import (
 //go:embed *.sql
 var sqlFiles embed.FS
 
-func newProvider(db *sql.DB) (*goose.Provider, error) {
-	return goose.NewProvider(goose.DialectPostgres, db, sqlFiles)
-}
-
-func Up(ctx context.Context, db *sql.DB) error {
+func Up(ctx context.Context, db *sql.DB) ([]*goose.MigrationResult, error) {
 	p, err := newProvider(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if _, err := p.Up(ctx); err != nil {
-		return fmt.Errorf("apply migrations: %w", err)
+	results, err := p.Up(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("apply migrations: %w", err)
 	}
-	return nil
+	return results, nil
 }
 
-func Down(ctx context.Context, db *sql.DB) error {
+func Down(ctx context.Context, db *sql.DB) (*goose.MigrationResult, error) {
 	p, err := newProvider(db)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if _, err := p.Down(ctx); err != nil {
-		return fmt.Errorf("roll back migration: %w", err)
+	result, err := p.Down(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("roll back migration: %w", err)
 	}
-	return nil
+	return result, nil
 }
 
 func Status(ctx context.Context, db *sql.DB) ([]*goose.MigrationStatus, error) {
@@ -72,4 +70,8 @@ func Verify(ctx context.Context, dsn string) error {
 		return fmt.Errorf("schema outdated: db at version: %d, expected: %d", current, target)
 	}
 	return nil
+}
+
+func newProvider(db *sql.DB) (*goose.Provider, error) {
+	return goose.NewProvider(goose.DialectPostgres, db, sqlFiles)
 }

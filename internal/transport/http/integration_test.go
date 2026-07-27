@@ -80,7 +80,7 @@ func setupIntegrationMux(t *testing.T) http.Handler {
 		t.Fatalf("failed to parse pg config: %v", err)
 	}
 	migrationDB := stdlib.OpenDB(*pgxCfg)
-	if err := migrations.Up(ctx, migrationDB); err != nil {
+	if _, err := migrations.Up(ctx, migrationDB); err != nil {
 		t.Fatalf("failed to apply migrations: %v", err)
 	}
 	if err := migrationDB.Close(); err != nil {
