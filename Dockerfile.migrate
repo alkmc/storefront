@@ -1,7 +1,5 @@
 FROM golang:1.26 AS builder
 
-LABEL maintainer="Alex <github.com/alkmc>"
-
 WORKDIR /app
 
 COPY go.mod go.sum ./
