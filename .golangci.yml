@@ -11,38 +11,53 @@ run:
 linters:
   default: standard
   enable:
+    - asasalint
     - asciicheck
     - bidichk
     - bodyclose
     - canonicalheader
+    - containedctx
     - contextcheck
     - durationcheck
+    - errchkjson
+    - errname
     - errorlint
+    - exhaustive
     - fatcontext
     - forcetypeassert
     - forbidigo
+    - gocheckcompilerdirectives
     - gosec
     - gocritic
     - iface
     - lll
     - makezero
     - modernize
+    - musttag
     - nilnesserr
     - nilnil
     - noctx
+    - nosprintfhostport
     - perfsprint
     - prealloc
     - predeclared
+    - reassign
+    - recvcheck
     - revive
     - rowserrcheck
     - sloglint
     - sqlclosecheck
+    - thelper
     - unparam
     - unconvert
+    - unqueryvet
     - usetesting
     - usestdlibvars
     - wastedassign
   settings:
+    exhaustive:
+      # slog.Kind switches are partial by design, a ReplaceAttr handler rewrites two kinds
+      ignore-enum-types: ^log/slog\.Kind$
     lll:
       line-length: 110
       tab-width: 1
@@ -55,6 +70,10 @@ linters:
       - std-error-handling
     paths:
       - api/gen
+    rules:
+      - path: internal/outbox/relay_test.go
+        linters:
+          - thelper
 
 formatters:
   enable:
