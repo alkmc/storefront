@@ -7,12 +7,16 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/alkmc/storefront/internal/pg/pgtest"
+	"github.com/alkmc/storefront/internal/service"
+	"github.com/alkmc/storefront/internal/store"
 	"github.com/google/uuid"
 )
 
@@ -43,8 +47,7 @@ func TestIntegration_OrderIdempotency(t *testing.T) {
 		t.Errorf("replay %s = %q, want %q", headerIdempotencyReplayed, got, "true")
 	}
 	replayOrder := decodeJSON[createOrderResponse](t, replay.Body)
-	if replayOrder.ID != firstOrder.ID || replayOrder.ProductID != firstOrder.ProductID ||
-		replayOrder.Quantity != firstOrder.Quantity || !replayOrder.CreatedAt.Equal(firstOrder.CreatedAt) {
+	if !reflect.DeepEqual(firstOrder, replayOrder) {
 		t.Errorf("replay diverged: first %+v, replay %+v", firstOrder, replayOrder)
 	}
 
