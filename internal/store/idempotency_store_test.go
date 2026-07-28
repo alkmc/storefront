@@ -12,8 +12,7 @@ import (
 )
 
 func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
@@ -59,8 +58,7 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_IdempotencyMismatch(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
@@ -85,8 +83,7 @@ func TestPostgres_CreateOrder_IdempotencyMismatch(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_KeyReusableAfterFailure(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 1)
@@ -114,8 +111,7 @@ func TestPostgres_CreateOrder_KeyReusableAfterFailure(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
@@ -158,8 +154,7 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 
 	const buyers = 10
 	productID := seedProduct(t, repo, 5)
@@ -176,8 +171,7 @@ func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_ConcurrentReclaim(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	const buyers = 10
@@ -205,8 +199,7 @@ func TestPostgres_CreateOrder_ConcurrentReclaim(t *testing.T) {
 }
 
 func TestPostgres_PurgeIdempotencyKeys(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	seed := func(key, expiresIn string) {

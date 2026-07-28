@@ -3,7 +3,6 @@
 package http
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -13,160 +12,9 @@ import (
 	"time"
 
 	"github.com/alkmc/storefront/internal/auth"
-	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/alkmc/storefront/internal/service"
-	"github.com/alkmc/storefront/internal/store"
-	"github.com/alkmc/storefront/migrations"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-// setupIntegrationMux boots PG in a container and wires the real service into the real mux.
-func setupIntegrationMux(t *testing.T) http.Handler {
-	t.Helper()
-	ctx := t.Context()
-
-	dbName := "testdb"
-	dbUser := "testuser"
-	dbPassword := "testpassword"
-
-	pgContainer, err := postgres.Run(
-		ctx,
-		"postgres:18",
-		postgres.WithDatabase(dbName),
-		postgres.WithUsername(dbUser),
-		postgres.WithPassword(dbPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(10*time.Second),
-		),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := pgContainer.Terminate(context.Background()); err != nil {
-			t.Fatalf("failed to terminate pg container: %v", err)
-		}
-	})
-
-	host, err := pgContainer.Host(ctx)
-	if err != nil {
-		t.Fatalf("failed to get host: %v", err)
-	}
-	port, err := pgContainer.MappedPort(ctx, "5432/tcp")
-	if err != nil {
-		t.Fatalf("failed to get mapped port: %v", err)
-	}
-
-	dsn := config.Postgres{
-		Host:     host,
-		Port:     int(port.Num()),
-		User:     dbUser,
-		Password: config.Secret(dbPassword),
-		Database: dbName,
-		SSLMode:  "disable",
-	}.DSN()
-
-	pgxCfg, err := pgx.ParseConfig(dsn)
-	if err != nil {
-		t.Fatalf("failed to parse pg config: %v", err)
-	}
-	migrationDB := stdlib.OpenDB(*pgxCfg)
-	if _, err := migrations.Up(ctx, migrationDB); err != nil {
-		t.Fatalf("failed to apply migrations: %v", err)
-	}
-	if err := migrationDB.Close(); err != nil {
-		t.Fatalf("failed to close migration db: %v", err)
-	}
-
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatalf("failed to create pg pool: %v", err)
-	}
-	t.Cleanup(pool.Close)
-
-	logger := slog.New(slog.DiscardHandler)
-	svc := service.NewService(store.NewPostgres(pool, time.Hour), nopCache{}, time.Second, logger)
-	h := NewHandler(svc, 2*time.Second, logger)
-	mw, err := NewMiddleware(MiddlewareCfg{
-		MaxBodyBytes:     testMaxBodyBytes,
-		CompressMinBytes: 1024,
-	})
-	if err != nil {
-		t.Fatalf("failed to build middleware: %v", err)
-	}
-	return mw(NewMux(h, Auth(auth.NewVerifier(testJWTSecret))))
-}
-
-func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID {
-	t.Helper()
-	body := fmt.Sprintf(`{"name":"Widget","stock":%d,"price":{"minorAmount":%d,"currency":"PLN"}}`,
-		stock, price)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/products", strings.NewReader(body),
-	)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create product: got %d: %s", rec.Code, rec.Body)
-	}
-	return decodeJSON[productResponse](t, rec.Body).ID
-}
-
-func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64) createOrderResponse {
-	t.Helper()
-	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
-	)
-	req.Header.Set("Authorization", bearer(t, sub))
-	req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create order: got %d: %s", rec.Code, rec.Body)
-	}
-	return decodeJSON[createOrderResponse](t, rec.Body)
-}
-
-func doGet[T any](t *testing.T, mux http.Handler, sub uuid.UUID, url string, wantStatus int) T {
-	t.Helper()
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
-	req.Header.Set("Authorization", bearer(t, sub))
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	if rec.Code != wantStatus {
-		t.Fatalf("GET %s: got %d, want %d: %s", url, rec.Code, wantStatus, rec.Body)
-	}
-	return decodeJSON[T](t, rec.Body)
-}
-
-// postOrder issues a create-order request with a caller-chosen Idempotency-Key (empty omits the
-// header) and returns the raw recorder so the test can inspect status, headers, and body.
-func postOrder(
-	t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64, key string,
-) *httptest.ResponseRecorder {
-	t.Helper()
-	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
-	)
-	req.Header.Set("Authorization", bearer(t, sub))
-	if key != "" {
-		req.Header.Set(headerIdempotencyKey, key)
-	}
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-	return rec
-}
 
 // TestIntegration_OrderIdempotency drives the full request path against real Postgres: the same key
 // replays the stored result without a second decrement, a different payload on that key is a mismatch.
@@ -344,4 +192,85 @@ func TestIntegration_PurchaseRequiresToken(t *testing.T) {
 	if got := rec.Header().Get("WWW-Authenticate"); got != "Bearer" {
 		t.Errorf("got WWW-Authenticate %q, want %q", got, "Bearer")
 	}
+}
+
+// setupIntegrationMux boots PG in a container and wires the real service into the real mux.
+func setupIntegrationMux(t *testing.T) http.Handler {
+	t.Helper()
+
+	pool := pgtest.MigratedPool(t)
+
+	logger := slog.New(slog.DiscardHandler)
+	svc := service.NewService(store.NewPostgres(pool, time.Hour), nopCache{}, time.Second, logger)
+	h := NewHandler(svc, 2*time.Second, logger)
+	mw, err := NewMiddleware(MiddlewareCfg{
+		MaxBodyBytes:     testMaxBodyBytes,
+		CompressMinBytes: 1024,
+	})
+	if err != nil {
+		t.Fatalf("failed to build middleware: %v", err)
+	}
+	return mw(NewMux(h, Auth(auth.NewVerifier(testJWTSecret))))
+}
+
+func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID {
+	t.Helper()
+	body := fmt.Sprintf(`{"name":"Widget","stock":%d,"price":{"minorAmount":%d,"currency":"PLN"}}`,
+		stock, price)
+	req := httptest.NewRequestWithContext(
+		t.Context(), http.MethodPost, "/v1/products", strings.NewReader(body),
+	)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create product: got %d: %s", rec.Code, rec.Body)
+	}
+	return decodeJSON[productResponse](t, rec.Body).ID
+}
+
+func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64) createOrderResponse {
+	t.Helper()
+	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
+	req := httptest.NewRequestWithContext(
+		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
+	)
+	req.Header.Set("Authorization", bearer(t, sub))
+	req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create order: got %d: %s", rec.Code, rec.Body)
+	}
+	return decodeJSON[createOrderResponse](t, rec.Body)
+}
+
+func doGet[T any](t *testing.T, mux http.Handler, sub uuid.UUID, url string, wantStatus int) T {
+	t.Helper()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+	req.Header.Set("Authorization", bearer(t, sub))
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != wantStatus {
+		t.Fatalf("GET %s: got %d, want %d: %s", url, rec.Code, wantStatus, rec.Body)
+	}
+	return decodeJSON[T](t, rec.Body)
+}
+
+// postOrder issues a create-order request with a caller-chosen Idempotency-Key (empty omits the
+// header) and returns the raw recorder so the test can inspect status, headers, and body.
+func postOrder(
+	t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64, key string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
+	req := httptest.NewRequestWithContext(
+		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
+	)
+	req.Header.Set("Authorization", bearer(t, sub))
+	if key != "" {
+		req.Header.Set(headerIdempotencyKey, key)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
 }

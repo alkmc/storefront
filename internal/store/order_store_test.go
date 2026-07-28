@@ -12,8 +12,7 @@ import (
 )
 
 func TestPostgres_FindOrder(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	productID := uuid.Must(uuid.NewV7())
@@ -52,8 +51,7 @@ func TestPostgres_FindOrder(t *testing.T) {
 }
 
 func TestPostgres_FindOrders(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	const (

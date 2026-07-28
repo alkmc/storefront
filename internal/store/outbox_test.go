@@ -17,8 +17,7 @@ import (
 )
 
 func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
@@ -106,8 +105,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 }
 
 func TestOutbox_DrainBatchPublishesAndDeletes(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	seedProducts(t, repo, 3)
@@ -140,8 +138,7 @@ func TestOutbox_DrainBatchPublishesAndDeletes(t *testing.T) {
 }
 
 func TestOutbox_TransientFailureKeepsRowDue(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	seedProducts(t, repo, 2)
@@ -181,8 +178,7 @@ func TestOutbox_TransientFailureKeepsRowDue(t *testing.T) {
 }
 
 func TestOutbox_PoisonDeadLettersAfterMaxAttempts(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 	const maxAttempts = 2
 
@@ -245,8 +241,7 @@ func TestOutbox_PoisonDeadLettersAfterMaxAttempts(t *testing.T) {
 }
 
 func TestOutbox_ConcurrentRelaysPublishExactlyOnce(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	const (

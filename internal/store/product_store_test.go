@@ -14,8 +14,7 @@ import (
 )
 
 func TestPostgres_Save(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	tests := []struct {
@@ -80,8 +79,7 @@ func TestPostgres_Save(t *testing.T) {
 }
 
 func TestPostgres_FindByID(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
@@ -129,8 +127,7 @@ func TestPostgres_FindByID(t *testing.T) {
 }
 
 func TestPostgres_FindAll(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	const (
@@ -208,8 +205,7 @@ func productIDs(products []domain.Product) []uuid.UUID {
 }
 
 func TestPostgres_Update(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
@@ -275,8 +271,7 @@ func TestPostgres_Update(t *testing.T) {
 }
 
 func TestPostgres_Delete(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
@@ -324,8 +319,7 @@ func TestPostgres_Delete(t *testing.T) {
 }
 
 func TestPostgres_Delete_ProductInUse(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	id := uuid.Must(uuid.NewV7())
@@ -350,8 +344,7 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	tests := []struct {
@@ -445,8 +438,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 }
 
 func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
-	repo, cleanup := setupTestContainerDB(t)
-	defer cleanup()
+	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
 	const (
