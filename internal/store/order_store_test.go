@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 )
 
@@ -32,12 +33,8 @@ func TestPostgres_FindOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !got.CreatedAt.Equal(placed.CreatedAt) {
-		t.Errorf("created_at: got %v, want %v", got.CreatedAt, placed.CreatedAt)
-	}
-	placed.CreatedAt = got.CreatedAt
-	if got != placed {
-		t.Errorf("got %+v, want %+v", got, placed)
+	if diff := cmp.Diff(placed, got); diff != "" {
+		t.Errorf("reloaded order mismatch (-placed +got):\n%s", diff)
 	}
 
 	if _, err := repo.FindOrder(ctx, domain.UserID(stranger), placed.ID); !errors.Is(err, domain.ErrNotFound) {

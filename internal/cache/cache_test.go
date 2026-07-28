@@ -1,10 +1,10 @@
 package cache
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 )
 
@@ -67,8 +67,9 @@ func TestClassifyStoredValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := classify(tt.raw); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("classify(%q) = %+v, want %+v", tt.raw, got, tt.want)
+			// Entry keeps the raw token unexported, so cmp needs explicit access to it
+			if diff := cmp.Diff(tt.want, classify(tt.raw), cmp.AllowUnexported(Entry{})); diff != "" {
+				t.Errorf("classify(%q) mismatch (-want +got):\n%s", tt.raw, diff)
 			}
 		})
 	}

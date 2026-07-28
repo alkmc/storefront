@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/alkmc/storefront/internal/pg/pgtest"
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 )
 
@@ -47,8 +47,8 @@ func TestIntegration_OrderIdempotency(t *testing.T) {
 		t.Errorf("replay %s = %q, want %q", headerIdempotencyReplayed, got, "true")
 	}
 	replayOrder := decodeJSON[createOrderResponse](t, replay.Body)
-	if !reflect.DeepEqual(firstOrder, replayOrder) {
-		t.Errorf("replay diverged: first %+v, replay %+v", firstOrder, replayOrder)
+	if diff := cmp.Diff(firstOrder, replayOrder); diff != "" {
+		t.Errorf("replay diverged (-first +replay):\n%s", diff)
 	}
 
 	// the replay decremented nothing: exactly one order exists end to end

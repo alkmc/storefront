@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/alkmc/storefront/internal/domain"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 )
 
@@ -36,12 +37,8 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 	}
 
 	// the replay reproduces the original order exactly (fetched via JOIN)
-	if replay.ID != first.ID || replay.ProductID != first.ProductID ||
-		replay.Quantity != first.Quantity || replay.UnitPrice != first.UnitPrice {
-		t.Errorf("replay diverged: first %+v, replay %+v", first, replay)
-	}
-	if !replay.CreatedAt.Equal(first.CreatedAt) {
-		t.Errorf("replay created_at: got %v, want %v", replay.CreatedAt, first.CreatedAt)
+	if diff := cmp.Diff(first, replay); diff != "" {
+		t.Errorf("replay diverged (-first +replay):\n%s", diff)
 	}
 
 	// stock decremented exactly once and only one order exists
