@@ -5,17 +5,17 @@
 * [General info](#general-info)
 * [Technologies](#technologies)
 * [Quickstart](#quickstart)
-* [Setup](#setup)
 * [API](#api)
 * [gRPC API](#grpc-api)
 * [Architecture](#architecture)
 * [Migrations](#migrations)
 
-## General Info
+## General info
 
 Product catalog API exposed over REST and gRPC.  
 PostgreSQL is the source of truth, with goose migrations embedded in the binary.  
-Product reads use cache-aside Redis, concurrent misses are coalesced with singleflight.  
+Product reads use cache-aside Redis.  
+Concurrent misses are coalesced with singleflight.  
 Only readers populate the cache, and only under a compare-and-set guard, so a reader
 that raced a writer loses instead of restoring stale data.  
 Writers just tombstone the key.  
@@ -39,14 +39,11 @@ make migrate-up
 make up
 ```
 
-## Setup
-
-Copy `.env.example` to `.env` and fill in the required values.  
 All available variables with their defaults are documented in `.env.example`.  
 Startup rejects settings that would fail silently:
 a zero timeout, a zero outbox batch size, a listen port of `0`.  
-Settings that fail loudly on their own, an invalid `PG_SSLMODE` or a `PG_PORT` nothing answers on,
-are left to their consumers, so no rule lives in two places.
+Settings that fail loudly on their own, such as an invalid `PG_SSLMODE` or a `PG_PORT` nothing
+answers on, are left to their consumers, so no rule lives in two places.
 
 ## API
 
@@ -86,45 +83,48 @@ Stock is set at creation and changed only through purchase.
 `POST /v1/orders` answers `201 Created` with a `Location` header and returns the created order:
 `{"id":"<id>","productId":"<id>","quantity":2,"unitPrice":{"minorAmount":999,"currency":"PLN"},"createdAt":"<ts>"}`.  
 A `409 Conflict` signals insufficient stock.  
-`POST /v1/orders` **requires** an `Idempotency-Key` header, an opaque string of up to 255 bytes,
-so a retry is safe: a missing or over-long key answers `400`, the first call runs, a repeat with the
-same key and body replays the stored result with `Idempotency-Replayed: true`, and the same key with
-a different body answers `422`.  
+`POST /v1/orders` **requires** an `Idempotency-Key` header, an opaque string of up to 255 bytes, so a retry is safe.  
+A missing or over-long key answers `400`.  
+The first call runs, a repeat with the same key and body replays the stored result with
+`Idempotency-Replayed: true`, and the same key with a different body answers `422`.  
 gRPC carries the key in the `idempotency-key` metadata.  
 See `api.rest` for the full set of example requests.
 
 ### Auth & orders
 
-The `/v1/orders*` endpoints require a bearer token, catalog reads stay public.  
-Tokens are HS256 (HMAC-SHA256) JWTs verified against `AUTH_JWT_SECRET`,
+The `/v1/orders*` endpoints require a bearer token.  
+Catalog reads stay public.  
+Tokens are HS256 (HMAC-SHA256) JWTs verified against `AUTH_JWT_SECRET`.  
 `make token` prints a dev token.  
 Startup rejects a secret shorter than the 32 bytes RFC 7518 requires.  
 Verification uses [golang-jwt](https://github.com/golang-jwt/jwt) pinned to HS256 through its `alg`
 allowlist, with `exp` required.  
 The test suite keeps the adversarial cases (`alg: none`, RS256 key confusion) as configuration
 regression guards.  
-There is intentionally no signup, refresh, or IdP integration, the showcase is object-level
-authorization, not identity management.  
+There is intentionally no signup, refresh, or IdP integration.  
+The showcase is object-level authorization, not identity management.  
 Both transports deny by default: a route or RPC serves anonymous callers only when it is
-explicitly registered as public, gRPC infrastructure (health, reflection) is excepted, and
-application streams are rejected outright until one consciously opts in.  
+explicitly registered as public.  
+gRPC infrastructure (health, reflection) is excepted, and application streams are rejected
+outright until one consciously opts in.  
 
 Every purchase records an order owned by the token's user, with the unit price snapshotted at
 purchase time.  
 Listings return only your own rows because ownership is enforced in the SQL query, not filtered
-in the handler, and a foreign order id answers `404`, so its existence stays hidden.  
+in the handler.  
+A foreign order id answers `404`, so its existence stays hidden.  
 `DELETE /v1/products/{id}` answers `409 Conflict` once a product has orders, backed by a
 foreign key with `ON DELETE RESTRICT`.
 
 ## gRPC API
 
-A gRPC transport mirrors the HTTP surface over the same service, on `GRPC_PORT` (default `9090`),
+A gRPC transport mirrors the HTTP surface over the same service on `GRPC_PORT` (default `9090`),
 with a registered gRPC health service.  
 The contract lives in `api/proto` as two packages, `catalog.v1` and `order.v1` (Protobuf edition 2024),
 mirroring the aggregate split of the HTTP paths.  
 Code is generated with [buf](https://buf.build) into `api/gen` (`make proto`).  
 The same bearer token guards the same operations: `order.v1.OrderService`
-requires an `authorization` metadata entry, catalog reads stay public.
+requires an `authorization` metadata entry, while catalog reads stay public.
 
 Server reflection is off by default.  
 Set `GRPC_REFLECTION=true` (dev only) and [grpcurl](https://github.com/fullstorydev/grpcurl) discovers the API without the proto:
@@ -170,17 +170,18 @@ in the same transaction as the data change, so there is no dual-write.
 A relay claims due rows with `FOR UPDATE SKIP LOCKED` (safe with multiple instances, no leader election),
 publishes them to the `storefront.product` topic exchange over AMQP 1.0, and deletes the published rows in the
 same transaction.  
-New events wake the relay via `LISTEN/NOTIFY`, interval polling is only a fallback.
+New events wake the relay via `LISTEN/NOTIFY`.  
+Interval polling is only a fallback.
 
 Delivery is at-least-once end-to-end: consumers deduplicate by `eventId` (UUIDv7) and can discard
 stale updates by `version`, since retries and multiple relays give no ordering guarantee.  
-Transient broker failures never consume retry attempts, events wait in Postgres for as long as an outage
-lasts.  
+Transient broker failures never consume retry attempts.  
+Events wait in Postgres for as long as an outage lasts.  
 Only permanent rejections (poison messages) count toward `OUTBOX_MAX_ATTEMPTS` and end up in `outbox_dead` together with their last error.
 
 ## Migrations
 
-Schema changes live in `migrate/migrations/` and are bundled into the binary via `embed.FS`.  
+Schema changes live in `migrations/` and are bundled into the binary via `embed.FS`.  
 The `cmd/migrate` CLI applies them using [goose](https://github.com/pressly/goose).
 
 ```bash
