@@ -27,7 +27,7 @@ Writes emit domain events through a transactional outbox relayed to RabbitMQ.
 
 * Go 1.26
 * PostgreSQL 18.x
-* Redis 8.8
+* Redis 8.10
 * RabbitMQ 4.3 (AMQP 1.0)
 
 ## Quickstart
