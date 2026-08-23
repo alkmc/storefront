@@ -38,14 +38,12 @@ func TestJanitor_PurgesEachInterval(t *testing.T) {
 			t.Fatalf("purge before first interval = %d, want 0", got)
 		}
 
-		time.Sleep(testInterval)
-		synctest.Wait()
+		synctest.Sleep(testInterval)
 		if got := fp.calls.Load(); got != 1 {
 			t.Errorf("purge after 1 interval = %d, want 1", got)
 		}
 
-		time.Sleep(testInterval)
-		synctest.Wait()
+		synctest.Sleep(testInterval)
 		if got := fp.calls.Load(); got != 2 {
 			t.Errorf("purge after 2 intervals = %d, want 2", got)
 		}
@@ -82,13 +80,11 @@ func TestJanitor_ContinuesAfterError(t *testing.T) {
 		defer cancel()
 		go func() { _ = j.Run(ctx) }()
 
-		time.Sleep(testInterval)
-		synctest.Wait()
+		synctest.Sleep(testInterval)
 		if got := fp.calls.Load(); got != 1 {
 			t.Fatalf("after 1 interval = %d, want 1 (errored)", got)
 		}
-		time.Sleep(testInterval)
-		synctest.Wait()
+		synctest.Sleep(testInterval)
 		if got := fp.calls.Load(); got != 2 {
 			t.Errorf("after an error the loop stopped: calls = %d, want 2", got)
 		}
