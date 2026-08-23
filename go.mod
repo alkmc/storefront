@@ -1,6 +1,6 @@
 module github.com/alkmc/storefront
 
-go 1.26
+go 1.26.7
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
@@ -8,17 +8,17 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jub0bs/cors v1.0.5
+	github.com/jub0bs/cors v1.1.0
 	github.com/klauspost/compress v1.19.2
 	github.com/pressly/goose/v3 v3.27.3
 	github.com/rabbitmq/rabbitmq-amqp-go-client v1.3.0
-	github.com/redis/rueidis v1.0.76
+	github.com/redis/rueidis v1.0.77
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/rabbitmq v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.44.0
 	golang.org/x/sync v0.22.0
-	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc v1.83.1
 	google.golang.org/protobuf v1.36.12
 )
 
@@ -78,7 +78,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260720211330-0afa2a65878a // indirect
