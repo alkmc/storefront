@@ -4,7 +4,8 @@ package store
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"sync"
@@ -128,7 +129,7 @@ func TestOutbox_DrainBatchPublishesAndDeletes(t *testing.T) {
 		if r.Type != event.TypeCreated {
 			t.Errorf("record %d: got type %q, want %q", i, r.Type, event.TypeCreated)
 		}
-		if !json.Valid(r.Payload) {
+		if !jsontext.Value(r.Payload).IsValid() {
 			t.Errorf("record %d: invalid payload %q", i, r.Payload)
 		}
 	}

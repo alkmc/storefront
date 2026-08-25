@@ -3,7 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -900,7 +900,7 @@ func testMoneyJSON(amount int64) map[string]any {
 func decodeJSON[T any](t *testing.T, r io.Reader) T {
 	t.Helper()
 	var v T
-	if err := json.NewDecoder(r).Decode(&v); err != nil {
+	if err := json.UnmarshalRead(r, &v); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	return v
