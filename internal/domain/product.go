@@ -2,8 +2,7 @@ package domain
 
 import (
 	"errors"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 var (

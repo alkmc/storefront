@@ -3,7 +3,7 @@ package http
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 const (
@@ -45,7 +45,7 @@ func TestGetProductByID(t *testing.T) {
 	}{
 		{
 			name: "success",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			setupMock: func() {
 				proc.findByID = func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 					return domain.Product{ID: id, Name: "Car", Price: testMoney()}, nil
@@ -58,11 +58,11 @@ func TestGetProductByID(t *testing.T) {
 			id:             "incorrect",
 			setupMock:      func() {},
 			expectedStatus: http.StatusBadRequest,
-			expectedMsg:    "invalid UUID length: 9",
+			expectedMsg:    "invalid uuid",
 		},
 		{
 			name: "non-existing product",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			setupMock: func() {
 				proc.findByID = func(_ context.Context, _ domain.ProductID) (domain.Product, error) {
 					return domain.Product{}, domain.ErrNotFound
@@ -108,8 +108,8 @@ func TestGetProductByID(t *testing.T) {
 func TestGetProducts(t *testing.T) {
 	mux, proc := setupTest(t)
 
-	cursorID := uuid.Must(uuid.NewV7())
-	lastID := uuid.Must(uuid.NewV7())
+	cursorID := uuid.NewV7()
+	lastID := uuid.NewV7()
 
 	tests := []struct {
 		name           string
@@ -283,7 +283,7 @@ func TestAddProduct(t *testing.T) {
 		{
 			name: "client supplied id rejected",
 			body: map[string]any{
-				"id":    uuid.Must(uuid.NewV7()).String(),
+				"id":    uuid.NewV7().String(),
 				"name":  "Car",
 				"price": testMoneyJSON(123),
 			},
@@ -348,7 +348,7 @@ func TestServiceUnavailable(t *testing.T) {
 		return domain.Product{}, fmt.Errorf("query failed: %w", domain.ErrUnavailable)
 	}
 
-	id := uuid.Must(uuid.NewV7()).String()
+	id := uuid.NewV7().String()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/products/"+id, nil)
 	resp := httptest.NewRecorder()
 	mux.ServeHTTP(resp, req)
@@ -392,7 +392,7 @@ func TestDeleteProduct(t *testing.T) {
 	}{
 		{
 			name: "not existing",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			setupMock: func() {
 				proc.delete = func(_ context.Context, _ domain.ProductID) error {
 					return domain.ErrNotFound
@@ -402,7 +402,7 @@ func TestDeleteProduct(t *testing.T) {
 		},
 		{
 			name: "success",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			setupMock: func() {
 				proc.delete = func(_ context.Context, _ domain.ProductID) error {
 					return nil
@@ -447,7 +447,7 @@ func TestUpdateProduct(t *testing.T) {
 	}{
 		{
 			name: "success",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			body: updateInput{Name: "Updated", Price: testMoneyInput(9990)},
 			setupMock: func() {
 				proc.update = func(_ context.Context, p domain.Product) (domain.Product, error) {
@@ -460,9 +460,9 @@ func TestUpdateProduct(t *testing.T) {
 		},
 		{
 			name: "client supplied id rejected",
-			id:   uuid.Must(uuid.NewV7()).String(),
+			id:   uuid.NewV7().String(),
 			body: map[string]any{
-				"id":    uuid.Must(uuid.NewV7()).String(),
+				"id":    uuid.NewV7().String(),
 				"name":  "Updated",
 				"price": testMoneyJSON(9990),
 			},
@@ -505,9 +505,9 @@ func TestUpdateProduct(t *testing.T) {
 func TestCreateOrder(t *testing.T) {
 	mux, proc := setupTest(t)
 
-	id := uuid.Must(uuid.NewV7())
-	userID := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
+	userID := uuid.NewV7()
+	orderID := uuid.NewV7()
 
 	tests := []struct {
 		name           string
@@ -586,7 +586,7 @@ func TestCreateOrder(t *testing.T) {
 				t.Context(), http.MethodPost, "/v1/orders", bytes.NewReader(b),
 			)
 			req.Header.Set("Authorization", bearer(t, userID))
-			req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
+			req.Header.Set(headerIdempotencyKey, uuid.NewV7().String())
 			resp := httptest.NewRecorder()
 			mux.ServeHTTP(resp, req)
 
@@ -613,10 +613,10 @@ func TestCreateOrder(t *testing.T) {
 }
 
 func TestCreateOrder_Idempotency(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
-	userID := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
-	idemKey := uuid.Must(uuid.NewV7()).String()
+	id := uuid.NewV7()
+	userID := uuid.NewV7()
+	orderID := uuid.NewV7()
+	idemKey := uuid.NewV7().String()
 
 	send := func(t *testing.T, mux http.Handler, key string, qty int64) *httptest.ResponseRecorder {
 		t.Helper()
@@ -733,7 +733,7 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 		{
 			name:   "get order",
 			method: http.MethodGet,
-			url:    "/v1/orders/" + uuid.NewString(),
+			url:    "/v1/orders/" + uuid.NewV7().String(),
 		},
 	}
 
@@ -758,9 +758,9 @@ func TestProtectedRoutesRequireToken(t *testing.T) {
 func TestGetOrder(t *testing.T) {
 	mux, proc := setupTest(t)
 
-	userID := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
-	productID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
+	orderID := uuid.NewV7()
+	productID := uuid.NewV7()
 
 	tests := []struct {
 		name           string
@@ -836,9 +836,9 @@ func TestGetOrder(t *testing.T) {
 func TestListOrders(t *testing.T) {
 	mux, proc := setupTest(t)
 
-	userID := uuid.Must(uuid.NewV7())
-	cursorID := uuid.Must(uuid.NewV7())
-	lastID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
+	cursorID := uuid.NewV7()
+	lastID := uuid.NewV7()
 
 	proc.findOrders = func(_ context.Context, gotUser domain.UserID, cursor domain.Cursor, limit int,
 	) (domain.OrderPage, error) {
@@ -853,7 +853,7 @@ func TestListOrders(t *testing.T) {
 				{
 					ID:        domain.OrderID(lastID),
 					UserID:    gotUser,
-					ProductID: domain.ProductID(uuid.Must(uuid.NewV7())),
+					ProductID: domain.ProductID(uuid.NewV7()),
 					Quantity:  1,
 					UnitPrice: testMoney(),
 				},
@@ -900,7 +900,7 @@ func testMoneyJSON(amount int64) map[string]any {
 func decodeJSON[T any](t *testing.T, r io.Reader) T {
 	t.Helper()
 	var v T
-	if err := json.NewDecoder(r).Decode(&v); err != nil {
+	if err := json.UnmarshalRead(r, &v); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	return v

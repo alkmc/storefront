@@ -6,10 +6,10 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 )
 
 func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
@@ -17,7 +17,7 @@ func TestPostgres_CreateOrder_IdempotentReplay(t *testing.T) {
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	idem := domain.IdempotencyKey("key-1")
 
 	first, firstReplayed, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
@@ -59,7 +59,7 @@ func TestPostgres_CreateOrder_IdempotencyMismatch(t *testing.T) {
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	key := domain.IdempotencyKey("key-x")
 
 	if _, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), key); err != nil {
@@ -84,7 +84,7 @@ func TestPostgres_CreateOrder_KeyReusableAfterFailure(t *testing.T) {
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 1)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	key := domain.IdempotencyKey("retry-key")
 
 	// a failed purchase must not persist the key
@@ -112,7 +112,7 @@ func TestPostgres_CreateOrder_ExpiredKeyReexecutes(t *testing.T) {
 	ctx := t.Context()
 
 	productID := seedProduct(t, repo, 5)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	idem := domain.IdempotencyKey("expiring-key")
 
 	first, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 2), idem)
@@ -155,7 +155,7 @@ func TestPostgres_CreateOrder_IdempotentUnderConcurrency(t *testing.T) {
 
 	const buyers = 10
 	productID := seedProduct(t, repo, 5)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	idem := domain.IdempotencyKey("same-key")
 
 	ids := concurrentCreateOrders(t, repo, buyers, userID, productID, 1, idem)
@@ -173,7 +173,7 @@ func TestPostgres_CreateOrder_ConcurrentReclaim(t *testing.T) {
 
 	const buyers = 10
 	productID := seedProduct(t, repo, 5)
-	userID := uuid.Must(uuid.NewV7())
+	userID := uuid.NewV7()
 	idem := domain.IdempotencyKey("reclaim-key")
 
 	first, _, err := repo.CreateOrder(ctx, testOrder(userID, productID, 1), idem)
@@ -205,7 +205,7 @@ func TestPostgres_PurgeIdempotencyKeys(t *testing.T) {
 			ctx,
 			`INSERT INTO idempotency_keys (user_id, key, request_hash, expires_at)
 			 VALUES ($1, $2, '\x00', now() + `+expiresIn+`)`,
-			uuid.Must(uuid.NewV7()), key,
+			uuid.NewV7(), key,
 		); err != nil {
 			t.Fatalf("seed %s: %v", key, err)
 		}

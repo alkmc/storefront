@@ -21,7 +21,7 @@ func TestRelay(t *testing.T) {
 			synctest.Wait()
 			assertDrainCalls(t, fd, 1)
 
-			sleep(cfg.PollInterval)
+			synctest.Sleep(cfg.PollInterval)
 			assertDrainCalls(t, fd, 2)
 		})
 	})
@@ -55,7 +55,7 @@ func TestRelay(t *testing.T) {
 			assertDrainCalls(t, fd, 1)
 
 			// A NOTIFY mid-wait re-drains well before the poll tick.
-			sleep(cfg.PollInterval / 4)
+			synctest.Sleep(cfg.PollInterval / 4)
 			fl.wake <- struct{}{}
 			synctest.Wait()
 			assertDrainCalls(t, fd, 2)
@@ -71,9 +71,9 @@ func TestRelay(t *testing.T) {
 			assertDrainCalls(t, fd, 1)
 
 			// The broken wait does not hot-loop: the next drain still lands one tick later.
-			sleep(cfg.PollInterval - epsilon)
+			synctest.Sleep(cfg.PollInterval - epsilon)
 			assertDrainCalls(t, fd, 1)
-			sleep(epsilon)
+			synctest.Sleep(epsilon)
 			assertDrainCalls(t, fd, 2)
 		})
 	})
@@ -89,20 +89,20 @@ func TestRelay(t *testing.T) {
 
 			// 1st backoff = 2 * PollInterval = 2s
 			backoff1 := cfg.PollInterval * 2
-			sleep(backoff1 - epsilon)
+			synctest.Sleep(backoff1 - epsilon)
 			assertDrainCalls(t, fd, 1)
-			sleep(epsilon)
+			synctest.Sleep(epsilon)
 			assertDrainCalls(t, fd, 2)
 
 			// 2nd backoff = 4 * PollInterval = 4s
 			backoff2 := cfg.PollInterval * 4
-			sleep(backoff2 - epsilon)
+			synctest.Sleep(backoff2 - epsilon)
 			assertDrainCalls(t, fd, 2)
-			sleep(epsilon)
+			synctest.Sleep(epsilon)
 			assertDrainCalls(t, fd, 3)
 
 			// Success resets backoff back to PollInterval = 1s
-			sleep(cfg.PollInterval)
+			synctest.Sleep(cfg.PollInterval)
 			assertDrainCalls(t, fd, 4)
 		})
 	})
@@ -114,23 +114,23 @@ func TestRelay(t *testing.T) {
 			// 1st poll (fail) -> wait 2s
 			synctest.Wait()
 			// 2nd poll (fail) -> wait 4s
-			sleep(cfg.PollInterval * 2)
+			synctest.Sleep(cfg.PollInterval * 2)
 			// 3rd poll (fail) -> wait 8s
-			sleep(cfg.PollInterval * 4)
+			synctest.Sleep(cfg.PollInterval * 4)
 			// 4th poll (fail) -> wait 16s
-			sleep(cfg.PollInterval * 8)
+			synctest.Sleep(cfg.PollInterval * 8)
 			// 5th poll (fail) -> wait is capped at maxBackoff
-			sleep(cfg.PollInterval * 16)
+			synctest.Sleep(cfg.PollInterval * 16)
 			// 6th poll (fail) -> wait is capped at maxBackoff
-			sleep(maxBackoff)
+			synctest.Sleep(maxBackoff)
 
 			assertDrainCalls(t, fd, 6)
 
 			// Wait after the 6th poll should be capped at maxBackoff
-			sleep(maxBackoff - epsilon)
+			synctest.Sleep(maxBackoff - epsilon)
 			assertDrainCalls(t, fd, 6)
 
-			sleep(epsilon)
+			synctest.Sleep(epsilon)
 			assertDrainCalls(t, fd, 7)
 		})
 	})
@@ -144,12 +144,12 @@ func TestRelay(t *testing.T) {
 			assertDrainCalls(t, fd, 1)
 
 			// The failed drain backs off on a plain timer and never touches the NOTIFY listener.
-			sleep(cfg.PollInterval*2 - epsilon)
+			synctest.Sleep(cfg.PollInterval*2 - epsilon)
 			if got := fl.callCount(); got != 0 {
 				t.Errorf("Await calls during backoff = %d, want 0", got)
 			}
 			assertDrainCalls(t, fd, 1)
-			sleep(epsilon)
+			synctest.Sleep(epsilon)
 			assertDrainCalls(t, fd, 2)
 		})
 	})
@@ -163,7 +163,7 @@ func TestRelay(t *testing.T) {
 			start := time.Now()
 			synctest.Wait()
 
-			sleep(cfg.PublishTimeout)
+			synctest.Sleep(cfg.PublishTimeout)
 
 			if got := time.Since(start); got != cfg.PublishTimeout {
 				t.Errorf("expected %v to timeout, got %v", cfg.PublishTimeout, got)
@@ -238,12 +238,6 @@ func runRelay(
 		go func() { _ = r.Run(ctx) }()
 		body(t)
 	})
-}
-
-// sleep is a local stand-in for Go 1.27's synctest.Sleep (time.Sleep + Wait).
-func sleep(d time.Duration) {
-	time.Sleep(d)
-	synctest.Wait()
 }
 
 func assertDrainCalls(t *testing.T, fd *fakeDrainer, want int64) {

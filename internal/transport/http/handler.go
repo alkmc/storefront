@@ -8,10 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 type (

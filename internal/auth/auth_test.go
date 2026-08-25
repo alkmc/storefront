@@ -6,10 +6,10 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 const testSecret = "test-secret"
@@ -25,7 +25,7 @@ func sign(t *testing.T, method jwt.SigningMethod, key any, claims jwt.MapClaims)
 }
 
 func TestVerifier_Verify(t *testing.T) {
-	sub := uuid.New()
+	sub := uuid.NewV7()
 	future := time.Now().Add(time.Hour).Unix()
 	hmacKey := []byte(testSecret)
 	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -117,7 +117,7 @@ func TestVerifier_Verify(t *testing.T) {
 }
 
 func TestUserID(t *testing.T) {
-	id := uuid.New()
+	id := uuid.NewV7()
 	if got, ok := UserID(WithUserID(t.Context(), id)); !ok || got != id {
 		t.Errorf("got %v ok %v, want %v ok true", got, ok, id)
 	}

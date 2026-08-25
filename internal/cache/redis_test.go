@@ -5,9 +5,9 @@ package cache
 import (
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 	"github.com/redis/rueidis"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
@@ -51,7 +51,7 @@ func setupTestContainerRedis(t *testing.T) *Redis {
 
 func testProduct(name string) domain.Product {
 	return domain.Product{
-		ID:    domain.ProductID(uuid.Must(uuid.NewV7())),
+		ID:    domain.ProductID(uuid.NewV7()),
 		Name:  name,
 		Stock: 5,
 		Price: domain.Money{MinorAmount: 100, Currency: domain.CurrencyPLN},

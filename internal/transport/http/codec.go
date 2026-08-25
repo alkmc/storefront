@@ -1,12 +1,12 @@
 package http
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 )
 
 const (
@@ -35,7 +35,7 @@ type messageResponse struct {
 func respond(w http.ResponseWriter, httpCode int, payload any) {
 	w.Header().Set("Content-Type", MediaTypeJSON)
 	w.WriteHeader(httpCode)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
+	if err := json.MarshalWrite(w, payload); err != nil {
 		http.Error(w, msgEncodeFailed, http.StatusInternalServerError)
 	}
 }
@@ -53,9 +53,7 @@ func respondDecodeError(w http.ResponseWriter, err error) {
 
 // decodeBody decodes request body to given struct
 func decodeBody(r io.ReadCloser, v any) error {
-	dec := json.NewDecoder(r)
-	dec.DisallowUnknownFields()
-	return dec.Decode(v)
+	return json.UnmarshalRead(r, v, json.RejectUnknownMembers(true))
 }
 
 // mapDecodeError returns the client-facing message and HTTP status for a decoder error
@@ -63,20 +61,21 @@ func mapDecodeError(err error) (msg string, status int) {
 	if mbe, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return fmt.Sprintf("%s: max %d bytes", msgBodyTooLarge, mbe.Limit), http.StatusRequestEntityTooLarge
 	}
-	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
-		return msgMalformedJSON, http.StatusBadRequest
+	return describeDecodeError(err), http.StatusBadRequest
+}
+
+// describeDecodeError describes a decoder error in terms the client can act on
+func describeDecodeError(err error) string {
+	if _, ok := errors.AsType[*jsontext.SyntacticError](err); ok {
+		return msgMalformedJSON
 	}
-	if errors.Is(err, io.ErrUnexpectedEOF) {
-		return msgMalformedJSON, http.StatusBadRequest
+	if se, ok := errors.AsType[*json.SemanticError](err); ok {
+		switch field := se.JSONPointer.LastToken(); {
+		case errors.Is(se.Err, json.ErrUnknownName):
+			return fmt.Sprintf("unknown field %q", field)
+		case field != "":
+			return fmt.Sprintf("invalid value for the %q field", field)
+		}
 	}
-	if ute, ok := errors.AsType[*json.UnmarshalTypeError](err); ok {
-		return fmt.Sprintf("invalid value for the %q field", ute.Field), http.StatusBadRequest
-	}
-	if strings.HasPrefix(err.Error(), "json: unknown field ") {
-		return strings.TrimPrefix(err.Error(), "json: "), http.StatusBadRequest
-	}
-	if errors.Is(err, io.EOF) {
-		return msgEmptyBody, http.StatusBadRequest
-	}
-	return msgInvalidBody, http.StatusBadRequest
+	return msgInvalidBody
 }

@@ -3,11 +3,10 @@ package event
 
 import (
 	"errors"
-	"fmt"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 const (
@@ -40,27 +39,20 @@ type (
 )
 
 // New builds an event with a generated v7 id and the current time.
-func New(eventType string, p domain.Product) (Event, error) {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return Event{}, fmt.Errorf("event id: %w", err)
-	}
+func New(eventType string, p domain.Product) Event {
 	return Event{
-		EventID:    id,
+		EventID:    uuid.NewV7(),
 		Type:       eventType,
 		ProductID:  uuid.UUID(p.ID),
 		Version:    p.Version,
 		OccurredAt: time.Now(),
 		Stock:      p.Stock,
-	}, nil
+	}
 }
 
 // NewPurchased builds a purchase event carrying the purchased quantity.
-func NewPurchased(p domain.Product, qty int64) (Event, error) {
-	e, err := New(TypePurchased, p)
-	if err != nil {
-		return Event{}, err
-	}
+func NewPurchased(p domain.Product, qty int64) Event {
+	e := New(TypePurchased, p)
 	e.Quantity = qty
-	return e, nil
+	return e
 }

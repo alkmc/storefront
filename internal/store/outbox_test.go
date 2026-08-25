@@ -4,23 +4,24 @@ package store
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/event"
-	"github.com/google/uuid"
 )
 
 func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "Car", Price: testMoney(1000), Stock: 5},
 	); err != nil {
@@ -32,7 +33,7 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 		t.Fatalf("update: %v", err)
 	}
 	if _, _, err := repo.CreateOrder(
-		ctx, testOrder(uuid.Must(uuid.NewV7()), id, 2), freshIdem(),
+		ctx, testOrder(uuid.NewV7(), id, 2), freshIdem(),
 	); err != nil {
 		t.Fatalf("purchase: %v", err)
 	}
@@ -90,12 +91,12 @@ func TestOutbox_WritesEmitEventsInTx(t *testing.T) {
 
 	// A rolled-back write leaves no event behind.
 	if _, _, err := repo.CreateOrder(
-		ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1), freshIdem(),
+		ctx, testOrder(uuid.NewV7(), id, 1), freshIdem(),
 	); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("purchase after delete: got %v, want ErrNotFound", err)
 	}
 	if _, err := repo.Save(
-		ctx, domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Bike", Price: testMoney(-1)},
+		ctx, domain.Product{ID: domain.ProductID(uuid.NewV7()), Name: "Bike", Price: testMoney(-1)},
 	); err == nil {
 		t.Fatal("save with negative price: expected error")
 	}
@@ -122,13 +123,13 @@ func TestOutbox_DrainBatchPublishesAndDeletes(t *testing.T) {
 		t.Fatalf("got n=%d published=%d, want 3", n, len(published))
 	}
 	for i, r := range published {
-		if r.MessageID == uuid.Nil {
+		if r.MessageID == uuid.Nil() {
 			t.Errorf("record %d: zero message id", i)
 		}
 		if r.Type != event.TypeCreated {
 			t.Errorf("record %d: got type %q, want %q", i, r.Type, event.TypeCreated)
 		}
-		if !json.Valid(r.Payload) {
+		if !jsontext.Value(r.Payload).IsValid() {
 			t.Errorf("record %d: invalid payload %q", i, r.Payload)
 		}
 	}
@@ -323,7 +324,7 @@ func seedProducts(t *testing.T, repo *Postgres, n int) {
 	t.Helper()
 	for i := range n {
 		if _, err := repo.Save(t.Context(), domain.Product{
-			ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: fmt.Sprintf("P%d", i), Price: testMoney(100),
+			ID: domain.ProductID(uuid.NewV7()), Name: fmt.Sprintf("P%d", i), Price: testMoney(100),
 		}); err != nil {
 			t.Fatalf("seed product %d: %v", i, err)
 		}
@@ -336,7 +337,7 @@ func seedOutboxRows(t *testing.T, repo *Postgres, eventTypes ...string) {
 	for i, typ := range eventTypes {
 		if _, err := repo.pool.Exec(
 			t.Context(),
-			queryInsertOutbox, uuid.Must(uuid.NewV7()), typ, []byte(`{}`),
+			queryInsertOutbox, uuid.NewV7(), typ, []byte(`{}`),
 		); err != nil {
 			t.Fatalf("seed outbox row %d: %v", i, err)
 		}

@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"uuid"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 // ErrInvalidToken covers every verification failure, transports reply 401 without detail.
@@ -38,11 +38,11 @@ func (v *Verifier) Verify(token string) (uuid.UUID, error) {
 	if _, err := v.parser.ParseWithClaims(token, &c, func(*jwt.Token) (any, error) {
 		return v.secret, nil
 	}); err != nil {
-		return uuid.Nil, fmt.Errorf("%w: %w", ErrInvalidToken, err)
+		return uuid.Nil(), fmt.Errorf("%w: %w", ErrInvalidToken, err)
 	}
 	sub, err := uuid.Parse(c.Subject)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("%w: sub is not a uuid: %w", ErrInvalidToken, err)
+		return uuid.Nil(), fmt.Errorf("%w: sub is not a uuid: %w", ErrInvalidToken, err)
 	}
 	return sub, nil
 }

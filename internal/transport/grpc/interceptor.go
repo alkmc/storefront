@@ -6,10 +6,10 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+	"uuid"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
 	"github.com/alkmc/storefront/internal/auth"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

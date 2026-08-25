@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/domain"
@@ -17,16 +18,15 @@ import (
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 )
 
 // TestIntegration_OrderIdempotency drives the full request path against real Postgres: the same key
 // replays the stored result without a second decrement, a different payload on that key is a mismatch.
 func TestIntegration_OrderIdempotency(t *testing.T) {
 	mux := setupIntegrationMux(t)
-	user := uuid.Must(uuid.NewV7())
+	user := uuid.NewV7()
 	productID := createProduct(t, mux, 5, 999)
-	key := uuid.Must(uuid.NewV7()).String()
+	key := uuid.NewV7().String()
 
 	// first call runs the purchase and carries no replay marker
 	first := postOrder(t, mux, user, productID, 2, key)
@@ -69,13 +69,13 @@ func TestIntegration_OrderIdempotency(t *testing.T) {
 
 func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {
 	mux := setupIntegrationMux(t)
-	userA := uuid.Must(uuid.NewV7())
-	userB := uuid.Must(uuid.NewV7())
+	userA := uuid.NewV7()
+	userB := uuid.NewV7()
 
 	productID := createProduct(t, mux, 5, 999)
 
 	pr := doPurchase(t, mux, userA, productID, 2)
-	if pr.ID == uuid.Nil {
+	if pr.ID == uuid.Nil() {
 		t.Fatal("create order response has no id")
 	}
 
@@ -100,8 +100,8 @@ func TestIntegration_PurchaseCreatesOwnedOrder(t *testing.T) {
 
 func TestIntegration_ListOrdersIsOwnerScoped(t *testing.T) {
 	mux := setupIntegrationMux(t)
-	userA := uuid.Must(uuid.NewV7())
-	userB := uuid.Must(uuid.NewV7())
+	userA := uuid.NewV7()
+	userB := uuid.NewV7()
 
 	productID := createProduct(t, mux, 10, 500)
 
@@ -148,7 +148,7 @@ func TestIntegration_ListOrdersIsOwnerScoped(t *testing.T) {
 
 func TestIntegration_DeleteBlockedByOrders(t *testing.T) {
 	mux := setupIntegrationMux(t)
-	user := uuid.Must(uuid.NewV7())
+	user := uuid.NewV7()
 
 	soldID := createProduct(t, mux, 5, 100)
 	freshID := createProduct(t, mux, 5, 100)
@@ -238,7 +238,7 @@ func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty in
 		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
 	)
 	req.Header.Set("Authorization", bearer(t, sub))
-	req.Header.Set(headerIdempotencyKey, uuid.Must(uuid.NewV7()).String())
+	req.Header.Set(headerIdempotencyKey, uuid.NewV7().String())
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {

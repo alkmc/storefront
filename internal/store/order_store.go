@@ -3,9 +3,9 @@ package store
 import (
 	"context"
 	"errors"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 

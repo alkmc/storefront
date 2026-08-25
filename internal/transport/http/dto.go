@@ -2,9 +2,9 @@ package http
 
 import (
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 type (

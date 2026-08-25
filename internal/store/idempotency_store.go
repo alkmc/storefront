@@ -5,9 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"strconv"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 

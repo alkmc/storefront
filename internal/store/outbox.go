@@ -2,7 +2,7 @@ package store
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"time"
@@ -84,11 +84,7 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, e event.Event) error {
 
 // emitProductEvent builds and stores an outbox event inside the caller's tx.
 func emitProductEvent(ctx context.Context, tx pgx.Tx, eventType string, p domain.Product) error {
-	e, err := event.New(eventType, p)
-	if err != nil {
-		return err
-	}
-	return insertOutbox(ctx, tx, e)
+	return insertOutbox(ctx, tx, event.New(eventType, p))
 }
 
 // claimOutbox locks and returns up to n due rows, skipping rows another relay holds.

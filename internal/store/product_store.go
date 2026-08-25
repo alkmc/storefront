@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 	"errors"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/event"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -146,11 +146,7 @@ func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, e
 		return domain.Order{}, err
 	}
 
-	e, err := event.NewPurchased(p, o.Quantity)
-	if err != nil {
-		return domain.Order{}, err
-	}
-	if err := insertOutbox(ctx, tx, e); err != nil {
+	if err := insertOutbox(ctx, tx, event.NewPurchased(p, o.Quantity)); err != nil {
 		return domain.Order{}, err
 	}
 	return o, nil
