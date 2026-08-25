@@ -52,8 +52,8 @@ func respondDecodeError(w http.ResponseWriter, err error) {
 }
 
 // decodeBody decodes request body to given struct
-func decodeBody(r io.ReadCloser, v any) error {
-	return json.UnmarshalRead(r, v, json.RejectUnknownMembers(true))
+func decodeBody(body io.Reader, v any) error {
+	return json.UnmarshalRead(body, v, json.RejectUnknownMembers(true))
 }
 
 // mapDecodeError returns the client-facing message and HTTP status for a decoder error
