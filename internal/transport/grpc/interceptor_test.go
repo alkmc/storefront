@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
 	orderv1 "github.com/alkmc/storefront/api/gen/order/v1"
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/auth/authtest"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -64,7 +64,7 @@ func TestTimeoutCancelsSlowHandler(t *testing.T) {
 }
 
 func TestRequireAuth(t *testing.T) {
-	sub := uuid.Must(uuid.NewV7())
+	sub := uuid.NewV7()
 	valid := "Bearer " + authtest.Token(testJWTSecret, sub, time.Now().Add(time.Hour))
 
 	tests := []struct {

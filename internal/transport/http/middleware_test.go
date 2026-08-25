@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/auth/authtest"
-	"github.com/google/uuid"
 )
 
 func okHandler() http.Handler {
@@ -127,7 +127,7 @@ func TestCSRFRejectsInvalidTrustedOrigin(t *testing.T) {
 }
 
 func TestAuth(t *testing.T) {
-	sub := uuid.Must(uuid.NewV7())
+	sub := uuid.NewV7()
 	valid := authtest.Token(testJWTSecret, sub, time.Now().Add(time.Hour))
 
 	tests := []struct {

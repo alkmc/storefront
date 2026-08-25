@@ -9,10 +9,10 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 func TestService_Create(t *testing.T) {
@@ -61,7 +61,7 @@ func TestService_Create(t *testing.T) {
 
 func TestService_FindByID(t *testing.T) {
 	ctx := t.Context()
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name     string
@@ -120,7 +120,7 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				id := domain.ProductID(uuid.Must(uuid.NewV7()))
+				id := domain.ProductID(uuid.NewV7())
 
 				var storeCalls atomic.Int32
 				release := make(chan struct{})
@@ -242,7 +242,7 @@ func TestService_Update(t *testing.T) {
 
 func TestService_Delete(t *testing.T) {
 	ctx := t.Context()
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name     string
@@ -284,8 +284,8 @@ func TestService_Delete(t *testing.T) {
 
 func TestService_CreateOrder(t *testing.T) {
 	ctx := t.Context()
-	id := uuid.Must(uuid.NewV7())
-	userID := domain.UserID(uuid.Must(uuid.NewV7()))
+	id := uuid.NewV7()
+	userID := domain.UserID(uuid.NewV7())
 
 	spyStore := new(SpyStore{})
 	spyStore.CreateOrderFn = func(
@@ -305,7 +305,7 @@ func TestService_CreateOrder(t *testing.T) {
 	if o.UserID != userID || o.ProductID != domain.ProductID(id) || o.Quantity != 2 {
 		t.Errorf("order fields not propagated: got %+v", o)
 	}
-	if uuid.UUID(o.ID) == uuid.Nil {
+	if uuid.UUID(o.ID) == uuid.Nil() {
 		t.Error("order id not generated")
 	}
 }
@@ -319,7 +319,7 @@ func testMoney(amount int64) domain.Money {
 }
 
 func TestService_WritersOnlyInvalidate(t *testing.T) {
-	id := uuid.New()
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name string
@@ -339,7 +339,7 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 		{
 			name: "create order",
 			call: func(s *Service) error {
-				_, _, err := s.CreateOrder(t.Context(), domain.UserID(uuid.New()), domain.ProductID(id), 1, "")
+				_, _, err := s.CreateOrder(t.Context(), domain.UserID(uuid.NewV7()), domain.ProductID(id), 1, "")
 				return err
 			},
 		},
@@ -384,7 +384,7 @@ func TestService_CreateLeavesCacheAlone(t *testing.T) {
 }
 
 func TestService_FindByID_CachePaths(t *testing.T) {
-	id := uuid.New()
+	id := uuid.NewV7()
 	found := domain.Product{ID: domain.ProductID(id), Name: "Cached", Price: testMoney(100)}
 
 	tests := []struct {
@@ -478,7 +478,7 @@ func TestService_InvalidateSurvivesCanceledRequest(t *testing.T) {
 	spyCache := &SpyCache{}
 	srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	if err := srv.Delete(ctx, domain.ProductID(uuid.New())); err != nil {
+	if err := srv.Delete(ctx, domain.ProductID(uuid.NewV7())); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if spyCache.Invalidates != 1 {
@@ -509,7 +509,7 @@ func TestService_FindByID_FlightHonoursCachedAbsence(t *testing.T) {
 	}
 	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	_, err := srv.FindByID(t.Context(), domain.ProductID(uuid.New()))
+	_, err := srv.FindByID(t.Context(), domain.ProductID(uuid.NewV7()))
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("FindByID error = %v, want %v", err, domain.ErrNotFound)
 	}

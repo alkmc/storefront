@@ -8,10 +8,10 @@ import (
 	"net"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/pg/pgtest"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -95,7 +95,7 @@ func testMoney(amount int64) domain.Money {
 
 func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 	return domain.Order{
-		ID:        domain.OrderID(uuid.Must(uuid.NewV7())),
+		ID:        domain.OrderID(uuid.NewV7()),
 		UserID:    domain.UserID(userID),
 		ProductID: domain.ProductID(productID),
 		Quantity:  qty,
@@ -104,13 +104,13 @@ func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 
 // freshIdem returns a unique idempotency key so independent orders never collide on the key.
 func freshIdem() domain.IdempotencyKey {
-	return domain.IdempotencyKey(uuid.Must(uuid.NewV7()).String())
+	return domain.IdempotencyKey(uuid.NewV7().String())
 }
 
 // seedProduct saves a product with the given stock and returns its id.
 func seedProduct(t *testing.T, repo *Postgres, stock int64) uuid.UUID {
 	t.Helper()
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		t.Context(), domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: stock},
 	); err != nil {

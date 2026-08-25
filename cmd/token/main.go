@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/config"
-	"github.com/google/uuid"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 
 func subID(sub string) (uuid.UUID, error) {
 	if sub == "" {
-		return uuid.NewV7()
+		return uuid.NewV7(), nil
 	}
 	return uuid.Parse(sub)
 }

@@ -8,9 +8,9 @@ import (
 	"slices"
 	"strconv"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/auth"
-	"github.com/google/uuid"
 	"github.com/jub0bs/cors"
 	"github.com/klauspost/compress/gzhttp"
 )

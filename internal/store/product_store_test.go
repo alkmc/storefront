@@ -8,9 +8,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 func TestPostgres_Save(t *testing.T) {
@@ -25,21 +25,21 @@ func TestPostgres_Save(t *testing.T) {
 		{
 			name: "success",
 			product: domain.Product{
-				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Car", Price: testMoney(1050),
+				ID: domain.ProductID(uuid.NewV7()), Name: "Car", Price: testMoney(1050),
 			},
 			wantErr: false,
 		},
 		{
 			name: "negative price - fails check constraint",
 			product: domain.Product{
-				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Bike", Price: testMoney(-500),
+				ID: domain.ProductID(uuid.NewV7()), Name: "Bike", Price: testMoney(-500),
 			},
 			wantErr: true,
 		},
 		{
 			name: "invalid currency - fails check constraint",
 			product: domain.Product{
-				ID:    domain.ProductID(uuid.Must(uuid.NewV7())),
+				ID:    domain.ProductID(uuid.NewV7()),
 				Name:  "Bike",
 				Price: domain.Money{MinorAmount: 500, Currency: domain.Currency("XXX")},
 			},
@@ -63,7 +63,7 @@ func TestPostgres_Save(t *testing.T) {
 	}
 
 	t.Run("duplicate id", func(t *testing.T) {
-		seededID := uuid.Must(uuid.NewV7())
+		seededID := uuid.NewV7()
 		if _, err := repo.Save(
 			ctx, domain.Product{ID: domain.ProductID(seededID), Name: "Boat", Price: testMoney(1000)},
 		); err != nil {
@@ -82,7 +82,7 @@ func TestPostgres_FindByID(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "Car", Price: testMoney(1050)},
 	); err != nil {
@@ -101,7 +101,7 @@ func TestPostgres_FindByID(t *testing.T) {
 		},
 		{
 			name:    "non-existing product",
-			id:      uuid.Must(uuid.NewV7()),
+			id:      uuid.NewV7(),
 			wantErr: true,
 		},
 	}
@@ -143,8 +143,8 @@ func TestPostgres_FindAll(t *testing.T) {
 		t.Fatalf("expected empty page on empty table, got %+v", page)
 	}
 
-	p1 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P1", Price: testMoney(100)}
-	p2 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P2", Price: testMoney(200)}
+	p1 := domain.Product{ID: domain.ProductID(uuid.NewV7()), Name: "P1", Price: testMoney(100)}
+	p2 := domain.Product{ID: domain.ProductID(uuid.NewV7()), Name: "P2", Price: testMoney(200)}
 	for _, p := range []domain.Product{p1, p2} {
 		if _, err := repo.Save(ctx, p); err != nil {
 			t.Fatalf("failed to save product: %v", err)
@@ -208,7 +208,7 @@ func TestPostgres_Update(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "OldName", Price: testMoney(1000), Stock: 5},
 	); err != nil {
@@ -234,7 +234,7 @@ func TestPostgres_Update(t *testing.T) {
 		{
 			name: "non-existing product returns ErrNotFound",
 			product: domain.Product{
-				ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "Ghost", Price: testMoney(100),
+				ID: domain.ProductID(uuid.NewV7()), Name: "Ghost", Price: testMoney(100),
 			},
 			wantErr:   true,
 			wantErrIs: domain.ErrNotFound,
@@ -274,7 +274,7 @@ func TestPostgres_Delete(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "ToDelete", Price: testMoney(1000)},
 	); err != nil {
@@ -293,7 +293,7 @@ func TestPostgres_Delete(t *testing.T) {
 		},
 		{
 			name:    "non-existing product returns ErrNotFound",
-			id:      uuid.Must(uuid.NewV7()),
+			id:      uuid.NewV7(),
 			wantErr: true,
 		},
 	}
@@ -322,14 +322,14 @@ func TestPostgres_Delete_ProductInUse(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: 5},
 	); err != nil {
 		t.Fatalf("failed to seed product: %v", err)
 	}
 	if _, _, err := repo.CreateOrder(
-		ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1), freshIdem(),
+		ctx, testOrder(uuid.NewV7(), id, 1), freshIdem(),
 	); err != nil {
 		t.Fatalf("failed to purchase: %v", err)
 	}
@@ -372,7 +372,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id := uuid.Must(uuid.NewV7())
+			id := uuid.NewV7()
 			if _, err := repo.Save(
 				ctx, domain.Product{
 					ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: tt.seedStock,
@@ -381,7 +381,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 				t.Fatalf("failed to seed product: %v", err)
 			}
 
-			order := testOrder(uuid.Must(uuid.NewV7()), id, tt.qty)
+			order := testOrder(uuid.NewV7(), id, tt.qty)
 			placed, _, err := repo.CreateOrder(ctx, order, freshIdem())
 			if tt.wantErrIs != nil {
 				if !errors.Is(err, tt.wantErrIs) {
@@ -429,7 +429,7 @@ func TestPostgres_CreateOrder(t *testing.T) {
 
 	t.Run("non-existing product", func(t *testing.T) {
 		_, _, err := repo.CreateOrder(
-			ctx, testOrder(uuid.Must(uuid.NewV7()), uuid.Must(uuid.NewV7()), 1), freshIdem(),
+			ctx, testOrder(uuid.NewV7(), uuid.NewV7(), 1), freshIdem(),
 		)
 		if !errors.Is(err, domain.ErrNotFound) {
 			t.Fatalf("got %v, want domain.ErrNotFound", err)
@@ -447,7 +447,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 		deniedBuyers     = concurrentBuyers - initialStock
 	)
 
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	if _, err := repo.Save(
 		ctx, domain.Product{ID: domain.ProductID(id), Name: "Widget", Price: testMoney(1000), Stock: initialStock},
 	); err != nil {
@@ -463,7 +463,7 @@ func TestPostgres_CreateOrder_OversellInvariant(t *testing.T) {
 	for range concurrentBuyers {
 		wg.Go(func() {
 			<-start
-			_, _, err := repo.CreateOrder(ctx, testOrder(uuid.Must(uuid.NewV7()), id, 1), freshIdem())
+			_, _, err := repo.CreateOrder(ctx, testOrder(uuid.NewV7(), id, 1), freshIdem())
 			switch {
 			case err == nil:
 				successes.Add(1)

@@ -7,9 +7,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/event"
-	"github.com/google/uuid"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/rabbitmq"
@@ -75,7 +75,7 @@ func bindQueue(t *testing.T, conn *rabbitmqamqp.AmqpConnection, queue, bindingKe
 
 func testRecord(eventType string) event.Record {
 	return event.Record{
-		MessageID: uuid.Must(uuid.NewV7()),
+		MessageID: uuid.NewV7(),
 		Type:      eventType,
 		Payload:   []byte(`{"quantity":2}`),
 	}

@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"uuid"
 
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"
 	orderv1 "github.com/alkmc/storefront/api/gen/order/v1"
 	"github.com/alkmc/storefront/internal/auth"
 	"github.com/alkmc/storefront/internal/auth/authtest"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,7 +29,7 @@ const testJWTSecret = "test-secret"
 func TestHandler_CreateProduct(t *testing.T) {
 	client := newTestClient(t, stubProcessor{
 		CreateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
-			p.ID = domain.ProductID(uuid.Must(uuid.NewV7()))
+			p.ID = domain.ProductID(uuid.NewV7())
 			return p, nil
 		},
 	})
@@ -52,7 +52,7 @@ func TestHandler_CreateProduct(t *testing.T) {
 }
 
 func TestHandler_GetProduct(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	client := newTestClient(t, stubProcessor{
 		FindByIDFn: func(_ context.Context, id domain.ProductID) (domain.Product, error) {
 			return domain.Product{ID: id, Name: "Test"}, nil
@@ -71,8 +71,8 @@ func TestHandler_GetProduct(t *testing.T) {
 }
 
 func TestHandler_ListProducts(t *testing.T) {
-	p1 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P1"}
-	p2 := domain.Product{ID: domain.ProductID(uuid.Must(uuid.NewV7())), Name: "P2"}
+	p1 := domain.Product{ID: domain.ProductID(uuid.NewV7()), Name: "P1"}
+	p2 := domain.Product{ID: domain.ProductID(uuid.NewV7()), Name: "P2"}
 	client := newTestClient(t, stubProcessor{
 		FindAllFn: func(_ context.Context, _ domain.Cursor, _ int) (domain.ProductPage, error) {
 			return domain.ProductPage{Items: []domain.Product{p1, p2}, HasMore: true}, nil
@@ -94,7 +94,7 @@ func TestHandler_ListProducts(t *testing.T) {
 }
 
 func TestHandler_UpdateProduct(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	client := newTestClient(t, stubProcessor{
 		UpdateFn: func(_ context.Context, p domain.Product) (domain.Product, error) {
 			p.Stock = 7 // stock comes from the store, not the request
@@ -117,7 +117,7 @@ func TestHandler_UpdateProduct(t *testing.T) {
 }
 
 func TestHandler_DeleteProduct(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 	client := newTestClient(t, stubProcessor{
 		DeleteFn: func(context.Context, domain.ProductID) error { return nil },
 	})
@@ -130,9 +130,9 @@ func TestHandler_DeleteProduct(t *testing.T) {
 }
 
 func TestHandler_CreateOrder(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
-	sub := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
+	sub := uuid.NewV7()
+	orderID := uuid.NewV7()
 	client := newOrderClient(t, stubProcessor{
 		CreateOrderFn: func(
 			_ context.Context, userID domain.UserID, pid domain.ProductID, qty int64, _ domain.IdempotencyKey,
@@ -146,7 +146,7 @@ func TestHandler_CreateOrder(t *testing.T) {
 	})
 
 	ctx := metadata.AppendToOutgoingContext(
-		authCtx(t, sub), metaIdempotencyKey, uuid.Must(uuid.NewV7()).String(),
+		authCtx(t, sub), metaIdempotencyKey, uuid.NewV7().String(),
 	)
 	resp, err := client.CreateOrder(
 		ctx, orderv1.CreateOrderRequest_builder{
@@ -169,7 +169,7 @@ func TestHandler_CreateOrder(t *testing.T) {
 }
 
 func TestHandler_ErrorMapping(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name string
@@ -246,7 +246,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := newTestClient(t, tt.proc)
 			// the token is inert on public methods and lets the protected ones reach the handler
-			if got := status.Code(tt.call(authCtx(t, uuid.New()), client)); got != tt.want {
+			if got := status.Code(tt.call(authCtx(t, uuid.NewV7()), client)); got != tt.want {
 				t.Errorf("got code %v, want %v", got, tt.want)
 			}
 		})
@@ -254,7 +254,7 @@ func TestHandler_ErrorMapping(t *testing.T) {
 }
 
 func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
+	id := uuid.NewV7()
 
 	tests := []struct {
 		name string
@@ -285,7 +285,7 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client := newOrderClient(t, tt.proc)
 			ctx := metadata.AppendToOutgoingContext(
-				authCtx(t, uuid.New()), metaIdempotencyKey, uuid.Must(uuid.NewV7()).String(),
+				authCtx(t, uuid.NewV7()), metaIdempotencyKey, uuid.NewV7().String(),
 			)
 			_, err := client.CreateOrder(ctx, tt.req)
 			if got := status.Code(err); got != tt.want {
@@ -296,10 +296,10 @@ func TestHandler_CreateOrder_ErrorMapping(t *testing.T) {
 }
 
 func TestHandler_CreateOrder_Idempotency(t *testing.T) {
-	id := uuid.Must(uuid.NewV7())
-	sub := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
-	idemKey := uuid.Must(uuid.NewV7()).String()
+	id := uuid.NewV7()
+	sub := uuid.NewV7()
+	orderID := uuid.NewV7()
+	idemKey := uuid.NewV7().String()
 
 	t.Run("replay sets the replayed metadata", func(t *testing.T) {
 		client := newOrderClient(t, stubProcessor{
@@ -467,9 +467,9 @@ func authCtx(t *testing.T, sub uuid.UUID) context.Context {
 }
 
 func TestHandler_GetOrder(t *testing.T) {
-	sub := uuid.Must(uuid.NewV7())
-	orderID := uuid.Must(uuid.NewV7())
-	productID := uuid.Must(uuid.NewV7())
+	sub := uuid.NewV7()
+	orderID := uuid.NewV7()
+	productID := uuid.NewV7()
 	created := time.Now().UTC().Truncate(time.Second)
 
 	client := newOrderClient(t, stubProcessor{
@@ -510,8 +510,8 @@ func TestHandler_GetOrder_NotFound(t *testing.T) {
 		},
 	})
 
-	_, err := client.GetOrder(authCtx(t, uuid.New()), orderv1.GetOrderRequest_builder{
-		Id: uuid.NewString(),
+	_, err := client.GetOrder(authCtx(t, uuid.NewV7()), orderv1.GetOrderRequest_builder{
+		Id: uuid.NewV7().String(),
 	}.Build())
 	if status.Code(err) != codes.NotFound {
 		t.Fatalf("got code %v, want NotFound", status.Code(err))
@@ -522,13 +522,13 @@ func TestHandler_GetOrder_NotFound(t *testing.T) {
 }
 
 func TestHandler_ListOrders(t *testing.T) {
-	sub := uuid.Must(uuid.NewV7())
+	sub := uuid.NewV7()
 	price := domain.Money{MinorAmount: 500, Currency: domain.CurrencyPLN}
 	o1 := domain.Order{
-		ID: domain.OrderID(uuid.Must(uuid.NewV7())), UserID: domain.UserID(sub), Quantity: 1, UnitPrice: price,
+		ID: domain.OrderID(uuid.NewV7()), UserID: domain.UserID(sub), Quantity: 1, UnitPrice: price,
 	}
 	o2 := domain.Order{
-		ID: domain.OrderID(uuid.Must(uuid.NewV7())), UserID: domain.UserID(sub), Quantity: 2, UnitPrice: price,
+		ID: domain.OrderID(uuid.NewV7()), UserID: domain.UserID(sub), Quantity: 2, UnitPrice: price,
 	}
 
 	client := newOrderClient(t, stubProcessor{
@@ -568,7 +568,7 @@ func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 	orders := orderv1.NewOrderServiceClient(conn)
 
 	if _, err := orders.CreateOrder(t.Context(), orderv1.CreateOrderRequest_builder{
-		ProductId: uuid.NewString(), Quantity: 1,
+		ProductId: uuid.NewV7().String(), Quantity: 1,
 	}.Build()); status.Code(err) != codes.Unauthenticated {
 		t.Errorf("create order: got %v, want Unauthenticated", status.Code(err))
 	}
@@ -578,14 +578,14 @@ func TestHandler_ProtectedMethodsRequireToken(t *testing.T) {
 		t.Errorf("list orders: got %v, want Unauthenticated", status.Code(err))
 	}
 	if _, err := orders.GetOrder(t.Context(), orderv1.GetOrderRequest_builder{
-		Id: uuid.NewString(),
+		Id: uuid.NewV7().String(),
 	}.Build()); status.Code(err) != codes.Unauthenticated {
 		t.Errorf("get order: got %v, want Unauthenticated", status.Code(err))
 	}
 
 	// the catalog stays public, no token needed
 	if _, err := products.GetProduct(t.Context(), catalogv1.GetProductRequest_builder{
-		Id: uuid.NewString(),
+		Id: uuid.NewV7().String(),
 	}.Build()); err != nil {
 		t.Errorf("public get product: unexpected error %v", err)
 	}

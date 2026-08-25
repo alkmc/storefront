@@ -2,10 +2,10 @@ package cache
 
 import (
 	"testing"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 )
 
 func TestClassifyStoredValue(t *testing.T) {

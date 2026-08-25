@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"uuid"
 
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/google/uuid"
 )
 
 type (
@@ -60,11 +60,7 @@ func NewService(
 }
 
 func (s *Service) Create(ctx context.Context, p domain.Product) (domain.Product, error) {
-	id, err := uuid.NewV7()
-	if err != nil {
-		return domain.Product{}, fmt.Errorf("failed to generate uuid: %w", err)
-	}
-	p.ID = domain.ProductID(id)
+	p.ID = domain.ProductID(uuid.NewV7())
 
 	return s.store.Save(ctx, p)
 }
@@ -133,11 +129,7 @@ func (s *Service) Delete(ctx context.Context, id domain.ProductID) error {
 func (s *Service) CreateOrder(
 	ctx context.Context, userID domain.UserID, productID domain.ProductID, qty int64, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
-	orderID, err := uuid.NewV7()
-	if err != nil {
-		return domain.Order{}, false, fmt.Errorf("failed to generate uuid: %w", err)
-	}
-	o := domain.Order{ID: domain.OrderID(orderID), UserID: userID, ProductID: productID, Quantity: qty}
+	o := domain.Order{ID: domain.OrderID(uuid.NewV7()), UserID: userID, ProductID: productID, Quantity: qty}
 
 	order, replayed, err := s.store.CreateOrder(ctx, o, idem)
 	if err != nil {

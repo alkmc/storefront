@@ -3,9 +3,9 @@ package authtest
 
 import (
 	"time"
+	"uuid"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 // Token returns a compact HS256 JWT for sub expiring at exp.

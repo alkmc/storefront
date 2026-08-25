@@ -2,8 +2,7 @@ package domain
 
 import (
 	"fmt"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 const (
