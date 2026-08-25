@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alkmc/storefront/internal/domain"
 	"github.com/alkmc/storefront/internal/event"
 	"github.com/jackc/pgx/v5"
 )
@@ -80,11 +79,6 @@ func insertOutbox(ctx context.Context, tx pgx.Tx, e event.Event) error {
 		return fmt.Errorf("notify outbox: %w", err)
 	}
 	return nil
-}
-
-// emitProductEvent builds and stores an outbox event inside the caller's tx.
-func emitProductEvent(ctx context.Context, tx pgx.Tx, eventType string, p domain.Product) error {
-	return insertOutbox(ctx, tx, event.New(eventType, p))
 }
 
 // claimOutbox locks and returns up to n due rows, skipping rows another relay holds.

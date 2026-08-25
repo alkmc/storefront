@@ -21,7 +21,7 @@ func (pg *Postgres) Save(
 		).Scan(&p.Version); err != nil {
 			return err
 		}
-		return emitProductEvent(ctx, tx, event.TypeCreated, p)
+		return insertOutbox(ctx, tx, event.New(event.TypeCreated, p))
 	})
 	if err != nil {
 		return domain.Product{}, err
@@ -93,7 +93,7 @@ func (pg *Postgres) Update(
 			return err
 		}
 		p = updated
-		return emitProductEvent(ctx, tx, event.TypeUpdated, p)
+		return insertOutbox(ctx, tx, event.New(event.TypeUpdated, p))
 	})
 	if err != nil {
 		return domain.Product{}, err
@@ -115,7 +115,7 @@ func (pg *Postgres) Delete(ctx context.Context, id domain.ProductID) error {
 			return err
 		}
 		deleted := domain.Product{ID: id, Version: version}
-		return emitProductEvent(ctx, tx, event.TypeDeleted, deleted)
+		return insertOutbox(ctx, tx, event.New(event.TypeDeleted, deleted))
 	})
 }
 
