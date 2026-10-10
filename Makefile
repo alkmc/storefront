@@ -16,13 +16,13 @@ fmt:
 	gofumpt -l -w .
 
 deadcode:
-	go run golang.org/x/tools/cmd/deadcode@v0.50.0 ./...
+	go run golang.org/x/tools/cmd/deadcode@v0.52.0 ./...
 
 lint:
 	golangci-lint run
 
 check:
-	go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
 proto:
 	buf generate
