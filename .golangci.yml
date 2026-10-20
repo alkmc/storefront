@@ -57,7 +57,8 @@ linters:
   settings:
     exhaustive:
       # slog.Kind switches are partial by design, a ReplaceAttr handler rewrites two kinds
-      ignore-enum-types: ^log/slog\.Kind$
+      ignore-types:
+        - ^log/slog\.Kind$
     lll:
       line-length: 110
       tab-width: 1
