@@ -16,7 +16,7 @@ type (
 	}
 )
 
-func NewInternalHandler(db pinger, cache pinger) *InternalHandler {
+func NewInternalHandler(db, cache pinger) *InternalHandler {
 	return &InternalHandler{db: db, cache: cache}
 }
 

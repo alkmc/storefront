@@ -13,7 +13,7 @@ integration:
 	go test -race -tags integration ./...
 
 fmt:
-	gofumpt -l -w .
+	golangci-lint fmt
 
 deadcode:
 	go run golang.org/x/tools/cmd/deadcode@v0.52.0 ./...

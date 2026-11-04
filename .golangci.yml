@@ -69,8 +69,6 @@ linters:
       - common-false-positives
       - legacy
       - std-error-handling
-    paths:
-      - api/gen
     rules:
       - path: internal/outbox/relay_test.go
         linters:
@@ -78,8 +76,16 @@ linters:
 
 formatters:
   enable:
+    - gci
     - gofumpt
     - goimports
-  exclusions:
-    paths:
-      - api/gen
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
