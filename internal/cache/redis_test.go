@@ -14,16 +14,18 @@ import (
 )
 
 const (
+	// keep in sync with compose.yaml; IFEQ needs Redis 8.4 or later
+	redisImage = "redis:8.10"
+
 	testTTL    = time.Minute
 	testNegTTL = 10 * time.Second
 )
 
-// setupTestContainerRedis needs an image with IFEQ, which landed in Redis 8.4.
 func setupTestContainerRedis(t *testing.T) *Redis {
 	t.Helper()
 	ctx := t.Context()
 
-	container, err := tcredis.Run(ctx, "redis:8.8")
+	container, err := tcredis.Run(ctx, redisImage)
 	if err != nil {
 		t.Fatalf("run redis container: %v", err)
 	}

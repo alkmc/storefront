@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	testImage = "rabbitmq:4.3-management-alpine"
+	// keep in sync with compose.yaml
+	rabbitmqImage = "rabbitmq:4.3-management"
 
 	// a routing regression must fail the test instead of blocking until the binary times out
 	receiveTimeout = 5 * time.Second
@@ -26,7 +27,7 @@ func setupTestContainerRabbit(t *testing.T) *rabbitmqamqp.AmqpConnection {
 	t.Helper()
 	ctx := t.Context()
 
-	container, err := rabbitmq.Run(ctx, testImage)
+	container, err := rabbitmq.Run(ctx, rabbitmqImage)
 	if err != nil {
 		t.Fatalf("run rabbitmq container: %v", err)
 	}

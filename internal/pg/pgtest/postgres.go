@@ -18,7 +18,9 @@ import (
 )
 
 const (
-	image      = "postgres:18"
+	// keep in sync with compose.yaml
+	postgresImage = "postgres:18"
+
 	dbName     = "testdb"
 	dbUser     = "testuser"
 	dbPassword = "testpassword"
@@ -50,7 +52,7 @@ func run(t *testing.T) string {
 
 	container, err := postgres.Run(
 		ctx,
-		image,
+		postgresImage,
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
