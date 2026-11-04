@@ -426,7 +426,7 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 		{
 			name: "cache unreadable, nothing populated",
 			getFn: func(context.Context, string) (cache.Entry, error) {
-				return cache.Entry{}, errors.New("redis down")
+				return cache.Entry{}, errors.New("valkey down")
 			},
 			wantStoreCalls: 1,
 		},

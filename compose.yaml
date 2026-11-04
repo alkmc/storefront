@@ -15,13 +15,13 @@ services:
       timeout: 3s
       retries: 10
 
-  redis:
+  valkey:
     image: valkey/valkey:9.1.3
-    command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}"]
+    command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD}"]
     environment:
-      VALKEYCLI_AUTH: ${REDIS_PASSWORD}
+      VALKEYCLI_AUTH: ${VALKEY_PASSWORD}
     ports:
-      - "${REDIS_PORT}:6379"
+      - "${VALKEY_PORT}:6379"
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
@@ -61,7 +61,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
+      valkey:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

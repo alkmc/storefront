@@ -18,7 +18,7 @@ func (c Config) validate() error {
 		c.HTTP.validate(),
 		c.GRPC.validate(),
 		c.Postgres.validate(),
-		c.Redis.validate(),
+		c.Valkey.validate(),
 		c.Outbox.validate(),
 		c.Service.validate(),
 		c.Idempotency.validate(),
@@ -105,11 +105,11 @@ func (p Postgres) validateConnLimits() error {
 	return nil
 }
 
-func (r Redis) validate() error {
+func (v Valkey) validate() error {
 	return errors.Join(
-		// the cache truncates a TTL to whole milliseconds and Redis rejects a PX of zero
-		atLeast("REDIS_CACHE_TTL", r.TTL, time.Millisecond),
-		atLeast("REDIS_CACHE_NEG_TTL", r.NegTTL, time.Millisecond),
+		// the cache truncates a TTL to whole milliseconds and Valkey rejects a PX of zero
+		atLeast("VALKEY_CACHE_TTL", v.TTL, time.Millisecond),
+		atLeast("VALKEY_CACHE_NEG_TTL", v.NegTTL, time.Millisecond),
 	)
 }
 

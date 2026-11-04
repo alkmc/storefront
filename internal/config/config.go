@@ -15,7 +15,7 @@ type (
 		HTTP            HTTP
 		GRPC            GRPC
 		Postgres        Postgres
-		Redis           Redis
+		Valkey          Valkey
 		RabbitMQ        RabbitMQ
 		Outbox          Outbox
 		Service         Service
@@ -66,13 +66,13 @@ type (
 		MaxIdleConns    int32         `env:"PG_MAX_IDLE_CONNS" envDefault:"5"`
 		ConnMaxLifetime time.Duration `env:"PG_CONN_MAX_LIFETIME" envDefault:"30m"`
 	}
-	Redis struct {
-		Host     string        `env:"REDIS_HOST,required,notEmpty"`
-		Port     int           `env:"REDIS_PORT,required"`
-		Password Secret        `env:"REDIS_PASSWORD,required,unset"`
-		DB       int           `env:"REDIS_DB" envDefault:"0"`
-		TTL      time.Duration `env:"REDIS_CACHE_TTL" envDefault:"5m"`
-		NegTTL   time.Duration `env:"REDIS_CACHE_NEG_TTL" envDefault:"1m"`
+	Valkey struct {
+		Host     string        `env:"VALKEY_HOST,required,notEmpty"`
+		Port     int           `env:"VALKEY_PORT,required"`
+		Password Secret        `env:"VALKEY_PASSWORD,required,unset"`
+		DB       int           `env:"VALKEY_DB" envDefault:"0"`
+		TTL      time.Duration `env:"VALKEY_CACHE_TTL" envDefault:"5m"`
+		NegTTL   time.Duration `env:"VALKEY_CACHE_NEG_TTL" envDefault:"1m"`
 	}
 	RabbitMQ struct {
 		Host     string `env:"RABBITMQ_HOST,required,notEmpty"`
@@ -106,8 +106,8 @@ func (g GRPC) Address() string {
 	return net.JoinHostPort(g.Host, strconv.Itoa(g.Port))
 }
 
-func (r Redis) Address() string {
-	return net.JoinHostPort(r.Host, strconv.Itoa(r.Port))
+func (v Valkey) Address() string {
+	return net.JoinHostPort(v.Host, strconv.Itoa(v.Port))
 }
 
 // URL renders an amqp:// address on the default vhost.

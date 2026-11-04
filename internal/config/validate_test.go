@@ -302,9 +302,9 @@ func TestConfigValidateReachesEverySection(t *testing.T) {
 			setting: "PG_CONN_MAX_LIFETIME",
 		},
 		{
-			name:    "Redis",
-			mutate:  func(c *Config) { c.Redis.TTL = 0 },
-			setting: "REDIS_CACHE_TTL",
+			name:    "Valkey",
+			mutate:  func(c *Config) { c.Valkey.TTL = 0 },
+			setting: "VALKEY_CACHE_TTL",
 		},
 		{
 			name:    "Outbox",
@@ -379,7 +379,7 @@ func TestConfigValidateAggregates(t *testing.T) {
 // TestLoadRejectsEmptyRequired covers the notEmpty tags, which fail before validate runs.
 func TestLoadRejectsEmptyRequired(t *testing.T) {
 	for _, name := range []string{
-		"PG_HOST", "PG_USER", "PG_DB", "REDIS_HOST", "RABBITMQ_HOST", "RABBITMQ_USER",
+		"PG_HOST", "PG_USER", "PG_DB", "VALKEY_HOST", "RABBITMQ_HOST", "RABBITMQ_USER",
 	} {
 		t.Run(name, func(t *testing.T) {
 			setRequired(t)
@@ -480,9 +480,9 @@ func setRequired(t *testing.T) {
 		"PG_USER":           "pguser",
 		"PG_PASSWORD":       "secret",
 		"PG_DB":             "storefront",
-		"REDIS_HOST":        "redis",
-		"REDIS_PORT":        "6379",
-		"REDIS_PASSWORD":    "secret",
+		"VALKEY_HOST":       "valkey",
+		"VALKEY_PORT":       "6379",
+		"VALKEY_PASSWORD":   "secret",
 		"RABBITMQ_HOST":     "rabbitmq",
 		"RABBITMQ_PORT":     "5672",
 		"RABBITMQ_USER":     "guest",
