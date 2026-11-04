@@ -17,7 +17,7 @@ type (
 )
 
 func NewInternalHandler(db, cache pinger) *InternalHandler {
-	return &InternalHandler{db: db, cache: cache}
+	return new(InternalHandler{db: db, cache: cache})
 }
 
 func (h *InternalHandler) Healthz(w http.ResponseWriter, _ *http.Request) {

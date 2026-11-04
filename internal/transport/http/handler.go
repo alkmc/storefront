@@ -53,11 +53,11 @@ type (
 
 // NewHandler initializes a product API handler with its required dependencies
 func NewHandler(p processor, requestTimeout time.Duration, l *slog.Logger) *Handler {
-	return &Handler{
+	return new(Handler{
 		logger:         l,
 		processor:      p,
 		requestTimeout: requestTimeout,
-	}
+	})
 }
 
 func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {

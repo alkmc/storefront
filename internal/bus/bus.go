@@ -29,7 +29,7 @@ func NewPublisher(ctx context.Context, conn *rabbitmqamqp.AmqpConnection,
 	if err != nil {
 		return nil, fmt.Errorf("bus new publisher: %w", err)
 	}
-	return &Publisher{pub: pub}, nil
+	return new(Publisher{pub: pub}), nil
 }
 
 // Publish emits the record's payload and blocks until the broker settles it.

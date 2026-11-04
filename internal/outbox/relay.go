@@ -50,9 +50,9 @@ type (
 func New(
 	store drainer, listener waiter, pub publisher, cfg Config, log *slog.Logger,
 ) *Relay {
-	return &Relay{
+	return new(Relay{
 		store: store, listener: listener, pub: pub, cfg: cfg, log: log,
-	}
+	})
 }
 
 // Run drains the outbox until ctx is cancelled, backing off when draining fails.
