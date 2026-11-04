@@ -8,14 +8,14 @@ import (
 	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/redis/rueidis"
 	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
+	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
+	"github.com/valkey-io/valkey-go"
 )
 
 const (
-	// keep in sync with compose.yaml; IFEQ needs Redis 8.4 or later
-	redisImage = "redis:8.10"
+	// keep in sync with compose.yaml; IFEQ needs Valkey 8.1 or later
+	redisImage = "valkey/valkey:9.1.3"
 
 	testTTL    = time.Minute
 	testNegTTL = 10 * time.Second
@@ -25,7 +25,7 @@ func setupTestContainerRedis(t *testing.T) *Redis {
 	t.Helper()
 	ctx := t.Context()
 
-	container, err := tcredis.Run(ctx, redisImage)
+	container, err := tcvalkey.Run(ctx, redisImage)
 	if err != nil {
 		t.Fatalf("run redis container: %v", err)
 	}
@@ -39,7 +39,7 @@ func setupTestContainerRedis(t *testing.T) *Redis {
 	if err != nil {
 		t.Fatalf("redis endpoint: %v", err)
 	}
-	client, err := rueidis.NewClient(rueidis.ClientOption{
+	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress:  []string{endpoint},
 		DisableCache: true,
 	})

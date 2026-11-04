@@ -9,7 +9,7 @@ import (
 	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/redis/rueidis"
+	"github.com/valkey-io/valkey-go"
 )
 
 const (
@@ -37,14 +37,14 @@ type (
 		token   []byte
 	}
 	Redis struct {
-		client rueidis.Client
+		client valkey.Client
 		ttl    time.Duration
 		negTTL time.Duration
 	}
 )
 
 // New wraps an open Redis client. ttl bounds a cached product, negTTL a cached absence.
-func New(client rueidis.Client, ttl, negTTL time.Duration) *Redis {
+func New(client valkey.Client, ttl, negTTL time.Duration) *Redis {
 	return new(Redis{client: client, ttl: ttl, negTTL: negTTL})
 }
 
@@ -63,7 +63,7 @@ func (r *Redis) SetMissing(ctx context.Context, key string, prev Entry) error {
 func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
 	raw, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
-		if rueidis.IsRedisNil(err) {
+		if valkey.IsValkeyNil(err) {
 			return Entry{}, nil
 		}
 		return Entry{}, fmt.Errorf("get cache key %q: %w", key, err)
@@ -73,7 +73,7 @@ func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
 
 func (r *Redis) Invalidate(ctx context.Context, key string) error {
 	cmd := r.client.B().Set().Key(key).
-		Value(rueidis.BinaryString(newTombstone())).
+		Value(valkey.BinaryString(newTombstone())).
 		PxMilliseconds(r.ttl.Milliseconds()).
 		Build()
 	if err := r.client.Do(ctx, cmd).Error(); err != nil {
@@ -90,19 +90,19 @@ func (r *Redis) guardedSet(
 	ctx context.Context, key string, value []byte, ttl time.Duration, prev Entry,
 ) error {
 	err := r.client.Do(ctx, r.setCmd(key, value, ttl, prev)).Error()
-	if err != nil && !rueidis.IsRedisNil(err) {
+	if err != nil && !valkey.IsValkeyNil(err) {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
 	return nil
 }
 
-func (r *Redis) setCmd(key string, value []byte, ttl time.Duration, prev Entry) rueidis.Completed {
-	set := r.client.B().Set().Key(key).Value(rueidis.BinaryString(value))
+func (r *Redis) setCmd(key string, value []byte, ttl time.Duration, prev Entry) valkey.Completed {
+	set := r.client.B().Set().Key(key).Value(valkey.BinaryString(value))
 	ms := ttl.Milliseconds()
 	if prev.token == nil {
 		return set.Nx().PxMilliseconds(ms).Build()
 	}
-	return set.Ifeq(rueidis.BinaryString(prev.token)).PxMilliseconds(ms).Build()
+	return set.Ifeq(valkey.BinaryString(prev.token)).PxMilliseconds(ms).Build()
 }
 
 func classify(raw []byte) Entry {

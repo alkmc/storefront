@@ -11,11 +11,11 @@ require (
 	github.com/klauspost/compress v1.20.3
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/rabbitmq/rabbitmq-amqp-go-client v1.5.0
-	github.com/redis/rueidis v1.0.79
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/rabbitmq v0.44.0
-	github.com/testcontainers/testcontainers-go/modules/redis v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/valkey v0.44.0
+	github.com/valkey-io/valkey-go v1.0.79
 	golang.org/x/sync v0.24.0
 	google.golang.org/grpc v1.85.0
 	google.golang.org/protobuf v1.36.12

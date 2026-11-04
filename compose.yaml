@@ -16,14 +16,14 @@ services:
       retries: 10
 
   redis:
-    image: redis:8.10
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]
+    image: valkey/valkey:9.1.3
+    command: ["valkey-server", "--requirepass", "${REDIS_PASSWORD}"]
     environment:
-      REDISCLI_AUTH: ${REDIS_PASSWORD}
+      VALKEYCLI_AUTH: ${REDIS_PASSWORD}
     ports:
       - "${REDIS_PORT}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10

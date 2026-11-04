@@ -22,7 +22,7 @@ import (
 	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
-	"github.com/redis/rueidis"
+	"github.com/valkey-io/valkey-go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -200,9 +200,9 @@ func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection
 	return conn, nil
 }
 
-// openRedis creates a rueidis client and verifies it with a ping.
-func openRedis(ctx context.Context, cfg config.Redis) (rueidis.Client, error) {
-	client, err := rueidis.NewClient(rueidis.ClientOption{
+// openRedis creates a valkey-go client and verifies it with a ping.
+func openRedis(ctx context.Context, cfg config.Redis) (valkey.Client, error) {
+	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{cfg.Address()},
 		Password:    cfg.Password.Reveal(),
 		SelectDB:    cfg.DB,

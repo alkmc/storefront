@@ -29,8 +29,6 @@ github.com/cpuguy83/dockercfg v0.3.2/go.mod h1:sugsbF4//dDlL/i+S+rtpIWp+5h0BHJHf
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f h1:lO4WD4F/rVNCu3HqELle0jiPLLBs70cWOduZpkS1E78=
-github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f/go.mod h1:cuUVRXasLTGF7a8hSLbxyZXjz+1KgoB3wDUb6vlszIc=
 github.com/distribution/reference v0.6.0 h1:0IXCQ5g4/QMHHkarYzh5l+u8T3t73zM5QvfrDyIgxBk=
 github.com/distribution/reference v0.6.0/go.mod h1:BbU0aIcezP1/5jX/8MP0YiH4SdvB5Y4f/wlDRiLyi3E=
 github.com/docker/go-connections v0.8.2 h1:9d9DEokx5W7qlr0shkFXIxEA7+TTD+llwzcykSlxMNc=
@@ -128,10 +126,6 @@ github.com/rabbitmq/amqp091-go v1.9.0 h1:qrQtyzB4H8BQgEuJwhmVQqVHB9O4+MNDJCCAcpc
 github.com/rabbitmq/amqp091-go v1.9.0/go.mod h1:+jPrT9iY2eLjRaMSRHUhc3z14E/l85kv/f+6luSD3pc=
 github.com/rabbitmq/rabbitmq-amqp-go-client v1.5.0 h1:dL0oLRQ7OjUXipoS6yjDsDRdsScG2F5AyWMJS4EWSko=
 github.com/rabbitmq/rabbitmq-amqp-go-client v1.5.0/go.mod h1:XFTHmJXOLLoQPuQqvjJNePHlc+Oz73UAkgUpw2L8y5I=
-github.com/redis/go-redis/v9 v9.7.3 h1:YpPyAayJV+XErNsatSElgRZZVCwXX9QzkKYNvO7x0wM=
-github.com/redis/go-redis/v9 v9.7.3/go.mod h1:bGUrSggJ9X9GUmZpZNEOQKaANxSGgOEBRltRTZHSvrA=
-github.com/redis/rueidis v1.0.79 h1:2faCYvkq0G8ozDIAn7+3d5k5bBYCc0DBG2THK5WYXF0=
-github.com/redis/rueidis v1.0.79/go.mod h1:L8mnCQJJaSNL6I4pIR6Rz732HTGS9vmuXm0yT9dRvjo=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 github.com/sethvargo/go-retry v0.5.0 h1:JYfFKmVJ8ER06GReN1efzc5cm52BrVsFVzmcHiKJwfY=
@@ -153,12 +147,14 @@ github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0 h1:8fdv/9y3
 github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0/go.mod h1:CFr2LncGYokw+OKjXcr8ARCKG1SaC2UEnGxFBovE86g=
 github.com/testcontainers/testcontainers-go/modules/rabbitmq v0.44.0 h1:apk1rmSJ5R7VbD25UB1KoWxP2LoQNybK+c2UooZdor0=
 github.com/testcontainers/testcontainers-go/modules/rabbitmq v0.44.0/go.mod h1:LEXVQoMV/ZUnyHH+/Oaagwv0RUXzTFB9WxzBZGxqQ/0=
-github.com/testcontainers/testcontainers-go/modules/redis v0.44.0 h1:43EH7N6yB5B2tY/9uhPit487tMLm5iQiyKQaXWXNbnk=
-github.com/testcontainers/testcontainers-go/modules/redis v0.44.0/go.mod h1:k4nnCSzm3z8yRMBKBn3rhsllbFjjhVn/2JjWNxxArg8=
+github.com/testcontainers/testcontainers-go/modules/valkey v0.44.0 h1:knKD2DGjhwV4tWgIalmSFyhkFCCpzH+U0lsxrsgJEoo=
+github.com/testcontainers/testcontainers-go/modules/valkey v0.44.0/go.mod h1:Rx2WWz5UBBJSkv2mC81iYnIxCe29SF0DkD7PhWnovXQ=
 github.com/tklauser/go-sysconf v0.4.0 h1:7H0uAN+7RkwWRaxhYXDLqa5V3LPrJeV8wmD9dRUgPQU=
 github.com/tklauser/go-sysconf v0.4.0/go.mod h1:8mTNWyog7H+MpKijp4VmKJAd2bbYQ2zuUwkYRbUArPI=
 github.com/tklauser/numcpus v0.12.0 h1:NR85qdvHA9pFse3x3weVZ0r0ST8R6l5RHbZrlRaqob4=
 github.com/tklauser/numcpus v0.12.0/go.mod h1:ABHeXzJnr/qqwguhClkZKT1/8VABcYrsyUiUGobwWJg=
+github.com/valkey-io/valkey-go v1.0.79 h1:dryzYka/oOkSMOcNmOTjQI8zfu/4bUzDZNnFW9NlqNM=
+github.com/valkey-io/valkey-go v1.0.79/go.mod h1:gvC/r2m3eW4Hbj0YnjogTzNtFdPSM/D+NCqen+5OABM=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
