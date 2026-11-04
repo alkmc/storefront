@@ -13,6 +13,6 @@ FROM gcr.io/distroless/static-debian13:nonroot
 
 COPY --from=builder --chown=nonroot:nonroot /app/storefront /storefront
 
-USER nonroot:nonroot
+USER 65532:65532
 
 CMD ["/storefront"]
