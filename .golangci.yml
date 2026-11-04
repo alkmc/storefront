@@ -67,11 +67,10 @@ linters:
     generated: strict
     presets:
       - comments
-      - common-false-positives
-      - legacy
       - std-error-handling
     rules:
       - path: internal/outbox/relay_test.go
+        source: runRelay\(
         linters:
           - thelper
 
