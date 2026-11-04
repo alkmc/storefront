@@ -8,43 +8,43 @@ import (
 	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/redis/rueidis"
 	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
+	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
+	"github.com/valkey-io/valkey-go"
 )
 
 const (
-	// keep in sync with compose.yaml; IFEQ needs Redis 8.4 or later
-	redisImage = "redis:8.10"
+	// keep in sync with compose.yaml; IFEQ needs Valkey 8.1 or later
+	valkeyImage = "valkey/valkey:9.1.3"
 
 	testTTL    = time.Minute
 	testNegTTL = 10 * time.Second
 )
 
-func setupTestContainerRedis(t *testing.T) *Redis {
+func setupTestContainerValkey(t *testing.T) *Valkey {
 	t.Helper()
 	ctx := t.Context()
 
-	container, err := tcredis.Run(ctx, redisImage)
+	container, err := tcvalkey.Run(ctx, valkeyImage)
 	if err != nil {
-		t.Fatalf("run redis container: %v", err)
+		t.Fatalf("run valkey container: %v", err)
 	}
 	t.Cleanup(func() {
 		if err := testcontainers.TerminateContainer(container); err != nil {
-			t.Logf("terminate redis container: %v", err)
+			t.Logf("terminate valkey container: %v", err)
 		}
 	})
 
 	endpoint, err := container.Endpoint(ctx, "")
 	if err != nil {
-		t.Fatalf("redis endpoint: %v", err)
+		t.Fatalf("valkey endpoint: %v", err)
 	}
-	client, err := rueidis.NewClient(rueidis.ClientOption{
+	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress:  []string{endpoint},
 		DisableCache: true,
 	})
 	if err != nil {
-		t.Fatalf("redis client: %v", err)
+		t.Fatalf("valkey client: %v", err)
 	}
 	t.Cleanup(client.Close)
 
@@ -60,58 +60,58 @@ func testProduct(name string) domain.Product {
 	}
 }
 
-func TestRedis_GuardRejectsStaleSet(t *testing.T) {
+func TestValkey_GuardRejectsStaleSet(t *testing.T) {
 	t.Parallel()
-	r := setupTestContainerRedis(t)
+	v := setupTestContainerValkey(t)
 	ctx := t.Context()
 
 	fresh := testProduct("fresh")
 	stale := testProduct("stale")
 	key := fresh.ID.String()
 
-	cold, err := r.Get(ctx, key)
+	cold, err := v.Get(ctx, key)
 	if err != nil || cold.Hit {
 		t.Fatalf("cold Get: hit=%v err=%v", cold.Hit, err)
 	}
-	if err := r.Set(ctx, key, fresh, cold); err != nil {
+	if err := v.Set(ctx, key, fresh, cold); err != nil {
 		t.Fatalf("cold Set: %v", err)
 	}
 
-	if err := r.Invalidate(ctx, key); err != nil {
+	if err := v.Invalidate(ctx, key); err != nil {
 		t.Fatalf("invalidate: %v", err)
 	}
 
-	if err := r.Set(ctx, key, stale, cold); err != nil {
+	if err := v.Set(ctx, key, stale, cold); err != nil {
 		t.Fatalf("unaware Set: %v", err)
 	}
-	if got, _ := r.Get(ctx, key); got.Hit {
+	if got, _ := v.Get(ctx, key); got.Hit {
 		t.Fatalf("a reader holding no token resurrected the product: %+v", got.Product)
 	}
 
-	stalePrev, err := r.Get(ctx, key)
+	stalePrev, err := v.Get(ctx, key)
 	if err != nil || stalePrev.Hit {
 		t.Fatalf("post-invalidate Get: hit=%v err=%v", stalePrev.Hit, err)
 	}
 
-	if err := r.Invalidate(ctx, key); err != nil {
+	if err := v.Invalidate(ctx, key); err != nil {
 		t.Fatalf("second invalidate: %v", err)
 	}
 
-	if err := r.Set(ctx, key, stale, stalePrev); err != nil {
+	if err := v.Set(ctx, key, stale, stalePrev); err != nil {
 		t.Fatalf("stale Set: %v", err)
 	}
-	if got, _ := r.Get(ctx, key); got.Hit {
+	if got, _ := v.Get(ctx, key); got.Hit {
 		t.Fatalf("stale Set populated the cache with %+v", got.Product)
 	}
 
-	entry, err := r.Get(ctx, key)
+	entry, err := v.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("fresh Get: %v", err)
 	}
-	if err := r.Set(ctx, key, fresh, entry); err != nil {
+	if err := v.Set(ctx, key, fresh, entry); err != nil {
 		t.Fatalf("fresh Set: %v", err)
 	}
-	got, err := r.Get(ctx, key)
+	got, err := v.Get(ctx, key)
 	if err != nil {
 		t.Fatalf("final Get: %v", err)
 	}

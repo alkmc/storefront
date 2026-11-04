@@ -9,7 +9,7 @@ import (
 	"uuid"
 
 	"github.com/alkmc/storefront/internal/domain"
-	"github.com/redis/rueidis"
+	"github.com/valkey-io/valkey-go"
 )
 
 const (
@@ -36,34 +36,34 @@ type (
 		Found   bool
 		token   []byte
 	}
-	Redis struct {
-		client rueidis.Client
+	Valkey struct {
+		client valkey.Client
 		ttl    time.Duration
 		negTTL time.Duration
 	}
 )
 
-// New wraps an open Redis client. ttl bounds a cached product, negTTL a cached absence.
-func New(client rueidis.Client, ttl, negTTL time.Duration) *Redis {
-	return new(Redis{client: client, ttl: ttl, negTTL: negTTL})
+// New wraps an open Valkey client. ttl bounds a cached product, negTTL a cached absence.
+func New(client valkey.Client, ttl, negTTL time.Duration) *Valkey {
+	return new(Valkey{client: client, ttl: ttl, negTTL: negTTL})
 }
 
-func (r *Redis) Set(ctx context.Context, key string, p domain.Product, prev Entry) error {
+func (v *Valkey) Set(ctx context.Context, key string, p domain.Product, prev Entry) error {
 	payload, err := encodeProduct(p)
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
-	return r.guardedSet(ctx, key, payload, r.ttl, prev)
+	return v.guardedSet(ctx, key, payload, v.ttl, prev)
 }
 
-func (r *Redis) SetMissing(ctx context.Context, key string, prev Entry) error {
-	return r.guardedSet(ctx, key, []byte{tagMissing}, r.negTTL, prev)
+func (v *Valkey) SetMissing(ctx context.Context, key string, prev Entry) error {
+	return v.guardedSet(ctx, key, []byte{tagMissing}, v.negTTL, prev)
 }
 
-func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
-	raw, err := r.client.Do(ctx, r.client.B().Get().Key(key).Build()).AsBytes()
+func (v *Valkey) Get(ctx context.Context, key string) (Entry, error) {
+	raw, err := v.client.Do(ctx, v.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
-		if rueidis.IsRedisNil(err) {
+		if valkey.IsValkeyNil(err) {
 			return Entry{}, nil
 		}
 		return Entry{}, fmt.Errorf("get cache key %q: %w", key, err)
@@ -71,38 +71,38 @@ func (r *Redis) Get(ctx context.Context, key string) (Entry, error) {
 	return classify(raw), nil
 }
 
-func (r *Redis) Invalidate(ctx context.Context, key string) error {
-	cmd := r.client.B().Set().Key(key).
-		Value(rueidis.BinaryString(newTombstone())).
-		PxMilliseconds(r.ttl.Milliseconds()).
+func (v *Valkey) Invalidate(ctx context.Context, key string) error {
+	cmd := v.client.B().Set().Key(key).
+		Value(valkey.BinaryString(newTombstone())).
+		PxMilliseconds(v.ttl.Milliseconds()).
 		Build()
-	if err := r.client.Do(ctx, cmd).Error(); err != nil {
+	if err := v.client.Do(ctx, cmd).Error(); err != nil {
 		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
 	return nil
 }
 
-func (r *Redis) Ping(ctx context.Context) error {
-	return r.client.Do(ctx, r.client.B().Ping().Build()).Error()
+func (v *Valkey) Ping(ctx context.Context) error {
+	return v.client.Do(ctx, v.client.B().Ping().Build()).Error()
 }
 
-func (r *Redis) guardedSet(
+func (v *Valkey) guardedSet(
 	ctx context.Context, key string, value []byte, ttl time.Duration, prev Entry,
 ) error {
-	err := r.client.Do(ctx, r.setCmd(key, value, ttl, prev)).Error()
-	if err != nil && !rueidis.IsRedisNil(err) {
+	err := v.client.Do(ctx, v.setCmd(key, value, ttl, prev)).Error()
+	if err != nil && !valkey.IsValkeyNil(err) {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
 	return nil
 }
 
-func (r *Redis) setCmd(key string, value []byte, ttl time.Duration, prev Entry) rueidis.Completed {
-	set := r.client.B().Set().Key(key).Value(rueidis.BinaryString(value))
+func (v *Valkey) setCmd(key string, value []byte, ttl time.Duration, prev Entry) valkey.Completed {
+	set := v.client.B().Set().Key(key).Value(valkey.BinaryString(value))
 	ms := ttl.Milliseconds()
 	if prev.token == nil {
 		return set.Nx().PxMilliseconds(ms).Build()
 	}
-	return set.Ifeq(rueidis.BinaryString(prev.token)).PxMilliseconds(ms).Build()
+	return set.Ifeq(valkey.BinaryString(prev.token)).PxMilliseconds(ms).Build()
 }
 
 func classify(raw []byte) Entry {

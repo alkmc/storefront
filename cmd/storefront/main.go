@@ -22,7 +22,7 @@ import (
 	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
-	"github.com/redis/rueidis"
+	"github.com/valkey-io/valkey-go"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -60,14 +60,14 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		logger.Info("connection to db closed")
 	}()
 
-	client, err := openRedis(ctx, cfg.Redis)
+	client, err := openValkey(ctx, cfg.Valkey)
 	if err != nil {
 		return err
 	}
-	logger.Info("successfully connected to redis")
+	logger.Info("successfully connected to valkey")
 	defer func() {
 		client.Close()
-		logger.Info("connection to redis closed")
+		logger.Info("connection to valkey closed")
 	}()
 
 	amqp, err := openRabbitMQ(ctx, cfg.RabbitMQ.URL())
@@ -85,8 +85,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 
 	repo := store.NewPostgres(pool, cfg.Idempotency.TTL)
 
-	rCache := cache.New(client, cfg.Redis.TTL, cfg.Redis.NegTTL)
-	srv := service.NewService(repo, rCache, cfg.Service.LoadTimeout, logger)
+	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
+	srv := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
 
 	verifier := auth.NewVerifier(cfg.Auth.JWTSecret.Reveal())
 
@@ -95,7 +95,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 
-	ih := httpsrv.NewInternalHandler(repo, rCache)
+	ih := httpsrv.NewInternalHandler(repo, vCache)
 	internalSrv := httpsrv.NewInternalServer(
 		httpsrv.NewInternalMux(ih),
 		httpsrv.ServerCfg{
@@ -200,19 +200,19 @@ func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection
 	return conn, nil
 }
 
-// openRedis creates a rueidis client and verifies it with a ping.
-func openRedis(ctx context.Context, cfg config.Redis) (rueidis.Client, error) {
-	client, err := rueidis.NewClient(rueidis.ClientOption{
+// openValkey creates a valkey-go client and verifies it with a ping.
+func openValkey(ctx context.Context, cfg config.Valkey) (valkey.Client, error) {
+	client, err := valkey.NewClient(valkey.ClientOption{
 		InitAddress: []string{cfg.Address()},
 		Password:    cfg.Password.Reveal(),
 		SelectDB:    cfg.DB,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create redis client: %w", err)
+		return nil, fmt.Errorf("create valkey client: %w", err)
 	}
 	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
 		client.Close()
-		return nil, fmt.Errorf("ping redis: %w", err)
+		return nil, fmt.Errorf("ping valkey: %w", err)
 	}
 	return client, nil
 }
