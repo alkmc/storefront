@@ -946,8 +946,8 @@ const file_catalog_v1_product_proto_rawDesc = "" +
 	"GetProduct\x12\x1d.catalog.v1.GetProductRequest\x1a\x1e.catalog.v1.GetProductResponse\x12Q\n" +
 	"\fListProducts\x12\x1f.catalog.v1.ListProductsRequest\x1a .catalog.v1.ListProductsResponse\x12T\n" +
 	"\rUpdateProduct\x12 .catalog.v1.UpdateProductRequest\x1a!.catalog.v1.UpdateProductResponse\x12T\n" +
-	"\rDeleteProduct\x12 .catalog.v1.DeleteProductRequest\x1a!.catalog.v1.DeleteProductResponseB\xa6\x01\n" +
-	"\x0ecom.catalog.v1B\fProductProtoP\x01Z8github.com/alkmc/storefront/api/gen/catalog/v1;catalogv1\xa2\x02\x03CXX\xaa\x02\n" +
+	"\rDeleteProduct\x12 .catalog.v1.DeleteProductRequest\x1a!.catalog.v1.DeleteProductResponseB\xa4\x01\n" +
+	"\x0ecom.catalog.v1B\fProductProtoZ8github.com/alkmc/storefront/api/gen/catalog/v1;catalogv1\xa2\x02\x03CXX\xaa\x02\n" +
 	"Catalog.V1\xca\x02\n" +
 	"Catalog\\V1\xe2\x02\x16Catalog\\V1\\GPBMetadata\xea\x02\vCatalog::V1\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 

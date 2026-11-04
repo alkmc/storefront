@@ -675,9 +675,9 @@ const file_order_v1_order_proto_rawDesc = "" +
 	"\vCreateOrder\x12\x1c.order.v1.CreateOrderRequest\x1a\x1d.order.v1.CreateOrderResponse\x12G\n" +
 	"\n" +
 	"ListOrders\x12\x1b.order.v1.ListOrdersRequest\x1a\x1c.order.v1.ListOrdersResponse\x12A\n" +
-	"\bGetOrder\x12\x19.order.v1.GetOrderRequest\x1a\x1a.order.v1.GetOrderResponseB\x96\x01\n" +
+	"\bGetOrder\x12\x19.order.v1.GetOrderRequest\x1a\x1a.order.v1.GetOrderResponseB\x94\x01\n" +
 	"\fcom.order.v1B\n" +
-	"OrderProtoP\x01Z4github.com/alkmc/storefront/api/gen/order/v1;orderv1\xa2\x02\x03OXX\xaa\x02\bOrder.V1\xca\x02\bOrder\\V1\xe2\x02\x14Order\\V1\\GPBMetadata\xea\x02\tOrder::V1\x92\x03\x02\b\x02b\beditionsp\xe9\a"
+	"OrderProtoZ4github.com/alkmc/storefront/api/gen/order/v1;orderv1\xa2\x02\x03OXX\xaa\x02\bOrder.V1\xca\x02\bOrder\\V1\xe2\x02\x14Order\\V1\\GPBMetadata\xea\x02\tOrder::V1\x92\x03\x02\b\x02b\beditionsp\xe9\a"
 
 var file_order_v1_order_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_order_v1_order_proto_goTypes = []any{
