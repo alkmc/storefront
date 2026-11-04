@@ -1,10 +1,7 @@
-.PHONY: build run test integration fmt deadcode lint check proto proto-lint up down logs migrate-up migrate-down migrate-status token
+.PHONY: build test integration fmt fix lint deadcode vuln proto up down logs migrate-up migrate-down migrate-status token
 
 build:
-	go build ./cmd/storefront ./cmd/migrate
-
-run:
-	go run ./cmd/storefront
+	go build ./...
 
 test:
 	go test -race ./...
@@ -15,20 +12,20 @@ integration:
 fmt:
 	golangci-lint fmt
 
+fix:
+	go fix -tags integration ./... && golangci-lint run --fix
+
+lint:
+	golangci-lint run && buf lint
+
 deadcode:
 	go run golang.org/x/tools/cmd/deadcode@v0.52.0 ./...
 
-lint:
-	golangci-lint run
-
-check:
+vuln:
 	go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
 proto:
 	buf generate
-
-proto-lint:
-	buf lint
 
 up:
 	docker compose up --build -d

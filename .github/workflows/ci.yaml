@@ -56,4 +56,4 @@ jobs:
       - name: Verify module checksums
         run: go mod verify
       - name: Run govulncheck (go run)
-        run: make check
+        run: make vuln
