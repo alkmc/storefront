@@ -52,7 +52,7 @@ func ValidPurchaseQuantity(qty int64) bool {
 }
 
 // Validate ensures the product meets basic business rules before processing
-func (p *Product) Validate() error {
+func (p Product) Validate() error {
 	if p.Name == "" {
 		return errors.New("the product name is empty")
 	}
