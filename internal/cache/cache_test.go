@@ -34,32 +34,37 @@ func TestClassifyStoredValue(t *testing.T) {
 		{
 			name: "payload",
 			raw:  payload,
-			want: Entry{Product: product, Hit: true, Found: true},
+			want: Entry{Product: product, Hit: true, Found: true, exists: true},
 		},
 		{
 			name: "missing marker",
 			raw:  []byte{tagMissing},
-			want: Entry{Hit: true},
+			want: Entry{Hit: true, exists: true},
 		},
 		{
 			name: "tombstone",
 			raw:  tombstone,
-			want: Entry{token: tombstone},
+			want: Entry{exists: true, token: tombstone},
 		},
 		{
 			name: "unknown tag",
 			raw:  unknownTag,
-			want: Entry{token: unknownTag},
+			want: Entry{exists: true, token: unknownTag},
 		},
 		{
 			name: "corrupt payload",
 			raw:  corrupt,
-			want: Entry{token: corrupt},
+			want: Entry{exists: true, token: corrupt},
 		},
 		{
-			name: "empty",
+			name: "empty value",
+			raw:  []byte{},
+			want: Entry{exists: true, token: []byte{}},
+		},
+		{
+			name: "empty value read back as nil",
 			raw:  nil,
-			want: Entry{},
+			want: Entry{exists: true},
 		},
 	}
 

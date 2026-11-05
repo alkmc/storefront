@@ -34,7 +34,9 @@ type (
 		Product domain.Product
 		Hit     bool
 		Found   bool
-		token   []byte
+		// exists separates a missing key from a stored empty value, which may read back as a nil token
+		exists bool
+		token  []byte
 	}
 	Valkey struct {
 		client valkey.Client
@@ -99,7 +101,7 @@ func (v *Valkey) guardedSet(
 func (v *Valkey) setCmd(key string, value []byte, ttl time.Duration, prev Entry) valkey.Completed {
 	set := v.client.B().Set().Key(key).Value(valkey.BinaryString(value))
 	ms := ttl.Milliseconds()
-	if prev.token == nil {
+	if !prev.exists {
 		return set.Nx().PxMilliseconds(ms).Build()
 	}
 	return set.Ifeq(valkey.BinaryString(prev.token)).PxMilliseconds(ms).Build()
@@ -110,13 +112,13 @@ func classify(raw []byte) Entry {
 		switch raw[0] {
 		case tagPayload:
 			if p, ok := decodeProduct(raw[1:]); ok {
-				return Entry{Product: p, Hit: true, Found: true}
+				return Entry{Product: p, Hit: true, Found: true, exists: true}
 			}
 		case tagMissing:
-			return Entry{Hit: true}
+			return Entry{Hit: true, exists: true}
 		}
 	}
-	return Entry{token: raw}
+	return Entry{exists: true, token: raw}
 }
 
 func newTombstone() []byte {

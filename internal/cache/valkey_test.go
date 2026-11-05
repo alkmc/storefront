@@ -119,3 +119,52 @@ func TestValkey_GuardRejectsStaleSet(t *testing.T) {
 		t.Errorf("final Get = %+v (hit=%v), want %+v", got.Product, got.Hit, fresh)
 	}
 }
+
+func TestValkey_SetReplacesEmptyValue(t *testing.T) {
+	t.Parallel()
+	v := setupTestContainerValkey(t)
+
+	tests := []struct {
+		name string
+		prev func(t *testing.T, key string) Entry
+	}{
+		{
+			name: "token read back",
+			prev: func(t *testing.T, key string) Entry {
+				t.Helper()
+				entry, err := v.Get(t.Context(), key)
+				if err != nil || entry.Hit {
+					t.Fatalf("Get over empty value: hit=%v err=%v", entry.Hit, err)
+				}
+				return entry
+			},
+		},
+		{
+			// the client may hand an empty value back as a nil slice
+			name: "token read back as nil",
+			prev: func(*testing.T, string) Entry { return Entry{exists: true} },
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			p := testProduct(tc.name)
+			key := p.ID.String()
+
+			// no TTL, so a misread empty value would block the fill for good
+			if err := v.client.Do(ctx, v.client.B().Set().Key(key).Value("").Build()).Error(); err != nil {
+				t.Fatalf("seed empty value: %v", err)
+			}
+			if err := v.Set(ctx, key, p, tc.prev(t, key)); err != nil {
+				t.Fatalf("Set: %v", err)
+			}
+			got, err := v.Get(ctx, key)
+			if err != nil {
+				t.Fatalf("final Get: %v", err)
+			}
+			if !got.Hit || got.Product != p {
+				t.Errorf("final Get = %+v (hit=%v), want %+v", got.Product, got.Hit, p)
+			}
+		})
+	}
+}
