@@ -60,6 +60,11 @@ linters:
       # slog.Kind switches are partial by design, a ReplaceAttr handler rewrites two kinds
       ignore-types:
         - ^log/slog\.Kind$
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
     lll:
       line-length: 110
       tab-width: 1
