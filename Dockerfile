@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-w -s" -o storefront .
 
 FROM gcr.io/distroless/static-debian13:nonroot
 
-COPY --from=builder --chown=nonroot:nonroot /app/storefront /storefront
+COPY --from=builder /app/storefront /storefront
 
 USER 65532:65532
 
