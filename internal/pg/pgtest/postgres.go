@@ -5,16 +5,13 @@ package pgtest
 
 import (
 	"testing"
-	"time"
 
-	"github.com/alkmc/storefront/internal/config"
 	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const (
@@ -24,11 +21,6 @@ const (
 	dbName     = "testdb"
 	dbUser     = "testuser"
 	dbPassword = "testpassword"
-
-	// the postgres image logs the ready line twice: first the init bootstrap, then the real start
-	dbReadyLogOccurrences = 2
-
-	startupTimeout = 10 * time.Second
 )
 
 // Pool starts a Postgres container and returns a ready pool on an empty database.
@@ -56,11 +48,7 @@ func run(t *testing.T) string {
 		postgres.WithDatabase(dbName),
 		postgres.WithUsername(dbUser),
 		postgres.WithPassword(dbPassword),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(dbReadyLogOccurrences).
-				WithStartupTimeout(startupTimeout),
-		),
+		postgres.BasicWaitStrategies(),
 	)
 	if err != nil {
 		t.Fatalf("run postgres container: %v", err)
@@ -71,23 +59,12 @@ func run(t *testing.T) string {
 		}
 	})
 
-	host, err := container.Host(ctx)
+	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
-		t.Fatalf("container host: %v", err)
-	}
-	port, err := container.MappedPort(ctx, "5432/tcp")
-	if err != nil {
-		t.Fatalf("container port: %v", err)
+		t.Fatalf("container connection string: %v", err)
 	}
 
-	return config.Postgres{
-		Host:     host,
-		Port:     int(port.Num()),
-		User:     dbUser,
-		Password: config.Secret(dbPassword),
-		Database: dbName,
-		SSLMode:  "disable",
-	}.DSN()
+	return dsn
 }
 
 // migrate applies the full schema over a short lived database/sql handle, goose needs one.
