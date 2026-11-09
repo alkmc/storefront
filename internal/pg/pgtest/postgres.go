@@ -50,14 +50,14 @@ func run(t *testing.T) string {
 		postgres.WithPassword(dbPassword),
 		postgres.BasicWaitStrategies(),
 	)
-	if err != nil {
-		t.Fatalf("run postgres container: %v", err)
-	}
 	t.Cleanup(func() {
 		if err := testcontainers.TerminateContainer(container); err != nil {
 			t.Logf("terminate pg container: %v", err)
 		}
 	})
+	if err != nil {
+		t.Fatalf("run postgres container: %v", err)
+	}
 
 	dsn, err := container.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {

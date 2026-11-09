@@ -28,14 +28,14 @@ func setupTestContainerRabbit(t *testing.T) *rabbitmqamqp.AmqpConnection {
 	ctx := t.Context()
 
 	container, err := rabbitmq.Run(ctx, rabbitmqImage)
-	if err != nil {
-		t.Fatalf("run rabbitmq container: %v", err)
-	}
 	t.Cleanup(func() {
 		if err := testcontainers.TerminateContainer(container); err != nil {
 			t.Logf("terminate rabbitmq container: %v", err)
 		}
 	})
+	if err != nil {
+		t.Fatalf("run rabbitmq container: %v", err)
+	}
 
 	url, err := container.AmqpURL(ctx)
 	if err != nil {

@@ -15,7 +15,7 @@ import (
 
 const (
 	// keep in sync with compose.yaml; IFEQ needs Valkey 8.1 or later
-	valkeyImage = "valkey/valkey:9.1.3"
+	valkeyImage = "valkey/valkey:9.1"
 
 	testTTL    = time.Minute
 	testNegTTL = 10 * time.Second
@@ -26,14 +26,14 @@ func setupTestContainerValkey(t *testing.T) *Valkey {
 	ctx := t.Context()
 
 	container, err := tcvalkey.Run(ctx, valkeyImage)
-	if err != nil {
-		t.Fatalf("run valkey container: %v", err)
-	}
 	t.Cleanup(func() {
 		if err := testcontainers.TerminateContainer(container); err != nil {
 			t.Logf("terminate valkey container: %v", err)
 		}
 	})
+	if err != nil {
+		t.Fatalf("run valkey container: %v", err)
+	}
 
 	endpoint, err := container.Endpoint(ctx, "")
 	if err != nil {

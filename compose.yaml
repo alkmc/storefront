@@ -16,7 +16,7 @@ services:
       retries: 10
 
   valkey:
-    image: valkey/valkey:9.1.3
+    image: valkey/valkey:9.1
     command: ["valkey-server", "--requirepass", "${VALKEY_PASSWORD}"]
     environment:
       VALKEYCLI_AUTH: ${VALKEY_PASSWORD}
