@@ -5,6 +5,7 @@ package store
 import (
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -33,6 +34,24 @@ func TestPostgres_Save(t *testing.T) {
 			name: "negative price - fails check constraint",
 			product: domain.Product{
 				ID: domain.ProductID(uuid.NewV7()), Name: "Bike", Price: testMoney(-500),
+			},
+			wantErr: true,
+		},
+		{
+			name: "name at the domain limit - fits the column",
+			product: domain.Product{
+				ID:    domain.ProductID(uuid.NewV7()),
+				Name:  strings.Repeat("ą", domain.MaxProductNameLen),
+				Price: testMoney(500),
+			},
+			wantErr: false,
+		},
+		{
+			name: "name over the domain limit - exceeds the column",
+			product: domain.Product{
+				ID:    domain.ProductID(uuid.NewV7()),
+				Name:  strings.Repeat("ą", domain.MaxProductNameLen+1),
+				Price: testMoney(500),
 			},
 			wantErr: true,
 		},

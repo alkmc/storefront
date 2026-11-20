@@ -2,6 +2,8 @@ package domain
 
 import (
 	"errors"
+	"fmt"
+	"unicode/utf8"
 	"uuid"
 )
 
@@ -14,6 +16,16 @@ var (
 	ErrInsufficientStock = errors.New("domain: insufficient stock")
 	// ErrProductInUse signals a delete of a product that has recorded orders.
 	ErrProductInUse = errors.New("domain: product in use")
+)
+
+const (
+	// MaxProductNameLen is the width of products.name, Postgres counts it in characters.
+	MaxProductNameLen = 100
+
+	minPurchaseQuantity = 1
+	// maxPurchaseQuantity is an arbitrary per-request sanity cap.
+	// It rejects absurd quantities as invalid input rather than as insufficient stock.
+	maxPurchaseQuantity = 10000
 )
 
 type (
@@ -39,13 +51,6 @@ func (id ProductID) String() string {
 	return uuid.UUID(id).String()
 }
 
-const (
-	minPurchaseQuantity = 1
-	// maxPurchaseQuantity is an arbitrary per-request sanity cap.
-	// It rejects absurd quantities as invalid input rather than as insufficient stock.
-	maxPurchaseQuantity = 10000
-)
-
 // ValidPurchaseQuantity reports whether qty falls within the purchasable range.
 func ValidPurchaseQuantity(qty int64) bool {
 	return qty >= minPurchaseQuantity && qty <= maxPurchaseQuantity
@@ -55,6 +60,9 @@ func ValidPurchaseQuantity(qty int64) bool {
 func (p Product) Validate() error {
 	if p.Name == "" {
 		return errors.New("the product name is empty")
+	}
+	if utf8.RuneCountInString(p.Name) > MaxProductNameLen {
+		return fmt.Errorf("the product name must be at most %d characters", MaxProductNameLen)
 	}
 	if err := p.Price.Validate(); err != nil {
 		return err
