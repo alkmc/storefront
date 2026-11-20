@@ -20,12 +20,15 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-const usage = `usage: migrate <up|status|down>
+const (
+	columnPadding = 2
 
-  up      apply all pending migrations
-  status  show applied and pending migrations
-  down    roll back the most recent migration (local dev only)
+	usage = `usage: migrate <up|status|down>
+  	up      apply all pending migrations
+  	status  show applied and pending migrations
+  	down    roll back the most recent migration (local dev only)
 `
+)
 
 var validCommands = map[string]struct{}{
 	"up":     {},
@@ -122,12 +125,12 @@ func execCommand(ctx context.Context, logger *slog.Logger, cmd string, db *sql.D
 		logger.Info("migration rolled back")
 		return nil
 	default:
-		return errors.New("unknown command: " + cmd)
+		return fmt.Errorf("unknown command %q", cmd)
 	}
 }
 
 func printStatus(w io.Writer, rows []*goose.MigrationStatus) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	tw := tabwriter.NewWriter(w, 0, 0, columnPadding, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "VERSION\tSTATE\tAPPLIED AT\tSOURCE")
 	for _, r := range rows {
 		applied := "—"

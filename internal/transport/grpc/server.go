@@ -55,7 +55,7 @@ func (s *Server) Run(ctx context.Context) error {
 	eg.Go(func() error {
 		s.log.Info("starting grpc server", slog.String("address", s.cfg.Addr))
 		if err := srv.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
-			return fmt.Errorf("grpc serve failed: %w", err)
+			return fmt.Errorf("grpc serve: %w", err)
 		}
 		return nil
 	})

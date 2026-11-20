@@ -30,7 +30,22 @@ type (
 	verifier interface {
 		Verify(string) (uuid.UUID, error)
 	}
+
+	statusRecorder struct {
+		http.ResponseWriter
+		status int
+	}
 )
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+// Unwrap lets http.ResponseController reach the underlying writer's capabilities.
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.ResponseWriter
+}
 
 // NewMiddleware builds the standard middleware chain.
 func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
@@ -211,19 +226,4 @@ func Auth(v verifier) func(http.HandlerFunc) http.HandlerFunc {
 func unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", "Bearer")
 	respondError(w, http.StatusUnauthorized, "invalid or missing token")
-}
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (r *statusRecorder) WriteHeader(code int) {
-	r.status = code
-	r.ResponseWriter.WriteHeader(code)
-}
-
-// Unwrap lets http.ResponseController reach the underlying writer's capabilities.
-func (r *statusRecorder) Unwrap() http.ResponseWriter {
-	return r.ResponseWriter
 }

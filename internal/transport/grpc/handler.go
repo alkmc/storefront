@@ -34,6 +34,7 @@ type (
 	Handler struct {
 		catalogv1.UnimplementedProductServiceServer
 		orderv1.UnimplementedOrderServiceServer
+
 		logger    *slog.Logger
 		processor processor
 	}
@@ -159,31 +160,6 @@ func (h *Handler) CreateOrder(
 	}.Build(), nil
 }
 
-// idempotencyFromMetadata reads the required idempotency-key metadata: an opaque string of at most
-// domain.MaxIdempotencyKeyLen bytes. A missing, empty, or over-long key is a client error.
-func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return "", status.Errorf(
-			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
-		)
-	}
-	vals := md.Get(metaIdempotencyKey)
-	if len(vals) == 0 || vals[0] == "" {
-		return "", status.Errorf(
-			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
-		)
-	}
-	key := vals[0]
-	if len(key) > domain.MaxIdempotencyKeyLen {
-		return "", status.Errorf(
-			codes.InvalidArgument,
-			"%s must be at most %d bytes", metaIdempotencyKey, domain.MaxIdempotencyKeyLen,
-		)
-	}
-	return domain.IdempotencyKey(key), nil
-}
-
 // toStatus maps domain errors to gRPC codes; unknown errors become Internal.
 func (h *Handler) toStatus(err error) error {
 	switch {
@@ -260,4 +236,29 @@ func (h *Handler) ListOrders(
 		Orders:     mapSlice(page.Items, toOrderProto),
 		NextCursor: page.NextCursor(),
 	}.Build(), nil
+}
+
+// idempotencyFromMetadata reads the required idempotency-key metadata: an opaque string of at most
+// domain.MaxIdempotencyKeyLen bytes. A missing, empty, or over-long key is a client error.
+func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", status.Errorf(
+			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
+		)
+	}
+	vals := md.Get(metaIdempotencyKey)
+	if len(vals) == 0 || vals[0] == "" {
+		return "", status.Errorf(
+			codes.InvalidArgument, "%s metadata is required", metaIdempotencyKey,
+		)
+	}
+	key := vals[0]
+	if len(key) > domain.MaxIdempotencyKeyLen {
+		return "", status.Errorf(
+			codes.InvalidArgument,
+			"%s must be at most %d bytes", metaIdempotencyKey, domain.MaxIdempotencyKeyLen,
+		)
+	}
+	return domain.IdempotencyKey(key), nil
 }

@@ -270,21 +270,6 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	respond(w, http.StatusCreated, toCreateOrderResponse(order))
 }
 
-// idempotencyFromHeader reads the required Idempotency-Key header.
-// A missing, empty, or over-long key is a client error.
-func idempotencyFromHeader(r *http.Request) (domain.IdempotencyKey, error) {
-	key := r.Header.Get(headerIdempotencyKey)
-	if key == "" {
-		return "", errors.New(msgIdempotencyRequired)
-	}
-	if len(key) > domain.MaxIdempotencyKeyLen {
-		return "", fmt.Errorf(
-			"%s must be at most %d bytes", headerIdempotencyKey, domain.MaxIdempotencyKeyLen,
-		)
-	}
-	return domain.IdempotencyKey(key), nil
-}
-
 // respondServerError maps outages, timeouts and client disconnects to their status and logs them.
 func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg string, attrs ...any) {
 	switch {
@@ -315,17 +300,6 @@ func (h *Handler) callerID(w http.ResponseWriter, r *http.Request) (domain.UserI
 		h.internalError(w, "user id missing on protected route")
 	}
 	return domain.UserID(userID), ok
-}
-
-func parseLimit(raw string) (int, error) {
-	if raw == "" {
-		return domain.DefaultPageSize, nil
-	}
-	n, err := strconv.Atoi(raw)
-	if err != nil {
-		return 0, fmt.Errorf("invalid limit: %q", raw)
-	}
-	return domain.NormalizePageSize(n), nil
 }
 
 func (h *Handler) GetOrder(w http.ResponseWriter, r *http.Request) {
@@ -384,4 +358,30 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, toOrdersPage(page))
+}
+
+// idempotencyFromHeader reads the required Idempotency-Key header.
+// A missing, empty, or over-long key is a client error.
+func idempotencyFromHeader(r *http.Request) (domain.IdempotencyKey, error) {
+	key := r.Header.Get(headerIdempotencyKey)
+	if key == "" {
+		return "", errors.New(msgIdempotencyRequired)
+	}
+	if len(key) > domain.MaxIdempotencyKeyLen {
+		return "", fmt.Errorf(
+			"%s must be at most %d bytes", headerIdempotencyKey, domain.MaxIdempotencyKeyLen,
+		)
+	}
+	return domain.IdempotencyKey(key), nil
+}
+
+func parseLimit(raw string) (int, error) {
+	if raw == "" {
+		return domain.DefaultPageSize, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid limit: %q", raw)
+	}
+	return domain.NormalizePageSize(n), nil
 }

@@ -52,11 +52,6 @@ func (id ProductID) String() string {
 	return uuid.UUID(id).String()
 }
 
-// ValidPurchaseQuantity reports whether qty falls within the purchasable range.
-func ValidPurchaseQuantity(qty int64) bool {
-	return qty >= minPurchaseQuantity && qty <= maxPurchaseQuantity
-}
-
 // Validate ensures the product meets basic business rules before processing
 func (p Product) Validate() error {
 	if p.Name == "" {
@@ -83,4 +78,9 @@ func (p ProductPage) NextCursor() string {
 		return ""
 	}
 	return p.Items[len(p.Items)-1].ID.String()
+}
+
+// ValidPurchaseQuantity reports whether qty falls within the purchasable range.
+func ValidPurchaseQuantity(qty int64) bool {
+	return qty >= minPurchaseQuantity && qty <= maxPurchaseQuantity
 }

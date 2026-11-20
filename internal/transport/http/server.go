@@ -61,7 +61,7 @@ func (s *Server) Run(ctx context.Context) error {
 	eg.Go(func() error {
 		s.log.Info("starting server", slog.String("address", s.srv.Addr))
 		if err := s.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("server %s listen failed: %w", s.srv.Addr, err)
+			return fmt.Errorf("server %s listen: %w", s.srv.Addr, err)
 		}
 		return nil
 	})
@@ -71,7 +71,7 @@ func (s *Server) Run(ctx context.Context) error {
 		defer cancel()
 		s.log.Info("shutting down server", slog.String("address", s.srv.Addr))
 		if err := s.srv.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("server %s shutdown failed: %w", s.srv.Addr, err)
+			return fmt.Errorf("server %s shutdown: %w", s.srv.Addr, err)
 		}
 		return nil
 	})

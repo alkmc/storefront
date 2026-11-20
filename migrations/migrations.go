@@ -45,7 +45,11 @@ func Status(ctx context.Context, db *sql.DB) ([]*goose.MigrationStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	return p.Status(ctx)
+	status, err := p.Status(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("migration status: %w", err)
+	}
+	return status, nil
 }
 
 func Verify(ctx context.Context, dsn string) error {

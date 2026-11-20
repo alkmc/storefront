@@ -25,7 +25,11 @@ func NewPublisher(ctx context.Context, conn *rabbitmqamqp.AmqpConnection,
 	); err != nil {
 		return nil, fmt.Errorf("bus declare exchange: %w", err)
 	}
-	pub, err := conn.NewPublisher(ctx, nil, nil)
+	var (
+		perMessageTarget rabbitmqamqp.ITargetAddress
+		defaultOptions   rabbitmqamqp.IPublisherOptions
+	)
+	pub, err := conn.NewPublisher(ctx, perMessageTarget, defaultOptions)
 	if err != nil {
 		return nil, fmt.Errorf("bus new publisher: %w", err)
 	}

@@ -192,7 +192,8 @@ func openPostgres(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, erro
 
 // openRabbitMQ connects to the broker through the client's auto-recovering environment.
 func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection, error) {
-	env := rabbitmqamqp.NewEnvironment(url, nil)
+	var defaultConnOptions *rabbitmqamqp.AmqpConnOptions
+	env := rabbitmqamqp.NewEnvironment(url, defaultConnOptions)
 	conn, err := env.NewConnection(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("connect rabbitmq: %w", err)
