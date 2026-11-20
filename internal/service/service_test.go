@@ -40,9 +40,9 @@ func TestService_Create(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spyStore := new(SpyStore{})
 			tt.spySetup(spyStore)
-			srv := newTestService(spyStore)
+			svc := newTestService(spyStore)
 
-			res, err := srv.Create(ctx, tt.product)
+			res, err := svc.Create(ctx, tt.product)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -85,9 +85,9 @@ func TestService_FindByID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spyStore := new(SpyStore{})
 			tt.spySetup(spyStore)
-			srv := newTestService(spyStore)
+			svc := newTestService(spyStore)
 
-			res, err := srv.FindByID(ctx, domain.ProductID(tt.id))
+			res, err := svc.FindByID(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -131,12 +131,12 @@ func TestService_FindByID_CoalescesConcurrentMisses(t *testing.T) {
 						return domain.Product{ID: id, Price: testMoney(100)}, nil
 					},
 				}
-				srv := newTestService(spyStore)
+				svc := newTestService(spyStore)
 
 				var wg sync.WaitGroup
 				for range tt.callers {
 					wg.Go(func() {
-						if _, err := srv.FindByID(t.Context(), id); err != nil {
+						if _, err := svc.FindByID(t.Context(), id); err != nil {
 							t.Errorf("unexpected error: %v", err)
 						}
 					})
@@ -180,9 +180,9 @@ func TestService_FindAll(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spyStore := new(SpyStore{})
 			tt.spySetup(spyStore)
-			srv := newTestService(spyStore)
+			svc := newTestService(spyStore)
 
-			page, err := srv.FindAll(ctx, domain.Cursor{}, 50)
+			page, err := svc.FindAll(ctx, domain.Cursor{}, 50)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -224,9 +224,9 @@ func TestService_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spyStore := new(SpyStore{})
 			tt.spySetup(spyStore)
-			srv := newTestService(spyStore)
+			svc := newTestService(spyStore)
 
-			_, err := srv.Update(ctx, tt.product)
+			_, err := svc.Update(ctx, tt.product)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -266,9 +266,9 @@ func TestService_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spyStore := new(SpyStore{})
 			tt.spySetup(spyStore)
-			srv := newTestService(spyStore)
+			svc := newTestService(spyStore)
 
-			err := srv.Delete(ctx, domain.ProductID(tt.id))
+			err := svc.Delete(ctx, domain.ProductID(tt.id))
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error")
@@ -293,9 +293,9 @@ func TestService_CreateOrder(t *testing.T) {
 	) (domain.Order, bool, error) {
 		return o, false, nil
 	}
-	srv := newTestService(spyStore)
+	svc := newTestService(spyStore)
 
-	o, replayed, err := srv.CreateOrder(ctx, userID, domain.ProductID(id), 2, "")
+	o, replayed, err := svc.CreateOrder(ctx, userID, domain.ProductID(id), 2, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -348,9 +348,9 @@ func TestService_WritersOnlyInvalidate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			spyCache := &SpyCache{}
-			srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
+			svc := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-			if err := tt.call(srv); err != nil {
+			if err := tt.call(svc); err != nil {
 				t.Fatalf("%s: %v", tt.name, err)
 			}
 			if spyCache.Sets != 0 || spyCache.SetMissings != 0 {
@@ -372,9 +372,9 @@ func TestService_CreateLeavesCacheAlone(t *testing.T) {
 	spyStore := &SpyStore{
 		SaveFn: func(_ context.Context, p domain.Product) (domain.Product, error) { return p, nil },
 	}
-	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+	svc := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	if _, err := srv.Create(t.Context(), domain.Product{Name: "New", Price: testMoney(100)}); err != nil {
+	if _, err := svc.Create(t.Context(), domain.Product{Name: "New", Price: testMoney(100)}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	if spyCache.Sets+spyCache.SetMissings+spyCache.Invalidates != 0 {
@@ -452,9 +452,9 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 					return domain.Product{ID: id, Price: testMoney(100)}, nil
 				},
 			}
-			srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+			svc := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-			_, err := srv.FindByID(t.Context(), domain.ProductID(id))
+			_, err := svc.FindByID(t.Context(), domain.ProductID(id))
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("FindByID error = %v, want %v", err, tt.wantErr)
 			}
@@ -476,9 +476,9 @@ func TestService_InvalidateSurvivesCanceledRequest(t *testing.T) {
 	cancel()
 
 	spyCache := &SpyCache{}
-	srv := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
+	svc := NewService(&SpyStore{}, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	if err := srv.Delete(ctx, domain.ProductID(uuid.NewV7())); err != nil {
+	if err := svc.Delete(ctx, domain.ProductID(uuid.NewV7())); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if spyCache.Invalidates != 1 {
@@ -507,9 +507,9 @@ func TestService_FindByID_FlightHonoursCachedAbsence(t *testing.T) {
 			return domain.Product{ID: id}, nil
 		},
 	}
-	srv := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
+	svc := NewService(spyStore, spyCache, time.Second, slog.New(slog.DiscardHandler))
 
-	_, err := srv.FindByID(t.Context(), domain.ProductID(uuid.NewV7()))
+	_, err := svc.FindByID(t.Context(), domain.ProductID(uuid.NewV7()))
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("FindByID error = %v, want %v", err, domain.ErrNotFound)
 	}

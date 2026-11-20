@@ -30,22 +30,23 @@ import (
 const brokerCloseTimeout = 5 * time.Second
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("application failed", slog.Any("error", err))
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	slog.SetDefault(config.Log{}.NewLogger(os.Stdout))
+
 	cfg, err := config.Load()
 	if err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "load config: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("load config: %w", err)
 	}
 
 	logger := cfg.Log.NewLogger(os.Stdout)
 	slog.SetDefault(logger)
 
-	if err := run(logger, cfg); err != nil {
-		logger.Error("application failed", slog.Any("error", err))
-		os.Exit(1)
-	}
-}
-
-func run(logger *slog.Logger, cfg config.Config) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -89,16 +90,43 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	repo := store.NewPostgres(pool, cfg.Idempotency.TTL)
 
 	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
-	srv := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
+	svc := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
 
+	ih := httpsrv.NewInternalHandler(repo, vCache)
+
+	listener := pg.NewListener(pool, store.OutboxChannel)
+	relay := outbox.New(repo, listener, pub, outbox.Config{
+		BatchSize:      cfg.Outbox.BatchSize,
+		PollInterval:   cfg.Outbox.PollInterval,
+		PublishTimeout: cfg.Outbox.PublishTimeout,
+		MaxAttempts:    cfg.Outbox.MaxAttempts,
+	}, logger)
+	janitor := pg.NewJanitor(repo, cfg.Idempotency.PurgeInterval, logger)
+
+	if err := serve(ctx, cfg, svc, ih, relay, janitor, logger); err != nil {
+		return err
+	}
+	logger.Info("server shutdown completed")
+	return nil
+}
+
+// serve runs the servers, the outbox relay and the janitor until the first failure or shutdown signal.
+func serve(
+	ctx context.Context,
+	cfg config.Config,
+	svc *service.Service,
+	ih *httpsrv.InternalHandler,
+	relay *outbox.Relay,
+	janitor *pg.Janitor,
+	logger *slog.Logger,
+) error {
 	verifier := auth.NewVerifier(cfg.Auth.JWTSecret.Reveal())
 
-	apiSrv, err := newAPIServer(cfg, srv, verifier, logger)
+	apiSrv, err := newAPIServer(cfg, svc, verifier, logger)
 	if err != nil {
 		return err
 	}
 
-	ih := httpsrv.NewInternalHandler(repo, vCache)
 	internalSrv := httpsrv.NewInternalServer(
 		httpsrv.NewInternalMux(ih),
 		httpsrv.ServerCfg{
@@ -117,17 +145,8 @@ func run(logger *slog.Logger, cfg config.Config) error {
 			ShutdownTimeout: cfg.ShutdownTimeout,
 			Reflection:      cfg.GRPC.Reflection,
 		},
-		srv, verifier, logger,
+		svc, verifier, logger,
 	)
-
-	listener := pg.NewListener(pool, store.OutboxChannel)
-	relay := outbox.New(repo, listener, pub, outbox.Config{
-		BatchSize:      cfg.Outbox.BatchSize,
-		PollInterval:   cfg.Outbox.PollInterval,
-		PublishTimeout: cfg.Outbox.PublishTimeout,
-		MaxAttempts:    cfg.Outbox.MaxAttempts,
-	}, logger)
-	janitor := pg.NewJanitor(repo, cfg.Idempotency.PurgeInterval, logger)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error { return apiSrv.Run(ctx) })
@@ -135,12 +154,7 @@ func run(logger *slog.Logger, cfg config.Config) error {
 	eg.Go(func() error { return grpcSrv.Run(ctx) })
 	eg.Go(func() error { return relay.Run(ctx) })
 	eg.Go(func() error { return janitor.Run(ctx) })
-
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-	logger.Info("server shutdown completed")
-	return nil
+	return eg.Wait()
 }
 
 func newAPIServer(
