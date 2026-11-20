@@ -361,6 +361,44 @@ func TestServiceUnavailable(t *testing.T) {
 	}
 }
 
+func TestRequestTimedOut(t *testing.T) {
+	mux, proc := setupTest(t)
+	proc.findByID = func(_ context.Context, _ domain.ProductID) (domain.Product, error) {
+		return domain.Product{}, fmt.Errorf("query failed: %w", context.DeadlineExceeded)
+	}
+
+	id := uuid.NewV7().String()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/products/"+id, nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Errorf("got status %d, want %d", resp.Code, http.StatusServiceUnavailable)
+	}
+	if e := decodeJSON[messageResponse](t, resp.Body); e.Message != msgTimedOut {
+		t.Errorf("got msg %q, want %q", e.Message, msgTimedOut)
+	}
+}
+
+func TestRequestCanceled(t *testing.T) {
+	mux, proc := setupTest(t)
+	proc.findByID = func(_ context.Context, _ domain.ProductID) (domain.Product, error) {
+		return domain.Product{}, fmt.Errorf("query failed: %w", context.Canceled)
+	}
+
+	id := uuid.NewV7().String()
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/v1/products/"+id, nil)
+	resp := httptest.NewRecorder()
+	mux.ServeHTTP(resp, req)
+
+	if resp.Code != statusClientClosedRequest {
+		t.Errorf("got status %d, want %d", resp.Code, statusClientClosedRequest)
+	}
+	if e := decodeJSON[messageResponse](t, resp.Body); e.Message != msgCanceled {
+		t.Errorf("got msg %q, want %q", e.Message, msgCanceled)
+	}
+}
+
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
 	h := NewHandler(new(stubProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))

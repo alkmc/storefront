@@ -226,6 +226,36 @@ func TestHandler_ErrorMapping(t *testing.T) {
 			want: codes.Unavailable,
 		},
 		{
+			name: "deadline exceeded",
+			proc: stubProcessor{
+				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
+					return domain.Product{}, context.DeadlineExceeded
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
+					Name: "Test", Price: testMoney(1000),
+				}.Build())
+				return err
+			},
+			want: codes.DeadlineExceeded,
+		},
+		{
+			name: "canceled",
+			proc: stubProcessor{
+				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {
+					return domain.Product{}, context.Canceled
+				},
+			},
+			call: func(ctx context.Context, c catalogv1.ProductServiceClient) error {
+				_, err := c.CreateProduct(ctx, catalogv1.CreateProductRequest_builder{
+					Name: "Test", Price: testMoney(1000),
+				}.Build())
+				return err
+			},
+			want: codes.Canceled,
+		},
+		{
 			name: "internal",
 			proc: stubProcessor{
 				CreateFn: func(context.Context, domain.Product) (domain.Product, error) {

@@ -285,14 +285,21 @@ func idempotencyFromHeader(r *http.Request) (domain.IdempotencyKey, error) {
 	return domain.IdempotencyKey(key), nil
 }
 
-// respondServerError maps infrastructure failures to 503 or 500 and logs them.
+// respondServerError maps outages, timeouts and client disconnects to their status and logs them.
 func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg string, attrs ...any) {
-	if errors.Is(err, domain.ErrUnavailable) {
+	switch {
+	case errors.Is(err, domain.ErrUnavailable):
 		h.logger.Warn(logMsg, attrs...)
 		respondError(w, http.StatusServiceUnavailable, msgUnavailable)
-		return
+	case errors.Is(err, context.DeadlineExceeded):
+		h.logger.Warn(logMsg, attrs...)
+		respondError(w, http.StatusServiceUnavailable, msgTimedOut)
+	case errors.Is(err, context.Canceled):
+		h.logger.Debug(logMsg, attrs...)
+		respondError(w, statusClientClosedRequest, msgCanceled)
+	default:
+		h.internalError(w, logMsg, attrs...)
 	}
-	h.internalError(w, logMsg, attrs...)
 }
 
 // internalError logs the failure with attrs and replies with a generic 500.

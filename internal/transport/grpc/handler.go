@@ -53,7 +53,7 @@ func (h *Handler) CreateProduct(
 	}
 	created, err := h.processor.Create(ctx, p)
 	if err != nil {
-		return nil, h.toStatus(err, "create product")
+		return nil, h.toStatus(err)
 	}
 	return catalogv1.CreateProductResponse_builder{Product: toProductProto(created)}.Build(), nil
 }
@@ -67,7 +67,7 @@ func (h *Handler) GetProduct(
 	}
 	p, err := h.processor.FindByID(ctx, domain.ProductID(id))
 	if err != nil {
-		return nil, h.toStatus(err, "get product")
+		return nil, h.toStatus(err)
 	}
 	return catalogv1.GetProductResponse_builder{Product: toProductProto(p)}.Build(), nil
 }
@@ -81,7 +81,7 @@ func (h *Handler) ListProducts(
 	}
 	page, err := h.processor.FindAll(ctx, cursor, domain.NormalizePageSize(int(req.GetLimit())))
 	if err != nil {
-		return nil, h.toStatus(err, "list products")
+		return nil, h.toStatus(err)
 	}
 	return catalogv1.ListProductsResponse_builder{
 		Products:   mapSlice(page.Items, toProductProto),
@@ -102,7 +102,7 @@ func (h *Handler) UpdateProduct(
 	}
 	updated, err := h.processor.Update(ctx, p)
 	if err != nil {
-		return nil, h.toStatus(err, "update product")
+		return nil, h.toStatus(err)
 	}
 	return catalogv1.UpdateProductResponse_builder{Product: toProductProto(updated)}.Build(), nil
 }
@@ -115,7 +115,7 @@ func (h *Handler) DeleteProduct(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if err := h.processor.Delete(ctx, domain.ProductID(id)); err != nil {
-		return nil, h.toStatus(err, "delete product")
+		return nil, h.toStatus(err)
 	}
 	return catalogv1.DeleteProductResponse_builder{}.Build(), nil
 }
@@ -147,7 +147,7 @@ func (h *Handler) CreateOrder(
 
 	order, replayed, err := h.processor.CreateOrder(ctx, userID, domain.ProductID(productID), qty, idem)
 	if err != nil {
-		return nil, h.toStatus(err, "create order")
+		return nil, h.toStatus(err)
 	}
 	if replayed {
 		if err := grpc.SetHeader(ctx, metadata.Pairs(metaIdempotencyReplayed, "true")); err != nil {
@@ -185,12 +185,14 @@ func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error)
 }
 
 // toStatus maps domain errors to gRPC codes; unknown errors become Internal.
-func (h *Handler) toStatus(err error, op string) error {
+func (h *Handler) toStatus(err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
+		h.logger.Debug("rpc canceled", slog.Any("error", err))
 		return status.Error(codes.Canceled, "request canceled")
 	case errors.Is(err, context.DeadlineExceeded):
-		return status.Error(codes.DeadlineExceeded, "deadline exceeded")
+		h.logger.Warn("rpc timed out", slog.Any("error", err))
+		return status.Error(codes.DeadlineExceeded, "request timed out")
 	case errors.Is(err, domain.ErrNotFound):
 		return status.Error(codes.NotFound, "product not found")
 	case errors.Is(err, domain.ErrInsufficientStock):
@@ -202,7 +204,7 @@ func (h *Handler) toStatus(err error, op string) error {
 	case errors.Is(err, domain.ErrUnavailable):
 		return status.Error(codes.Unavailable, "service temporarily unavailable")
 	default:
-		h.logger.Error(op+" failed", slog.Any("error", err))
+		h.logger.Error("rpc failed", slog.Any("error", err))
 		return status.Error(codes.Internal, "internal error")
 	}
 }
@@ -234,7 +236,7 @@ func (h *Handler) GetOrder(
 		if errors.Is(err, domain.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, "order not found")
 		}
-		return nil, h.toStatus(err, "get order")
+		return nil, h.toStatus(err)
 	}
 	return orderv1.GetOrderResponse_builder{Order: toOrderProto(o)}.Build(), nil
 }
@@ -252,7 +254,7 @@ func (h *Handler) ListOrders(
 	}
 	page, err := h.processor.FindOrders(ctx, userID, cursor, domain.NormalizePageSize(int(req.GetLimit())))
 	if err != nil {
-		return nil, h.toStatus(err, "list orders")
+		return nil, h.toStatus(err)
 	}
 	return orderv1.ListOrdersResponse_builder{
 		Orders:     mapSlice(page.Items, toOrderProto),

@@ -19,7 +19,12 @@ const (
 	msgInvalidBody     = "invalid request body"
 	msgInternalError   = "internal server error"
 	msgUnavailable     = "service temporarily unavailable"
+	msgTimedOut        = "request timed out"
+	msgCanceled        = "request canceled"
 	msgInvalidQuantity = "quantity must be between 1 and 10000"
+
+	// statusClientClosedRequest is the nginx convention for a client disconnect, absent from net/http.
+	statusClientClosedRequest = 499
 
 	headerIdempotencyKey      = "Idempotency-Key"
 	headerIdempotencyReplayed = "Idempotency-Replayed"
