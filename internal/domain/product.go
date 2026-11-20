@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 	"uuid"
 )
@@ -63,6 +64,9 @@ func (p Product) Validate() error {
 	}
 	if utf8.RuneCountInString(p.Name) > MaxProductNameLen {
 		return fmt.Errorf("the product name must be at most %d characters", MaxProductNameLen)
+	}
+	if strings.ContainsRune(p.Name, 0) {
+		return errors.New("the product name must not contain NUL characters")
 	}
 	if err := p.Price.Validate(); err != nil {
 		return err

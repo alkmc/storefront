@@ -22,6 +22,11 @@ func TestProduct_Validate(t *testing.T) {
 			product: Product{Name: strings.Repeat("ą", MaxProductNameLen+1), Price: price},
 			wantErr: true,
 		},
+		{
+			name:    "NUL in name",
+			product: Product{Name: "a\x00b", Price: price},
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
