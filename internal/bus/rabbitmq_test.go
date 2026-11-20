@@ -17,7 +17,7 @@ import (
 
 const (
 	// keep in sync with compose.yaml
-	rabbitmqImage = "rabbitmq:4.3-management"
+	rabbitmqImage = "rabbitmq:4.4-management"
 
 	// a routing regression must fail the test instead of blocking until the binary times out
 	receiveTimeout = 5 * time.Second
