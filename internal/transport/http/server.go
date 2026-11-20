@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
@@ -55,13 +56,24 @@ func NewInternalServer(h http.Handler, cfg ServerCfg, log *slog.Logger) *Server 
 	})
 }
 
-// Run serves until ctx is cancelled, then shuts down gracefully.
+// Run binds the configured address and serves until ctx is cancelled.
 func (s *Server) Run(ctx context.Context) error {
+	var lc net.ListenConfig
+	lis, err := lc.Listen(ctx, "tcp", s.srv.Addr)
+	if err != nil {
+		return fmt.Errorf("server %s listen: %w", s.srv.Addr, err)
+	}
+	return s.Serve(ctx, lis)
+}
+
+// Serve takes ownership of lis and serves until ctx is cancelled.
+func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
+	addr := lis.Addr().String()
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		s.log.Info("starting server", slog.String("address", s.srv.Addr))
-		if err := s.srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("server %s listen: %w", s.srv.Addr, err)
+		s.log.Info("starting server", slog.String("address", addr))
+		if err := s.srv.Serve(lis); !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("server %s serve: %w", addr, err)
 		}
 		return nil
 	})
@@ -69,9 +81,10 @@ func (s *Server) Run(ctx context.Context) error {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.shutdownTimeout)
 		defer cancel()
-		s.log.Info("shutting down server", slog.String("address", s.srv.Addr))
+		s.log.Info("shutting down server", slog.String("address", addr))
 		if err := s.srv.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("server %s shutdown: %w", s.srv.Addr, err)
+			s.log.Warn("forcing server close", slog.String("address", addr), slog.Any("error", err))
+			_ = s.srv.Close()
 		}
 		return nil
 	})

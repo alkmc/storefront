@@ -26,6 +26,9 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// brokerCloseTimeout keeps RabbitMQ closes within the stop grace period.
+const brokerCloseTimeout = 5 * time.Second
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -75,13 +78,13 @@ func run(logger *slog.Logger, cfg config.Config) error {
 		return err
 	}
 	logger.Info("successfully connected to rabbitmq")
-	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "rabbitmq connection", amqp.Close, logger)
+	defer closeWithTimeout(ctx, brokerCloseTimeout, "rabbitmq connection", amqp.Close, logger)
 
 	pub, err := bus.NewPublisher(ctx, amqp)
 	if err != nil {
 		return err
 	}
-	defer closeWithTimeout(ctx, cfg.ShutdownTimeout, "event publisher", pub.Close, logger)
+	defer closeWithTimeout(ctx, brokerCloseTimeout, "event publisher", pub.Close, logger)
 
 	repo := store.NewPostgres(pool, cfg.Idempotency.TTL)
 
