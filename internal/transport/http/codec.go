@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 )
 
@@ -16,6 +17,7 @@ const (
 	msgBodyTooLarge     = "request body too large"
 	msgEmptyBody        = "request body must not be empty"
 	msgMalformedJSON    = "request body contains malformed JSON"
+	msgBodyTimeout      = "request body read timed out"
 	msgInvalidBody      = "invalid request body"
 	msgInternalError    = "internal server error"
 	msgUnavailable      = "service temporarily unavailable"
@@ -32,6 +34,13 @@ const (
 	headerIdempotencyReplayed = "Idempotency-Replayed"
 	msgIdempotencyMismatch    = "idempotency key reused with different payload"
 	msgIdempotencyRequired    = "Idempotency-Key header is required"
+)
+
+var (
+	// errBodyTimeout marks a body read cut off by ReadTimeout.
+	errBodyTimeout = errors.New("request body read timed out")
+	// errBodyAborted marks a body the client broke off.
+	errBodyAborted = errors.New("request body aborted")
 )
 
 type messageResponse struct {
@@ -52,21 +61,36 @@ func respondError(w http.ResponseWriter, code int, msg string) {
 	respond(w, code, messageResponse{Message: msg})
 }
 
-// respondDecodeError responds to a decoder error
-func respondDecodeError(w http.ResponseWriter, err error) {
-	msg, status := mapDecodeError(err)
-	respondError(w, status, msg)
+// decodeBody reads the whole body before decoding it, so a failed read can't pass for malformed JSON
+func decodeBody(body io.Reader, v any) error {
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		return tagReadError(err)
+	}
+	return json.Unmarshal(raw, v, json.RejectUnknownMembers(true))
 }
 
-// decodeBody decodes request body to given struct
-func decodeBody(body io.Reader, v any) error {
-	return json.UnmarshalRead(body, v, json.RejectUnknownMembers(true))
+// tagReadError marks a failed body read as timed out or aborted, leaving size errors untagged
+func tagReadError(err error) error {
+	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+		return err
+	}
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
+		return fmt.Errorf("%w: %w", errBodyTimeout, err)
+	}
+	return fmt.Errorf("%w: %w", errBodyAborted, err)
 }
 
 // mapDecodeError returns the client-facing message and HTTP status for a decoder error
 func mapDecodeError(err error) (msg string, status int) {
 	if mbe, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return fmt.Sprintf("%s: max %d bytes", msgBodyTooLarge, mbe.Limit), http.StatusRequestEntityTooLarge
+	}
+	switch {
+	case errors.Is(err, errBodyTimeout):
+		return msgBodyTimeout, http.StatusRequestTimeout
+	case errors.Is(err, errBodyAborted):
+		return msgCanceled, statusClientClosedRequest
 	}
 	return describeDecodeError(err), http.StatusBadRequest
 }

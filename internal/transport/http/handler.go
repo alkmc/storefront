@@ -117,8 +117,7 @@ func (h *Handler) Add(w http.ResponseWriter, r *http.Request) {
 
 	var in addInput
 	if err := decodeBody(r.Body, &in); err != nil {
-		h.logger.Warn("decode body failed", slog.Any("error", err))
-		respondDecodeError(w, err)
+		h.respondDecodeError(w, err)
 		return
 	}
 
@@ -181,8 +180,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var in updateInput
 	if err := decodeBody(r.Body, &in); err != nil {
-		h.logger.Warn("decode body failed", slog.Any("error", err))
-		respondDecodeError(w, err)
+		h.respondDecodeError(w, err)
 		return
 	}
 
@@ -223,8 +221,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	var in createOrderInput
 	if err := decodeBody(r.Body, &in); err != nil {
-		h.logger.Warn("decode body failed", slog.Any("error", err))
-		respondDecodeError(w, err)
+		h.respondDecodeError(w, err)
 		return
 	}
 
@@ -285,6 +282,17 @@ func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg st
 	default:
 		h.internalError(w, logMsg, attrs...)
 	}
+}
+
+// respondDecodeError logs and answers a decoder error, a stalled or departed client is no warning
+func (h *Handler) respondDecodeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errBodyTimeout) || errors.Is(err, errBodyAborted) {
+		h.logger.Debug("decode body failed", slog.Any("error", err))
+	} else {
+		h.logger.Warn("decode body failed", slog.Any("error", err))
+	}
+	msg, status := mapDecodeError(err)
+	respondError(w, status, msg)
 }
 
 // internalError logs the failure with attrs and replies with a generic 500.

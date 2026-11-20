@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 	"uuid"
 
@@ -490,6 +493,51 @@ func TestAddProductBodyTooLarge(t *testing.T) {
 	e := decodeJSON[messageResponse](t, resp.Body)
 	if !strings.Contains(e.Message, "request body too large") {
 		t.Errorf("got msg %q, want it to contain %q", e.Message, "request body too large")
+	}
+}
+
+func TestAddProductBodyReadFailure(t *testing.T) {
+	mux, _ := setupTest(t)
+
+	tests := []struct {
+		name     string
+		body     io.Reader
+		wantCode int
+		wantMsg  string
+	}{
+		{
+			name:     "body stalls past the read timeout",
+			body:     iotest.ErrReader(&net.OpError{Op: "read", Net: "tcp", Err: os.ErrDeadlineExceeded}),
+			wantCode: http.StatusRequestTimeout,
+			wantMsg:  msgBodyTimeout,
+		},
+		{
+			name:     "client aborts the body",
+			body:     iotest.ErrReader(io.ErrUnexpectedEOF),
+			wantCode: statusClientClosedRequest,
+			wantMsg:  msgCanceled,
+		},
+		{
+			name:     "truncated JSON",
+			body:     strings.NewReader(`{"name":"ab`),
+			wantCode: http.StatusBadRequest,
+			wantMsg:  msgMalformedJSON,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/products", tt.body)
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != tt.wantCode {
+				t.Errorf("got status %d, want %d", resp.Code, tt.wantCode)
+			}
+			if e := decodeJSON[messageResponse](t, resp.Body); e.Message != tt.wantMsg {
+				t.Errorf("got msg %q, want %q", e.Message, tt.wantMsg)
+			}
+		})
 	}
 }
 
