@@ -14,7 +14,7 @@
 
 Product catalog API exposed over REST and gRPC.  
 PostgreSQL is the source of truth, with goose migrations embedded in the binary.  
-Product reads use cache-aside Redis.  
+Product reads use cache-aside Valkey.  
 Concurrent misses are coalesced with singleflight.  
 Only readers populate the cache, and only under a compare-and-set guard, so a reader
 that raced a writer loses instead of restoring stale data.  
@@ -27,8 +27,8 @@ Writes emit domain events through a transactional outbox relayed to RabbitMQ.
 
 * Go 1.27
 * PostgreSQL 18.x
-* Redis 8.10
-* RabbitMQ 4.3 (AMQP 1.0)
+* Valkey 9.1
+* RabbitMQ 4.4 (AMQP 1.0)
 
 ## Quickstart
 
