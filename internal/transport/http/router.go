@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"net/http/pprof"
+	"strings"
 )
 
 // NewMux registers routes, private ones wrapped in requireAuth.
@@ -17,7 +18,28 @@ func NewMux(h *Handler, requireAuth func(http.HandlerFunc) http.HandlerFunc) htt
 	mux.HandleFunc("GET /v1/orders", requireAuth(h.ListOrders))
 	mux.HandleFunc("GET /v1/orders/{id}", requireAuth(h.GetOrder))
 
+	mux.HandleFunc("/v1/products", methodNotAllowed(http.MethodGet, http.MethodHead, http.MethodPost))
+	mux.HandleFunc("/v1/products/{id}",
+		methodNotAllowed(http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete))
+	mux.HandleFunc("/v1/orders", methodNotAllowed(http.MethodGet, http.MethodHead, http.MethodPost))
+	mux.HandleFunc("/v1/orders/{id}", methodNotAllowed(http.MethodGet, http.MethodHead))
+	mux.HandleFunc("/", notFound)
+
 	return mux
+}
+
+// notFound replaces ServeMux's plain-text 404.
+func notFound(w http.ResponseWriter, _ *http.Request) {
+	respondError(w, http.StatusNotFound, msgUnknownRoute)
+}
+
+// methodNotAllowed replaces ServeMux's plain-text 405.
+func methodNotAllowed(allowed ...string) http.HandlerFunc {
+	allow := strings.Join(allowed, ", ")
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Allow", allow)
+		respondError(w, http.StatusMethodNotAllowed, msgMethodNotAllowed)
+	}
 }
 
 // NewInternalMux returns a mux for the internal-only port.

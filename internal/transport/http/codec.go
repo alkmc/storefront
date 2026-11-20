@@ -12,16 +12,18 @@ import (
 const (
 	MediaTypeJSON = "application/json"
 
-	msgEncodeFailed    = "error encoding data"
-	msgBodyTooLarge    = "request body too large"
-	msgEmptyBody       = "request body must not be empty"
-	msgMalformedJSON   = "request body contains malformed JSON"
-	msgInvalidBody     = "invalid request body"
-	msgInternalError   = "internal server error"
-	msgUnavailable     = "service temporarily unavailable"
-	msgTimedOut        = "request timed out"
-	msgCanceled        = "request canceled"
-	msgInvalidQuantity = "quantity must be between 1 and 10000"
+	msgEncodeFailed     = "error encoding data"
+	msgBodyTooLarge     = "request body too large"
+	msgEmptyBody        = "request body must not be empty"
+	msgMalformedJSON    = "request body contains malformed JSON"
+	msgInvalidBody      = "invalid request body"
+	msgInternalError    = "internal server error"
+	msgUnavailable      = "service temporarily unavailable"
+	msgTimedOut         = "request timed out"
+	msgCanceled         = "request canceled"
+	msgUnknownRoute     = "unknown route"
+	msgMethodNotAllowed = "method not allowed"
+	msgInvalidQuantity  = "quantity must be between 1 and 10000"
 
 	// statusClientClosedRequest is the nginx convention for a client disconnect, absent from net/http.
 	statusClientClosedRequest = 499

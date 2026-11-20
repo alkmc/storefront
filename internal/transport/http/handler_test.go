@@ -399,6 +399,81 @@ func TestRequestCanceled(t *testing.T) {
 	}
 }
 
+func TestRouting(t *testing.T) {
+	mux, _ := setupTest(t)
+	id := uuid.NewV7().String()
+
+	tests := []struct {
+		name      string
+		method    string
+		path      string
+		wantCode  int
+		wantAllow string
+		wantMsg   string
+	}{
+		{
+			name:     "unknown path",
+			method:   http.MethodGet,
+			path:     "/nope",
+			wantCode: http.StatusNotFound,
+			wantMsg:  msgUnknownRoute,
+		},
+		{
+			name:      "wrong method on products",
+			method:    http.MethodDelete,
+			path:      "/v1/products",
+			wantCode:  http.StatusMethodNotAllowed,
+			wantAllow: "GET, HEAD, POST",
+			wantMsg:   msgMethodNotAllowed,
+		},
+		{
+			name:      "wrong method on product",
+			method:    http.MethodPatch,
+			path:      "/v1/products/" + id,
+			wantCode:  http.StatusMethodNotAllowed,
+			wantAllow: "GET, HEAD, PUT, DELETE",
+			wantMsg:   msgMethodNotAllowed,
+		},
+		{
+			name:      "wrong method on orders",
+			method:    http.MethodDelete,
+			path:      "/v1/orders",
+			wantCode:  http.StatusMethodNotAllowed,
+			wantAllow: "GET, HEAD, POST",
+			wantMsg:   msgMethodNotAllowed,
+		},
+		{
+			name:      "wrong method on order",
+			method:    http.MethodPut,
+			path:      "/v1/orders/" + id,
+			wantCode:  http.StatusMethodNotAllowed,
+			wantAllow: "GET, HEAD",
+			wantMsg:   msgMethodNotAllowed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), tt.method, tt.path, nil)
+			resp := httptest.NewRecorder()
+			mux.ServeHTTP(resp, req)
+
+			if resp.Code != tt.wantCode {
+				t.Errorf("got status %d, want %d", resp.Code, tt.wantCode)
+			}
+			if got := resp.Header().Get("Allow"); got != tt.wantAllow {
+				t.Errorf("got Allow %q, want %q", got, tt.wantAllow)
+			}
+			if got := resp.Header().Get("Content-Type"); got != MediaTypeJSON {
+				t.Errorf("got Content-Type %q, want %q", got, MediaTypeJSON)
+			}
+			if e := decodeJSON[messageResponse](t, resp.Body); e.Message != tt.wantMsg {
+				t.Errorf("got msg %q, want %q", e.Message, tt.wantMsg)
+			}
+		})
+	}
+}
+
 func TestAddProductBodyTooLarge(t *testing.T) {
 	const limit = 16 // bytes
 	h := NewHandler(new(stubProcessor{}), 2*time.Second, slog.New(slog.DiscardHandler))
