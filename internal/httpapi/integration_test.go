@@ -1,6 +1,6 @@
 //go:build integration
 
-package http
+package httpapi
 
 import (
 	"fmt"

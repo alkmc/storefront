@@ -1,4 +1,4 @@
-package grpc
+package grpcapi
 
 import (
 	catalogv1 "github.com/alkmc/storefront/api/gen/catalog/v1"

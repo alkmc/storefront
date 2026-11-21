@@ -161,7 +161,7 @@ grpcurl -plaintext -H "authorization: Bearer $(make -s token)" \
 
 ## Architecture
 
-`cmd/` → `transport/http` and `transport/grpc` → `service` → `store`, with `domain` and `cache` as cross-cutting packages.
+`cmd/` → `httpapi` and `grpcapi` → `service` → `store`, with `domain` and `cache` as cross-cutting packages.
 
 ### Outbox & events
 
