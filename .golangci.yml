@@ -68,6 +68,9 @@ linters:
     lll:
       line-length: 110
       tab-width: 1
+    rowserrcheck:
+      packages:
+        - github.com/jackc/pgx/v5
   exclusions:
     generated: strict
     presets:
