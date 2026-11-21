@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	// A SQLSTATE code is 5 characters; its first 2 identify the error class.
+	// A SQLSTATE code is 5 characters and the first 2 identify the error class.
 	sqlStateLen      = 5
 	sqlStateClassLen = 2
 	// SQLSTATE classes that signal the database is temporarily unavailable.
@@ -42,7 +42,7 @@ func (pg *Postgres) Ping(ctx context.Context) error {
 	return pg.pool.Ping(ctx)
 }
 
-// withTx wraps fn in a transaction and maps its error so callers never leak a raw DB error.
+// withTx runs fn in a transaction and maps its error so no raw DB error leaks.
 func (pg *Postgres) withTx(ctx context.Context, fn func(pgx.Tx) error) error {
 	tx, err := pg.pool.Begin(ctx)
 	if err != nil {

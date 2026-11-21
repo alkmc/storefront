@@ -24,7 +24,7 @@ type (
 		RequestTimeout  time.Duration
 		MaxRequestBytes int
 		ShutdownTimeout time.Duration
-		// Reflection enables server reflection for CLI tooling in dev, keep off in prod.
+		// Reflection enables server reflection for CLI tooling in dev, keep it off in prod.
 		Reflection bool
 	}
 	// Server serves the gRPC API over the product service.
@@ -41,7 +41,7 @@ func NewServer(cfg ServerCfg, svc processor, v verifier, log *slog.Logger) *Serv
 	return new(Server{cfg: cfg, svc: svc, log: log, ver: v})
 }
 
-// Run serves until ctx is cancelled, then stops gracefully.
+// Run serves until ctx is canceled, then stops gracefully.
 func (s *Server) Run(ctx context.Context) error {
 	var lc net.ListenConfig
 	lis, err := lc.Listen(ctx, "tcp", s.cfg.Addr)

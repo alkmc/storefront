@@ -234,8 +234,7 @@ func expireKey(t *testing.T, repo *Postgres, userID uuid.UUID, idem domain.Idemp
 	}
 }
 
-// concurrentCreateOrders fires n CreateOrder calls with the same key at once and returns the distinct
-// order ids they produce, so a test can assert they all resolve to a single order.
+// concurrentCreateOrders fires n same-key CreateOrder calls at once and returns the distinct order ids.
 func concurrentCreateOrders(
 	t *testing.T, repo *Postgres, n int, userID, productID uuid.UUID, qty int64, idem domain.IdempotencyKey,
 ) map[uuid.UUID]struct{} {

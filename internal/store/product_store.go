@@ -119,15 +119,15 @@ func (pg *Postgres) Delete(ctx context.Context, id domain.ProductID) error {
 	})
 }
 
-// CreateOrder atomically decrements stock, records the order, and stores the purchased event in one tx.
-// The idempotency key is mandatory (enforced by the transports); the call replays a known key.
+// CreateOrder decrements stock, records the order, and stores the purchased event in one tx.
+// The transports require an idempotency key, and a known key replays the stored order.
 func (pg *Postgres) CreateOrder(
 	ctx context.Context, o domain.Order, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
 	return pg.createOrderIdempotent(ctx, o, idem)
 }
 
-// purchaseTx decrements stock, records the order, and stores the purchased event within the caller's tx.
+// purchaseTx does the CreateOrder writes within the caller's tx.
 func purchaseTx(ctx context.Context, tx pgx.Tx, o domain.Order) (domain.Order, error) {
 	p, err := scanProduct(tx.QueryRow(ctx, queryPurchase, uuid.UUID(o.ProductID), o.Quantity))
 	if err != nil {

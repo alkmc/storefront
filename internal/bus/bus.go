@@ -62,7 +62,7 @@ func (p *Publisher) Close(ctx context.Context) error {
 	return nil
 }
 
-// outcomeErr classifies the settlement, released (no queue bound yet) is pub/sub success.
+// outcomeErr treats a release (no queue bound yet) as pub/sub success.
 func outcomeErr(outcome rabbitmqamqp.DeliveryState) error {
 	switch outcome.(type) {
 	case *rabbitmqamqp.StateAccepted, *rabbitmqamqp.StateReleased:

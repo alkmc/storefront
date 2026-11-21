@@ -20,19 +20,18 @@ var (
 )
 
 const (
-	// MaxProductNameLen is the width of products.name, Postgres counts it in characters.
+	// MaxProductNameLen is the width of products.name, Postgres counts it in characters
 	MaxProductNameLen = 100
 
 	minPurchaseQuantity = 1
-	// maxPurchaseQuantity is an arbitrary per-request sanity cap.
-	// It rejects absurd quantities as invalid input rather than as insufficient stock.
+	// maxPurchaseQuantity caps a request so absurd quantities fail as invalid input, not insufficient stock
 	maxPurchaseQuantity = 10000
 )
 
 type (
 	// ProductID identifies a product.
 	ProductID uuid.UUID
-	// Product represents a purchasable item in the system
+	// Product represents a purchasable item in the system.
 	Product struct {
 		ID      ProductID
 		Name    string
@@ -40,7 +39,7 @@ type (
 		Stock   int64
 		Version int64
 	}
-	// ProductPage is a single keyset page
+	// ProductPage is a single keyset page.
 	ProductPage struct {
 		Items   []Product
 		HasMore bool
@@ -52,7 +51,7 @@ func (id ProductID) String() string {
 	return uuid.UUID(id).String()
 }
 
-// Validate ensures the product meets basic business rules before processing
+// Validate checks the product against basic business rules.
 func (p Product) Validate() error {
 	if p.Name == "" {
 		return errors.New("the product name is empty")

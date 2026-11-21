@@ -35,7 +35,7 @@ func requireAuth(v verifier, log *slog.Logger) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler,
 	) (any, error) {
-		// the grpc. prefix covers health and reflection, infrastructure stays token free
+		// the grpc. prefix covers health and reflection, which need no token
 		if _, ok := publicMethods[info.FullMethod]; ok || strings.HasPrefix(info.FullMethod, "/grpc.") {
 			return handler(ctx, req)
 		}

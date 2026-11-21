@@ -20,7 +20,7 @@ type Listener struct {
 	conn    *pgx.Conn
 }
 
-// NewListener returns a listener for channel, the connection is acquired lazily on first Await.
+// NewListener returns a listener for channel that connects lazily on the first Await.
 func NewListener(pool *pgxpool.Pool, channel string) *Listener {
 	return new(Listener{pool: pool, channel: channel})
 }
@@ -78,7 +78,7 @@ func (l *Listener) acquire(ctx context.Context) (*pgx.Conn, error) {
 		conn.Release()
 		return nil, fmt.Errorf("listen %s: %w", l.channel, err)
 	}
-	// Hijacked out of the pool, a long held pool conn would block pool.Close forever.
+	// Hijack it, since a long-held pooled conn would block pool.Close forever.
 	l.conn = conn.Hijack()
 	return l.conn, nil
 }

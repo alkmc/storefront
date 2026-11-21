@@ -6,12 +6,12 @@ import (
 	"time"
 )
 
-// purger deletes rows past their retention window, reporting how many went.
+// purger deletes rows past their retention window and returns the count.
 type purger interface {
 	PurgeIdempotencyKeys(context.Context) (int64, error)
 }
 
-// Janitor periodically purges expired idempotency keys until its context is cancelled.
+// Janitor periodically purges expired idempotency keys until its context is canceled.
 type Janitor struct {
 	purger   purger
 	interval time.Duration
@@ -23,7 +23,7 @@ func NewJanitor(p purger, interval time.Duration, logger *slog.Logger) *Janitor 
 	return new(Janitor{purger: p, interval: interval, logger: logger})
 }
 
-// Run purges after each interval until ctx is cancelled, logging a failure without stopping.
+// Run purges after each interval until ctx is canceled, logging a failure without stopping.
 func (j *Janitor) Run(ctx context.Context) error {
 	for {
 		select {

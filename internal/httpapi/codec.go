@@ -47,7 +47,7 @@ type messageResponse struct {
 	Message string `json:"message"`
 }
 
-// respond replies to the request with the specified payload and HTTP code
+// respond replies with the payload and HTTP code.
 func respond(w http.ResponseWriter, httpCode int, payload any) {
 	w.Header().Set("Content-Type", MediaTypeJSON)
 	w.WriteHeader(httpCode)
@@ -56,12 +56,12 @@ func respond(w http.ResponseWriter, httpCode int, payload any) {
 	}
 }
 
-// respondError replies to the request with an error message and its HTTP code
+// respondError replies with an error message and HTTP code.
 func respondError(w http.ResponseWriter, code int, msg string) {
 	respond(w, code, messageResponse{Message: msg})
 }
 
-// decodeBody reads the whole body before decoding it, so a failed read can't pass for malformed JSON
+// decodeBody reads the whole body before decoding it, so a failed read can't pass for malformed JSON.
 func decodeBody(body io.Reader, v any) error {
 	raw, err := io.ReadAll(body)
 	if err != nil {
@@ -70,7 +70,7 @@ func decodeBody(body io.Reader, v any) error {
 	return json.Unmarshal(raw, v, json.RejectUnknownMembers(true))
 }
 
-// tagReadError marks a failed body read as timed out or aborted, leaving size errors untagged
+// tagReadError marks a failed body read as timed out or aborted, leaving size errors untagged.
 func tagReadError(err error) error {
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return err
@@ -81,7 +81,7 @@ func tagReadError(err error) error {
 	return fmt.Errorf("%w: %w", errBodyAborted, err)
 }
 
-// mapDecodeError returns the client-facing message and HTTP status for a decoder error
+// mapDecodeError returns the client-facing message and HTTP status for a decoder error.
 func mapDecodeError(err error) (msg string, status int) {
 	if mbe, ok := errors.AsType[*http.MaxBytesError](err); ok {
 		return fmt.Sprintf("%s: max %d bytes", msgBodyTooLarge, mbe.Limit), http.StatusRequestEntityTooLarge
@@ -95,7 +95,7 @@ func mapDecodeError(err error) (msg string, status int) {
 	return describeDecodeError(err), http.StatusBadRequest
 }
 
-// describeDecodeError describes a decoder error in terms the client can act on
+// describeDecodeError describes a decoder error in terms the client can act on.
 func describeDecodeError(err error) string {
 	if _, ok := errors.AsType[*jsontext.SyntacticError](err); ok {
 		return msgMalformedJSON

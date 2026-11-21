@@ -45,7 +45,7 @@ func setupTestContainerRabbit(t *testing.T) *rabbitmqamqp.AmqpConnection {
 	if err != nil {
 		t.Fatalf("dial rabbitmq: %v", err)
 	}
-	// t.Context is canceled before cleanup runs, closing the connection still needs a live one
+	// t.Context is canceled before cleanup runs, closing the conn needs a live ctx
 	closeCtx := context.WithoutCancel(ctx)
 	t.Cleanup(func() {
 		if err := conn.Close(closeCtx); err != nil {

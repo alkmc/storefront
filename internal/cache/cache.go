@@ -45,7 +45,7 @@ type (
 	}
 )
 
-// New wraps an open Valkey client. ttl bounds a cached product, negTTL a cached absence.
+// New wraps an open Valkey client, caching products for ttl and absences for negTTL.
 func New(client valkey.Client, ttl, negTTL time.Duration) *Valkey {
 	return new(Valkey{client: client, ttl: ttl, negTTL: negTTL})
 }

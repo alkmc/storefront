@@ -9,11 +9,11 @@ import (
 
 const (
 	maxPort = 65535
-	// minJWTSecretBytes follows RFC 7518 section 3.2, an HMAC key must match the hash output size.
+	// minJWTSecretBytes follows RFC 7518 section 3.2, an HMAC key must be at least the hash output size.
 	minJWTSecretBytes = 32
 )
 
-// validate rejects settings that fail silently, those that fail loudly stay with their consumers.
+// validate rejects settings that fail silently, leaving loud failures to their consumers.
 func (c Config) validate() error {
 	return errors.Join(
 		c.HTTP.validate(),
@@ -24,13 +24,13 @@ func (c Config) validate() error {
 		c.Service.validate(),
 		c.Idempotency.validate(),
 		c.Auth.validate(),
-		// an expired context leaves in flight connections undrained on the way out
+		// an expired context leaves in-flight connections undrained on the way out
 		positive("SHUTDOWN_TIMEOUT", c.ShutdownTimeout),
 		c.validateListenAddresses(),
 	)
 }
 
-// validateListenAddresses keeps the listeners apart, a bind collision blames a foreign process.
+// validateListenAddresses rejects duplicates, whose bind error would blame another process.
 func (c Config) validateListenAddresses() error {
 	seen := make(map[string]struct{}, 3)
 	for _, addr := range []string{c.HTTP.Address(), c.HTTP.InternalAddress(), c.GRPC.Address()} {
@@ -53,11 +53,11 @@ func (h HTTP) validate() error {
 		positive("HTTP_READ_TIMEOUT", h.ReadTimeout),
 		positive("HTTP_WRITE_TIMEOUT", h.WriteTimeout),
 		positive("HTTP_IDLE_TIMEOUT", h.IdleTimeout),
-		// zero hands the handler a context that already expired
+		// zero hands the handler a context that has already expired
 		positive("HTTP_REQUEST_TIMEOUT", h.RequestTimeout),
 		// zero rejects every request that carries a body
 		positive("HTTP_MAX_BODY_BYTES", h.MaxBodyBytes),
-		// zero compresses everything, which is a choice, a negative floor is not
+		// zero compresses everything, which is fine, but a negative floor is not
 		notNegative("HTTP_COMPRESS_MIN_BYTES", h.CompressMinBytes),
 		// zero is the canonical way to clear HSTS, a negative age builds an invalid header
 		notNegative("HSTS_MAX_AGE", h.HSTSMaxAge),
@@ -90,13 +90,13 @@ func (p Postgres) validate() error {
 	return errors.Join(
 		positive("PG_MAX_OPEN_CONNS", p.MaxOpenConns),
 		notNegative("PG_MAX_IDLE_CONNS", p.MaxIdleConns),
-		// zero expires every connection on creation, then the pool fails blaming its own hooks
+		// zero expires every connection on creation, and the pool then blames its own hooks
 		positive("PG_CONN_MAX_LIFETIME", p.ConnMaxLifetime),
 		p.validateConnLimits(),
 	)
 }
 
-// validateConnLimits catches an idle floor above the open cap, a relation pgxpool never checks.
+// validateConnLimits rejects more idle than open conns, which pgxpool doesn't check.
 func (p Postgres) validateConnLimits() error {
 	if p.MaxIdleConns > p.MaxOpenConns {
 		return fmt.Errorf(
@@ -128,7 +128,7 @@ func (o Outbox) validate() error {
 }
 
 func (s Service) validate() error {
-	// zero expires every detached read fill, so the cache never fills
+	// zero cancels every detached fill, so the cache never gets populated
 	return positive("SERVICE_LOAD_TIMEOUT", s.LoadTimeout)
 }
 
@@ -149,7 +149,7 @@ func (a Auth) validate() error {
 	return nil
 }
 
-// bounded is every setting type the checks below accept, time.Duration included through ~int64.
+// bounded lists the setting types the checks below accept, with ~int64 covering time.Duration.
 type bounded interface {
 	~int | ~int32 | ~int64
 }

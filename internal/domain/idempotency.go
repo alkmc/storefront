@@ -2,7 +2,7 @@ package domain
 
 import "errors"
 
-// ErrIdempotencyMismatch signals a reused idempotency key paired with a different request payload.
+// ErrIdempotencyMismatch signals a reused idempotency key with a different payload.
 var ErrIdempotencyMismatch = errors.New("domain: idempotency key reused with different payload")
 
 // MaxIdempotencyKeyLen bounds the opaque key both transports accept.

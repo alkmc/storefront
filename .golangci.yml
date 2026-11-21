@@ -57,7 +57,7 @@ linters:
     - wastedassign
   settings:
     exhaustive:
-      # slog.Kind switches are partial by design, a ReplaceAttr handler rewrites two kinds
+      # slog.Kind switches are partial by design, a ReplaceAttr handler rewrites only two kinds
       ignore-types:
         - ^log/slog\.Kind$
     govet:

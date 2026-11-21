@@ -102,7 +102,7 @@ func testOrder(userID, productID uuid.UUID, qty int64) domain.Order {
 	}
 }
 
-// freshIdem returns a unique idempotency key so independent orders never collide on the key.
+// freshIdem returns a unique idempotency key so independent orders never collide.
 func freshIdem() domain.IdempotencyKey {
 	return domain.IdempotencyKey(uuid.NewV7().String())
 }

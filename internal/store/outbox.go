@@ -27,7 +27,7 @@ type (
 )
 
 // DrainBatch claims, publishes, and settles due outbox rows in one tx, the row locks are the claim.
-// The bool reports whether the claim hit batchSize, signalling more rows likely wait.
+// The bool reports a full claim, meaning more rows are likely waiting.
 func (pg *Postgres) DrainBatch(
 	ctx context.Context,
 	batchSize, maxAttempts int,
@@ -124,7 +124,7 @@ func publishBatch(
 	return sent, failed
 }
 
-// classifyFailures spares the transient error from the attempts count and returns it.
+// classifyFailures exempts the transient error from the attempt count and returns it.
 func classifyFailures(failed []failedRow, maxAttempts int) ([]int64, []failedRow, error) {
 	var (
 		bump      []int64

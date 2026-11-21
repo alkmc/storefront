@@ -160,7 +160,7 @@ func (h *Handler) CreateOrder(
 	}.Build(), nil
 }
 
-// toStatus maps domain errors to gRPC codes; unknown errors become Internal.
+// toStatus maps domain errors to gRPC codes and unknown errors to Internal.
 func (h *Handler) toStatus(err error) error {
 	switch {
 	case errors.Is(err, context.Canceled):
@@ -238,8 +238,7 @@ func (h *Handler) ListOrders(
 	}.Build(), nil
 }
 
-// idempotencyFromMetadata reads the required idempotency-key metadata: an opaque string of at most
-// domain.MaxIdempotencyKeyLen bytes. A missing, empty, or over-long key is a client error.
+// idempotencyFromMetadata reads the idempotency-key metadata, rejecting a missing, empty, or over-long key.
 func idempotencyFromMetadata(ctx context.Context) (domain.IdempotencyKey, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {

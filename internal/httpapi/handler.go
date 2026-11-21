@@ -51,7 +51,7 @@ type (
 	}
 )
 
-// NewHandler initializes a product API handler with its required dependencies
+// NewHandler returns a product API handler.
 func NewHandler(p processor, requestTimeout time.Duration, l *slog.Logger) *Handler {
 	return new(Handler{
 		logger:         l,
@@ -284,7 +284,7 @@ func (h *Handler) respondServerError(w http.ResponseWriter, err error, logMsg st
 	}
 }
 
-// respondDecodeError logs and answers a decoder error, a stalled or departed client is no warning
+// respondDecodeError answers a decoder error, logging client stalls and disconnects at debug level.
 func (h *Handler) respondDecodeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, errBodyTimeout) || errors.Is(err, errBodyAborted) {
 		h.logger.Debug("decode body failed", slog.Any("error", err))

@@ -56,7 +56,7 @@ func NewInternalServer(h http.Handler, cfg ServerCfg, log *slog.Logger) *Server 
 	})
 }
 
-// Run binds the configured address and serves until ctx is cancelled.
+// Run binds the configured address and serves until ctx is canceled.
 func (s *Server) Run(ctx context.Context) error {
 	var lc net.ListenConfig
 	lis, err := lc.Listen(ctx, "tcp", s.srv.Addr)
@@ -66,7 +66,7 @@ func (s *Server) Run(ctx context.Context) error {
 	return s.Serve(ctx, lis)
 }
 
-// Serve takes ownership of lis and serves until ctx is cancelled.
+// Serve takes ownership of lis and serves until ctx is canceled.
 func (s *Server) Serve(ctx context.Context, lis net.Listener) error {
 	addr := lis.Addr().String()
 	eg, ctx := errgroup.WithContext(ctx)

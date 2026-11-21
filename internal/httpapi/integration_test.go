@@ -259,8 +259,7 @@ func doGet[T any](t *testing.T, mux http.Handler, sub uuid.UUID, url string, wan
 	return decodeJSON[T](t, rec.Body)
 }
 
-// postOrder issues a create-order request with a caller-chosen Idempotency-Key (empty omits the
-// header) and returns the raw recorder so the test can inspect status, headers, and body.
+// postOrder sends a create-order request with the given Idempotency-Key, omitted when empty
 func postOrder(
 	t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64, key string,
 ) *httptest.ResponseRecorder {

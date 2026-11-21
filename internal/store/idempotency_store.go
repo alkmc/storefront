@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// PurgeIdempotencyKeys deletes rows past their TTL and reports how many went.
+// PurgeIdempotencyKeys deletes rows past their TTL and returns the count.
 func (pg *Postgres) PurgeIdempotencyKeys(ctx context.Context) (int64, error) {
 	tag, err := pg.pool.Exec(ctx, queryPurgeIdempotency)
 	if err != nil {
@@ -49,8 +49,7 @@ func (pg *Postgres) createOrderIdempotent(
 	return o, replayed, nil
 }
 
-// replayIdempotent loads the stored order for a conflicting key by joining orders on order_id,
-// rejecting a reused key with a different payload. The conflicting row is already committed.
+// replayIdempotent loads the committed order for a conflicting key and rejects a different payload.
 func replayIdempotent(
 	ctx context.Context, tx pgx.Tx, o domain.Order, idem domain.IdempotencyKey,
 ) (domain.Order, bool, error) {
@@ -85,7 +84,7 @@ func updateIdempotencyResult(
 	return err
 }
 
-// hashOrderRequest fingerprints the order payload so a reused key with a different body is caught.
+// hashOrderRequest fingerprints the payload to catch a reused key with a different body.
 func hashOrderRequest(o domain.Order) []byte {
 	sum := sha256.Sum256([]byte(o.ProductID.String() + "|" + strconv.FormatInt(o.Quantity, 10)))
 	return sum[:]

@@ -224,7 +224,7 @@ func testConfig() Config {
 	return Config{BatchSize: 5, PollInterval: time.Second, PublishTimeout: 5 * time.Second}
 }
 
-// runRelay runs body in a synctest bubble with a started relay and a cancellable ctx.
+// runRelay runs body in a synctest bubble with a started relay and a cancelable ctx.
 func runRelay(
 	t *testing.T, fd *fakeDrainer, fl *fakeListener, pub *fakePublisher, cfg Config, body func(*testing.T),
 ) {

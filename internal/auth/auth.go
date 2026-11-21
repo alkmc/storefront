@@ -11,7 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// ErrInvalidToken covers every verification failure, transports reply 401 without detail.
+// ErrInvalidToken covers every verification failure and maps to a bare 401.
 var ErrInvalidToken = errors.New("invalid token")
 
 // Verifier checks HS256 JWTs signed with a shared secret.
@@ -24,7 +24,7 @@ type Verifier struct {
 func NewVerifier(secret string) *Verifier {
 	return new(Verifier{
 		secret: []byte(secret),
-		// the allowlist keeps alg none and RS256 key confusion away from the signature check
+		// the allowlist keeps alg "none" and RS256 key confusion away from the signature check
 		parser: jwt.NewParser(
 			jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
 			jwt.WithExpirationRequired(),
@@ -47,7 +47,7 @@ func (v *Verifier) Verify(token string) (uuid.UUID, error) {
 	return sub, nil
 }
 
-// BearerToken extracts the token from an RFC 6750 Authorization value, the scheme match ignores case.
+// BearerToken extracts the token from an RFC 6750 Authorization value, ignoring scheme case.
 func BearerToken(header string) (string, bool) {
 	const scheme = "Bearer "
 	if len(header) < len(scheme) || !strings.EqualFold(header[:len(scheme)], scheme) {

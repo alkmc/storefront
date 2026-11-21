@@ -76,7 +76,7 @@ func NewMiddleware(cfg MiddlewareCfg) (Middleware, error) {
 	}, nil
 }
 
-// chain composes middlewares in top-down order
+// chain composes middlewares in top-down order.
 func chain(h http.Handler, mws ...Middleware) http.Handler {
 	for _, mw := range slices.Backward(mws) {
 		h = mw(h)
@@ -102,7 +102,7 @@ func logging(next http.Handler) http.Handler {
 	})
 }
 
-// recovery catches panics and prevents the server from crashing
+// recovery catches panics and prevents the server from crashing.
 func recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -140,7 +140,7 @@ func securityHeaders(hstsEnabled bool, hstsMaxAge int) Middleware {
 	}
 }
 
-// corsPolicy enforces an origin allowlist. Empty list disables CORS entirely.
+// corsPolicy enforces an origin allowlist, and an empty list disables CORS.
 func corsPolicy(origins []string, maxAge int) (Middleware, error) {
 	if len(origins) == 0 {
 		return func(next http.Handler) http.Handler {
@@ -187,7 +187,7 @@ func bodyLimit(maxBytes int64) Middleware {
 	}
 }
 
-// compression applies zstd/gzip to JSON responses larger than minBytes
+// compression applies zstd/gzip to JSON responses larger than minBytes.
 func compression(minBytes int) (Middleware, error) {
 	wrap, err := gzhttp.NewWrapper(
 		gzhttp.MinSize(minBytes),

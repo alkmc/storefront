@@ -45,8 +45,7 @@ type (
 	}
 )
 
-// NewService applies loadTimeout to every cache and store call that runs detached from
-// the caller, so a client disconnect cannot leave the cache unwritten.
+// NewService caps detached cache and store calls at loadTimeout, since they outlive the client request.
 func NewService(
 	st storer, c cacher, loadTimeout time.Duration, l *slog.Logger,
 ) *Service {

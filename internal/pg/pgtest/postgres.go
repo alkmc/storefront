@@ -67,7 +67,7 @@ func run(t *testing.T) string {
 	return dsn
 }
 
-// migrate applies the full schema over a short lived database/sql handle, goose needs one.
+// migrate applies the full schema over a short-lived database/sql handle, goose needs one.
 func migrate(t *testing.T, dsn string) {
 	t.Helper()
 

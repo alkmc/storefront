@@ -20,7 +20,7 @@ const (
 var ErrUndeliverable = errors.New("undeliverable")
 
 type (
-	// Event describes a product change. EventID (v7) lets consumers deduplicate.
+	// Event describes a product change, with a v7 EventID for consumer deduplication.
 	Event struct {
 		EventID    uuid.UUID `json:"eventId"`
 		Type       string    `json:"type"`

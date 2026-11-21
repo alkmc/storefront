@@ -13,8 +13,7 @@ import (
 const maxBackoff = 30 * time.Second
 
 type (
-	// drainer claims, publishes, and settles a batch of pending outbox rows,
-	// the bool reports a full claim, signalling more rows likely wait.
+	// drainer claims, publishes, and settles a batch of pending rows, reporting whether the claim was full.
 	drainer interface {
 		DrainBatch(ctx context.Context, batchSize, maxAttempts int,
 			publish func(context.Context, event.Record) error,
@@ -29,7 +28,7 @@ type (
 	publisher interface {
 		Publish(context.Context, event.Record) error
 	}
-	// Config tunes the relay's batching, waiting, and publish behaviour.
+	// Config tunes the relay's batching, waiting, and publish behavior.
 	Config struct {
 		BatchSize      int
 		PollInterval   time.Duration
@@ -55,7 +54,7 @@ func New(
 	})
 }
 
-// Run drains the outbox until ctx is cancelled, backing off when draining fails.
+// Run drains the outbox until ctx is canceled, backing off when draining fails.
 // It owns the listener and closes it on return.
 func (r *Relay) Run(ctx context.Context) error {
 	defer r.listener.Close()
@@ -74,7 +73,7 @@ func (r *Relay) Run(ctx context.Context) error {
 			r.log.Error("outbox drain failed",
 				slog.Int("published", published), slog.Any("error", err))
 			backoff = min(backoff*2, maxBackoff)
-			// Backing off deaf to NOTIFY, or steady writes would retry at their own rate.
+			// Sleep through NOTIFYs while backing off, or steady writes would set the retry pace.
 			if err := pause(ctx, backoff); err != nil {
 				return nil
 			}
@@ -107,7 +106,7 @@ func (r *Relay) publishWithTimeout(ctx context.Context, rec event.Record) error 
 	return r.pub.Publish(ctx, rec)
 }
 
-// pause sleeps d out in full, only ctx cancellation cuts it short.
+// pause sleeps for the full d unless ctx is canceled.
 func pause(ctx context.Context, d time.Duration) error {
 	select {
 	case <-ctx.Done():

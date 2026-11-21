@@ -26,7 +26,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// brokerCloseTimeout keeps RabbitMQ closes within the stop grace period.
+// brokerCloseTimeout keeps closing the RabbitMQ connection within the stop grace period.
 const brokerCloseTimeout = 5 * time.Second
 
 func main() {

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// TestSecretRedaction guards the value receivers on Secret, pointer ones let fmt and slog print it raw.
+// TestSecretRedaction guards the value receivers, since pointer ones would let fmt and slog print it raw.
 func TestSecretRedaction(t *testing.T) {
 	const (
 		pgPassword       = "pg-password"

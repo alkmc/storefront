@@ -16,7 +16,7 @@ func Token(secret string, sub uuid.UUID, exp time.Time) string {
 	})
 	signed, err := t.SignedString([]byte(secret))
 	if err != nil {
-		// hmac signing of registered claims has no failure path
+		// HMAC signing of registered claims has no failure path
 		panic(err)
 	}
 	return signed

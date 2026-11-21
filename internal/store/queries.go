@@ -1,6 +1,6 @@
 package store
 
-// OutboxChannel is the NOTIFY channel that wakes the outbox relay, LISTEN and NOTIFY share it.
+// OutboxChannel is the LISTEN/NOTIFY channel that wakes the outbox relay.
 const OutboxChannel = "outbox_wakeup"
 
 const (

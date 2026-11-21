@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	// DefaultPageSize is used when a client omits or under-specifies a page limit.
+	// DefaultPageSize is used when a client omits a page limit or sends a non-positive one.
 	DefaultPageSize = 50
 	// MaxPageSize caps a client-requested page size.
 	MaxPageSize = 200
@@ -24,7 +24,7 @@ func NewCursor(id uuid.UUID) Cursor { return Cursor{id: id, valid: true} }
 // After returns the id to resume after and whether the cursor is set.
 func (c Cursor) After() (uuid.UUID, bool) { return c.id, c.valid }
 
-// NormalizePageSize bounds n into (0, MaxPageSize], defaulting non-positive values.
+// NormalizePageSize defaults a non-positive n and caps it at MaxPageSize.
 func NormalizePageSize(n int) int {
 	if n <= 0 {
 		return DefaultPageSize

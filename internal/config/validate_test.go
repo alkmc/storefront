@@ -496,7 +496,7 @@ func assertRule(t *testing.T, err error, wantErr bool, settings ...string) {
 	}
 }
 
-// defaultConfig parses a config from the required variables alone, so every other value is its default.
+// defaultConfig parses only the required variables, leaving everything else at its default.
 func defaultConfig(t *testing.T) Config {
 	t.Helper()
 	setRequired(t)
