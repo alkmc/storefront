@@ -16,7 +16,7 @@ import (
 
 const (
 	// keep in sync with compose.yaml
-	postgresImage = "postgres:18"
+	postgresImage = "postgres:19"
 
 	dbName     = "testdb"
 	dbUser     = "testuser"
