@@ -1,4 +1,4 @@
-package http
+package httpapi
 
 import (
 	"context"
@@ -28,8 +28,8 @@ type Server struct {
 	log             *slog.Logger
 }
 
-// NewAPIServer builds the public HTTP server from cfg.
-func NewAPIServer(h http.Handler, cfg ServerCfg, log *slog.Logger) *Server {
+// NewPublicServer builds the public HTTP server from cfg.
+func NewPublicServer(h http.Handler, cfg ServerCfg, log *slog.Logger) *Server {
 	return new(Server{
 		srv: &http.Server{
 			Addr:         cfg.Addr,

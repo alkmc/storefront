@@ -13,12 +13,12 @@ import (
 	"github.com/alkmc/storefront/internal/bus"
 	"github.com/alkmc/storefront/internal/cache"
 	"github.com/alkmc/storefront/internal/config"
+	"github.com/alkmc/storefront/internal/grpcapi"
+	"github.com/alkmc/storefront/internal/httpapi"
 	"github.com/alkmc/storefront/internal/outbox"
 	"github.com/alkmc/storefront/internal/pg"
 	"github.com/alkmc/storefront/internal/service"
 	"github.com/alkmc/storefront/internal/store"
-	grpcsrv "github.com/alkmc/storefront/internal/transport/grpc"
-	httpsrv "github.com/alkmc/storefront/internal/transport/http"
 	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
@@ -92,7 +92,7 @@ func run() error {
 	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
 	svc := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
 
-	ih := httpsrv.NewInternalHandler(repo, vCache)
+	ih := httpapi.NewInternalHandler(repo, vCache)
 
 	listener := pg.NewListener(pool, store.OutboxChannel)
 	relay := outbox.New(repo, listener, pub, outbox.Config{
@@ -115,7 +115,7 @@ func serve(
 	ctx context.Context,
 	cfg config.Config,
 	svc *service.Service,
-	ih *httpsrv.InternalHandler,
+	ih *httpapi.InternalHandler,
 	relay *outbox.Relay,
 	janitor *pg.Janitor,
 	logger *slog.Logger,
@@ -127,9 +127,9 @@ func serve(
 		return err
 	}
 
-	internalSrv := httpsrv.NewInternalServer(
-		httpsrv.NewInternalMux(ih),
-		httpsrv.ServerCfg{
+	internalSrv := httpapi.NewInternalServer(
+		httpapi.NewInternalMux(ih),
+		httpapi.ServerCfg{
 			Addr:            cfg.HTTP.InternalAddress(),
 			ReadTimeout:     cfg.HTTP.ReadTimeout,
 			ShutdownTimeout: cfg.ShutdownTimeout,
@@ -137,8 +137,8 @@ func serve(
 		logger,
 	)
 
-	grpcSrv := grpcsrv.NewServer(
-		grpcsrv.ServerCfg{
+	grpcSrv := grpcapi.NewServer(
+		grpcapi.ServerCfg{
 			Addr:            cfg.GRPC.Address(),
 			RequestTimeout:  cfg.GRPC.RequestTimeout,
 			MaxRequestBytes: int(cfg.GRPC.MaxRequestBytes),
@@ -159,8 +159,8 @@ func serve(
 
 func newAPIServer(
 	cfg config.Config, svc *service.Service, v *auth.Verifier, l *slog.Logger,
-) (*httpsrv.Server, error) {
-	mw, err := httpsrv.NewMiddleware(httpsrv.MiddlewareCfg{
+) (*httpapi.Server, error) {
+	mw, err := httpapi.NewMiddleware(httpapi.MiddlewareCfg{
 		MaxBodyBytes:       cfg.HTTP.MaxBodyBytes,
 		CompressMinBytes:   cfg.HTTP.CompressMinBytes,
 		CORSAllowedOrigins: cfg.HTTP.CORSAllowedOrigins,
@@ -172,10 +172,10 @@ func newAPIServer(
 		return nil, err
 	}
 
-	h := httpsrv.NewHandler(svc, cfg.HTTP.RequestTimeout, l)
-	return httpsrv.NewAPIServer(
-		mw(httpsrv.NewMux(h, httpsrv.Auth(v))),
-		httpsrv.ServerCfg{
+	h := httpapi.NewHandler(svc, cfg.HTTP.RequestTimeout, l)
+	return httpapi.NewPublicServer(
+		mw(httpapi.NewMux(h, httpapi.Auth(v))),
+		httpapi.ServerCfg{
 			Addr:            cfg.HTTP.Address(),
 			ReadTimeout:     cfg.HTTP.ReadTimeout,
 			WriteTimeout:    cfg.HTTP.WriteTimeout,
