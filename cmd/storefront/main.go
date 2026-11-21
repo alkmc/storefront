@@ -169,7 +169,7 @@ func newAPIServer(
 		HSTSMaxAge:         cfg.HTTP.HSTSMaxAge,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create http middleware: %w", err)
 	}
 
 	h := httpapi.NewHandler(svc, cfg.HTTP.RequestTimeout, l)

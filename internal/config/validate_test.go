@@ -148,6 +148,37 @@ func TestListenPort(t *testing.T) {
 	}
 }
 
+func TestExactOrigins(t *testing.T) {
+	tests := []struct {
+		name    string
+		origins []string
+		wantErr bool
+	}{
+		{
+			name:    "exact origins",
+			origins: []string{"https://app.example.com", "http://localhost:3000"},
+		},
+		{
+			name:    "bare wildcard",
+			origins: []string{"https://app.example.com", "*"},
+			wantErr: true,
+		},
+		{
+			name:    "subdomain wildcard",
+			origins: []string{"https://app.example.com", "https://*.example.com"},
+			wantErr: true,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := exactOrigins(setting, tc.origins)
+			if (err != nil) != tc.wantErr {
+				t.Errorf("got error %v, want error %v", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestValidateConnLimits(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -345,6 +376,11 @@ func TestConfigValidateReachesEverySection(t *testing.T) {
 			name:    "listen addresses",
 			mutate:  func(c *Config) { c.GRPC.Port = c.HTTP.Port },
 			setting: "GRPC_PORT",
+		},
+		{
+			name:    "CORS origins",
+			mutate:  func(c *Config) { c.HTTP.CORSAllowedOrigins = []string{"http://*.localhost:3000"} },
+			setting: "CORS_ALLOWED_ORIGINS",
 		},
 	}
 	for _, tc := range tests {

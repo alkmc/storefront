@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -61,6 +62,7 @@ func (h HTTP) validate() error {
 		// zero is the canonical way to clear HSTS, a negative age builds an invalid header
 		notNegative("HSTS_MAX_AGE", h.HSTSMaxAge),
 		h.validateResponseDeadline(),
+		exactOrigins("CORS_ALLOWED_ORIGINS", h.CORSAllowedOrigins),
 	)
 }
 
@@ -169,6 +171,16 @@ func notNegative[T bounded](name string, v T) error {
 func atLeast[T bounded](name string, v, floor T) error {
 	if v < floor {
 		return fmt.Errorf("%s must be at least %v, got %v", name, floor, v)
+	}
+	return nil
+}
+
+// exactOrigins rejects wildcards, CSRF matches trusted origins literally so a pattern blocks every write.
+func exactOrigins(name string, origins []string) error {
+	for _, o := range origins {
+		if strings.Contains(o, "*") {
+			return fmt.Errorf("%s must list exact origins, got %q", name, o)
+		}
 	}
 	return nil
 }
