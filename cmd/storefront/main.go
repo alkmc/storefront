@@ -77,7 +77,11 @@ func run() error {
 
 	repo := store.NewPostgres(pool, cfg.Idempotency.TTL, logger)
 
-	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
+	vCache := cache.New(client, cache.Config{
+		TTL:     cfg.Valkey.TTL,
+		NegTTL:  cfg.Valkey.NegTTL,
+		Timeout: cfg.Valkey.Timeout,
+	})
 	svc := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
 
 	ih := httpapi.NewInternalHandler(repo)

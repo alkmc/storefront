@@ -19,6 +19,25 @@ const (
 )
 
 type (
+	// Config sets how long products and absences stay cached and how long one Valkey call may take.
+	Config struct {
+		TTL    time.Duration
+		NegTTL time.Duration
+		// Timeout caps each call so a hung Valkey falls through to the database.
+		Timeout time.Duration
+	}
+	Valkey struct {
+		client valkey.Client
+		cfg    Config
+	}
+	Entry struct {
+		Product domain.Product
+		Hit     bool
+		Found   bool
+		// exists tells a missing key from an empty value, whose token may be nil
+		exists bool
+		token  []byte
+	}
 	cacheEntry struct {
 		ID      string     `json:"id"`
 		Name    string     `json:"name"`
@@ -30,24 +49,11 @@ type (
 		MinorAmount int64           `json:"minorAmount"`
 		Currency    domain.Currency `json:"currency"`
 	}
-	Entry struct {
-		Product domain.Product
-		Hit     bool
-		Found   bool
-		// exists tells a missing key from an empty value, whose token may be nil
-		exists bool
-		token  []byte
-	}
-	Valkey struct {
-		client valkey.Client
-		ttl    time.Duration
-		negTTL time.Duration
-	}
 )
 
-// New wraps an open Valkey client, caching products for ttl and absences for negTTL.
-func New(client valkey.Client, ttl, negTTL time.Duration) *Valkey {
-	return new(Valkey{client: client, ttl: ttl, negTTL: negTTL})
+// New wraps an open Valkey client per the given config.
+func New(client valkey.Client, cfg Config) *Valkey {
+	return new(Valkey{client: client, cfg: cfg})
 }
 
 func (v *Valkey) Set(ctx context.Context, key string, p domain.Product, prev Entry) error {
@@ -55,15 +61,15 @@ func (v *Valkey) Set(ctx context.Context, key string, p domain.Product, prev Ent
 	if err != nil {
 		return fmt.Errorf("marshal cache value for key %q: %w", key, err)
 	}
-	return v.guardedSet(ctx, key, payload, v.ttl, prev)
+	return v.guardedSet(ctx, key, payload, v.cfg.TTL, prev)
 }
 
 func (v *Valkey) SetMissing(ctx context.Context, key string, prev Entry) error {
-	return v.guardedSet(ctx, key, []byte{tagMissing}, v.negTTL, prev)
+	return v.guardedSet(ctx, key, []byte{tagMissing}, v.cfg.NegTTL, prev)
 }
 
 func (v *Valkey) Get(ctx context.Context, key string) (Entry, error) {
-	raw, err := v.client.Do(ctx, v.client.B().Get().Key(key).Build()).AsBytes()
+	raw, err := v.doWithTimeout(ctx, v.client.B().Get().Key(key).Build()).AsBytes()
 	if err != nil {
 		if valkey.IsValkeyNil(err) {
 			return Entry{}, nil
@@ -76,9 +82,9 @@ func (v *Valkey) Get(ctx context.Context, key string) (Entry, error) {
 func (v *Valkey) Invalidate(ctx context.Context, key string) error {
 	cmd := v.client.B().Set().Key(key).
 		Value(valkey.BinaryString(newTombstone())).
-		PxMilliseconds(v.ttl.Milliseconds()).
+		PxMilliseconds(v.cfg.TTL.Milliseconds()).
 		Build()
-	if err := v.client.Do(ctx, cmd).Error(); err != nil {
+	if err := v.doWithTimeout(ctx, cmd).Error(); err != nil {
 		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
 	return nil
@@ -87,11 +93,17 @@ func (v *Valkey) Invalidate(ctx context.Context, key string) error {
 func (v *Valkey) guardedSet(
 	ctx context.Context, key string, value []byte, ttl time.Duration, prev Entry,
 ) error {
-	err := v.client.Do(ctx, v.setCmd(key, value, ttl, prev)).Error()
+	err := v.doWithTimeout(ctx, v.setCmd(key, value, ttl, prev)).Error()
 	if err != nil && !valkey.IsValkeyNil(err) {
 		return fmt.Errorf("set cache key %q: %w", key, err)
 	}
 	return nil
+}
+
+func (v *Valkey) doWithTimeout(ctx context.Context, cmd valkey.Completed) valkey.ValkeyResult {
+	ctx, cancel := context.WithTimeout(ctx, v.cfg.Timeout)
+	defer cancel()
+	return v.client.Do(ctx, cmd)
 }
 
 func (v *Valkey) setCmd(key string, value []byte, ttl time.Duration, prev Entry) valkey.Completed {

@@ -373,6 +373,16 @@ func TestConfigValidateReachesEverySection(t *testing.T) {
 			setting: "PG_MAX_IDLE_CONNS",
 		},
 		{
+			name:    "Valkey timeout",
+			mutate:  func(c *Config) { c.Valkey.Timeout = 0 },
+			setting: "VALKEY_TIMEOUT",
+		},
+		{
+			name:    "cache timeout",
+			mutate:  func(c *Config) { c.Valkey.Timeout = c.Service.LoadTimeout },
+			setting: "VALKEY_TIMEOUT",
+		},
+		{
 			name:    "listen addresses",
 			mutate:  func(c *Config) { c.GRPC.Port = c.HTTP.Port },
 			setting: "GRPC_PORT",

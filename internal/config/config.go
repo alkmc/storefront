@@ -73,6 +73,7 @@ type (
 		DB       int           `env:"VALKEY_DB" envDefault:"0"`
 		TTL      time.Duration `env:"VALKEY_CACHE_TTL" envDefault:"5m"`
 		NegTTL   time.Duration `env:"VALKEY_CACHE_NEG_TTL" envDefault:"1m"`
+		Timeout  time.Duration `env:"VALKEY_TIMEOUT" envDefault:"200ms"`
 	}
 	RabbitMQ struct {
 		Host     string `env:"RABBITMQ_HOST,required,notEmpty"`

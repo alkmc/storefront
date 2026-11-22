@@ -17,48 +17,10 @@ const (
 	// keep in sync with compose.yaml, IFEQ needs Valkey 8.1 or later
 	valkeyImage = "valkey/valkey:9.1"
 
-	testTTL    = time.Minute
-	testNegTTL = 10 * time.Second
+	testTTL     = time.Minute
+	testNegTTL  = 10 * time.Second
+	testTimeout = 5 * time.Second
 )
-
-func setupTestContainerValkey(t *testing.T) *Valkey {
-	t.Helper()
-	ctx := t.Context()
-
-	container, err := tcvalkey.Run(ctx, valkeyImage)
-	t.Cleanup(func() {
-		if err := testcontainers.TerminateContainer(container); err != nil {
-			t.Logf("terminate valkey container: %v", err)
-		}
-	})
-	if err != nil {
-		t.Fatalf("run valkey container: %v", err)
-	}
-
-	endpoint, err := container.Endpoint(ctx, "")
-	if err != nil {
-		t.Fatalf("valkey endpoint: %v", err)
-	}
-	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress:  []string{endpoint},
-		DisableCache: true,
-	})
-	if err != nil {
-		t.Fatalf("valkey client: %v", err)
-	}
-	t.Cleanup(client.Close)
-
-	return New(client, testTTL, testNegTTL)
-}
-
-func testProduct(name string) domain.Product {
-	return domain.Product{
-		ID:    domain.ProductID(uuid.NewV7()),
-		Name:  name,
-		Stock: 5,
-		Price: domain.Money{MinorAmount: 100, Currency: domain.CurrencyPLN},
-	}
-}
 
 func TestValkey_GuardRejectsStaleSet(t *testing.T) {
 	t.Parallel()
@@ -166,5 +128,44 @@ func TestValkey_SetReplacesEmptyValue(t *testing.T) {
 				t.Errorf("final Get = %+v (hit=%v), want %+v", got.Product, got.Hit, p)
 			}
 		})
+	}
+}
+
+func setupTestContainerValkey(t *testing.T) *Valkey {
+	t.Helper()
+	ctx := t.Context()
+
+	container, err := tcvalkey.Run(ctx, valkeyImage)
+	t.Cleanup(func() {
+		if err := testcontainers.TerminateContainer(container); err != nil {
+			t.Logf("terminate valkey container: %v", err)
+		}
+	})
+	if err != nil {
+		t.Fatalf("run valkey container: %v", err)
+	}
+
+	endpoint, err := container.Endpoint(ctx, "")
+	if err != nil {
+		t.Fatalf("valkey endpoint: %v", err)
+	}
+	client, err := valkey.NewClient(valkey.ClientOption{
+		InitAddress:  []string{endpoint},
+		DisableCache: true,
+	})
+	if err != nil {
+		t.Fatalf("valkey client: %v", err)
+	}
+	t.Cleanup(client.Close)
+
+	return New(client, Config{TTL: testTTL, NegTTL: testNegTTL, Timeout: testTimeout})
+}
+
+func testProduct(name string) domain.Product {
+	return domain.Product{
+		ID:    domain.ProductID(uuid.NewV7()),
+		Name:  name,
+		Stock: 5,
+		Price: domain.Money{MinorAmount: 100, Currency: domain.CurrencyPLN},
 	}
 }

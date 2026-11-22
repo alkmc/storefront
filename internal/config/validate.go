@@ -22,12 +22,24 @@ func (c Config) validate() error {
 		c.Valkey.validate(),
 		c.Outbox.validate(),
 		c.Service.validate(),
+		c.validateCacheTimeout(),
 		c.Idempotency.validate(),
 		c.Auth.validate(),
 		// an expired context leaves in-flight connections undrained on the way out
 		positive("SHUTDOWN_TIMEOUT", c.ShutdownTimeout),
 		c.validateListenAddresses(),
 	)
+}
+
+// validateCacheTimeout leaves room for the database read within the load budget.
+func (c Config) validateCacheTimeout() error {
+	if c.Valkey.Timeout >= c.Service.LoadTimeout {
+		return fmt.Errorf(
+			"VALKEY_TIMEOUT (%v) must be less than SERVICE_LOAD_TIMEOUT (%v)",
+			c.Valkey.Timeout, c.Service.LoadTimeout,
+		)
+	}
+	return nil
 }
 
 // validateListenAddresses rejects duplicates, whose bind error would blame another process.
@@ -112,6 +124,7 @@ func (v Valkey) validate() error {
 		// the cache truncates a TTL to whole milliseconds and Valkey rejects a PX of zero
 		atLeast("VALKEY_CACHE_TTL", v.TTL, time.Millisecond),
 		atLeast("VALKEY_CACHE_NEG_TTL", v.NegTTL, time.Millisecond),
+		positive("VALKEY_TIMEOUT", v.Timeout),
 	)
 }
 
