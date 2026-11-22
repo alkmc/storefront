@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"time"
 
@@ -30,12 +31,13 @@ const (
 type Postgres struct {
 	pool           *pgxpool.Pool
 	idempotencyTTL time.Duration
+	log            *slog.Logger
 }
 
 // NewPostgres wraps an open connection pool in a Postgres store.
 // idempotencyTTL is how long a stored order-creation result stays replayable.
-func NewPostgres(pool *pgxpool.Pool, idempotencyTTL time.Duration) *Postgres {
-	return new(Postgres{pool: pool, idempotencyTTL: idempotencyTTL})
+func NewPostgres(pool *pgxpool.Pool, idempotencyTTL time.Duration, log *slog.Logger) *Postgres {
+	return new(Postgres{pool: pool, idempotencyTTL: idempotencyTTL, log: log})
 }
 
 func (pg *Postgres) Ping(ctx context.Context) error {

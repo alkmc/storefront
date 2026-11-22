@@ -155,9 +155,7 @@ func TestIntegration_DeleteBlockedByOrders(t *testing.T) {
 	doPurchase(t, mux, user, soldID, 1)
 
 	del := func(id uuid.UUID) *httptest.ResponseRecorder {
-		req := httptest.NewRequestWithContext(
-			t.Context(), http.MethodDelete, "/v1/products/"+id.String(), nil,
-		)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/v1/products/"+id.String(), nil)
 		rec := httptest.NewRecorder()
 		mux.ServeHTTP(rec, req)
 		return rec
@@ -202,14 +200,10 @@ func setupIntegrationMux(t *testing.T) http.Handler {
 	t.Helper()
 
 	pool := pgtest.MigratedPool(t)
-
-	logger := slog.New(slog.DiscardHandler)
-	svc := service.NewService(store.NewPostgres(pool, time.Hour), nopCache{}, time.Second, logger)
-	h := NewHandler(svc, 2*time.Second, logger)
-	mw, err := NewMiddleware(MiddlewareCfg{
-		MaxBodyBytes:     testMaxBodyBytes,
-		CompressMinBytes: 1024,
-	})
+	l := slog.New(slog.DiscardHandler)
+	svc := service.NewService(store.NewPostgres(pool, time.Hour, l), nopCache{}, time.Second, l)
+	h := NewHandler(svc, 2*time.Second, l)
+	mw, err := NewMiddleware(MiddlewareCfg{MaxBodyBytes: testMaxBodyBytes, CompressMinBytes: 1024})
 	if err != nil {
 		t.Fatalf("failed to build middleware: %v", err)
 	}
@@ -218,11 +212,8 @@ func setupIntegrationMux(t *testing.T) http.Handler {
 
 func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID {
 	t.Helper()
-	body := fmt.Sprintf(`{"name":"Widget","stock":%d,"price":{"minorAmount":%d,"currency":"PLN"}}`,
-		stock, price)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/products", strings.NewReader(body),
-	)
+	body := fmt.Sprintf(`{"name":"Widget","stock":%d,"price":{"minorAmount":%d,"currency":"PLN"}}`, stock, price)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/products", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -234,9 +225,7 @@ func createProduct(t *testing.T, mux http.Handler, stock, price int64) uuid.UUID
 func doPurchase(t *testing.T, mux http.Handler, sub, productID uuid.UUID, qty int64) createOrderResponse {
 	t.Helper()
 	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
-	)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body))
 	req.Header.Set("Authorization", bearer(t, sub))
 	req.Header.Set(headerIdempotencyKey, uuid.NewV7().String())
 	rec := httptest.NewRecorder()
@@ -265,9 +254,7 @@ func postOrder(
 ) *httptest.ResponseRecorder {
 	t.Helper()
 	body := fmt.Sprintf(`{"productId":%q,"quantity":%d}`, productID.String(), qty)
-	req := httptest.NewRequestWithContext(
-		t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body),
-	)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/v1/orders", strings.NewReader(body))
 	req.Header.Set("Authorization", bearer(t, sub))
 	if key != "" {
 		req.Header.Set(headerIdempotencyKey, key)

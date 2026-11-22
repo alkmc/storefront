@@ -87,7 +87,7 @@ func run() error {
 	}
 	defer closeWithTimeout(ctx, brokerCloseTimeout, "event publisher", pub.Close, logger)
 
-	repo := store.NewPostgres(pool, cfg.Idempotency.TTL)
+	repo := store.NewPostgres(pool, cfg.Idempotency.TTL, logger)
 
 	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
 	svc := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)

@@ -17,9 +17,9 @@ type (
 	drainer interface {
 		DrainBatch(ctx context.Context, batchSize, maxAttempts int,
 			publish func(context.Context, event.Record) error,
-		) (int, bool, error)
+		) (published int, morePending bool, err error)
 	}
-	// waiter blocks until an outbox wakeup or the poll timeout, Run owns its lifecycle.
+	// waiter blocks until an outbox wakeup or the poll timeout.
 	waiter interface {
 		Await(ctx context.Context, timeout time.Duration) error
 		Close()
@@ -28,6 +28,7 @@ type (
 	publisher interface {
 		Publish(context.Context, event.Record) error
 	}
+
 	// Config tunes the relay's batching, waiting, and publish behavior.
 	Config struct {
 		BatchSize      int
@@ -46,8 +47,7 @@ type (
 )
 
 // New returns a Relay that drains the outbox per the given config.
-func New(
-	store drainer, listener waiter, pub publisher, cfg Config, log *slog.Logger,
+func New(store drainer, listener waiter, pub publisher, cfg Config, log *slog.Logger,
 ) *Relay {
 	return new(Relay{
 		store: store, listener: listener, pub: pub, cfg: cfg, log: log,

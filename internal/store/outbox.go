@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/alkmc/storefront/internal/event"
@@ -45,15 +46,14 @@ func (pg *Postgres) DrainBatch(
 	if err != nil || len(batch) == 0 {
 		return 0, false, err
 	}
-	full := len(batch) == batchSize
 
 	sent, failed := publishBatch(ctx, batch, publish)
-	bump, dead, transientErr := classifyFailures(failed, maxAttempts)
+	retry, dead, transientErr := classifyFailures(failed, maxAttempts)
 
 	if err := deleteOutbox(ctx, tx, sent); err != nil {
 		return 0, false, err
 	}
-	if err := bumpAttempts(ctx, tx, bump); err != nil {
+	if err := bumpAttempts(ctx, tx, rowIDs(retry)); err != nil {
 		return 0, false, err
 	}
 	if err := deadLetter(ctx, tx, dead); err != nil {
@@ -62,7 +62,11 @@ func (pg *Postgres) DrainBatch(
 	if err := tx.Commit(ctx); err != nil {
 		return 0, false, fmt.Errorf("outbox commit: %w", err)
 	}
-	return len(sent), full, transientErr
+
+	pg.logRetries(ctx, retry, maxAttempts)
+	pg.logDeadLetters(ctx, dead, maxAttempts)
+
+	return len(sent), len(batch) == batchSize, transientErr
 }
 
 // insertOutbox stores one pending event and schedules a relay wakeup within the caller's tx.
@@ -125,12 +129,7 @@ func publishBatch(
 }
 
 // classifyFailures exempts the transient error from the attempt count and returns it.
-func classifyFailures(failed []failedRow, maxAttempts int) ([]int64, []failedRow, error) {
-	var (
-		bump      []int64
-		dead      []failedRow
-		transient error
-	)
+func classifyFailures(failed []failedRow, maxAttempts int) (retry, dead []failedRow, transient error) {
 	for _, f := range failed {
 		switch {
 		case !errors.Is(f.err, event.ErrUndeliverable):
@@ -138,10 +137,46 @@ func classifyFailures(failed []failedRow, maxAttempts int) ([]int64, []failedRow
 		case int(f.row.attempts)+1 >= maxAttempts:
 			dead = append(dead, f)
 		default:
-			bump = append(bump, f.row.id)
+			retry = append(retry, f)
 		}
 	}
-	return bump, dead, transient
+	return retry, dead, transient
+}
+
+// logRetries warns only because the backoff delivers these rows without anyone stepping in.
+func (pg *Postgres) logRetries(ctx context.Context, rows []failedRow, maxAttempts int) {
+	for _, f := range rows {
+		pg.log.LogAttrs(ctx, slog.LevelWarn, "outbox event undeliverable, retry scheduled",
+			failureAttrs(f, maxAttempts)...)
+	}
+}
+
+// logDeadLetters logs at error because only a manual replay delivers a dead-lettered row.
+func (pg *Postgres) logDeadLetters(ctx context.Context, rows []failedRow, maxAttempts int) {
+	for _, f := range rows {
+		pg.log.LogAttrs(ctx, slog.LevelError, "outbox event moved to outbox_dead",
+			failureAttrs(f, maxAttempts)...)
+	}
+}
+
+// failureAttrs carries what an operator needs to find the event and judge its replay.
+func failureAttrs(f failedRow, maxAttempts int) []slog.Attr {
+	return []slog.Attr{
+		slog.String("message_id", f.row.record.MessageID.String()),
+		slog.String("event_type", f.row.record.Type),
+		slog.Int("attempts", int(f.row.attempts)+1),
+		slog.Int("max_attempts", maxAttempts),
+		slog.Any("error", f.err),
+	}
+}
+
+// rowIDs lists the ids of failed rows.
+func rowIDs(rows []failedRow) []int64 {
+	ids := make([]int64, len(rows))
+	for i, f := range rows {
+		ids[i] = f.row.id
+	}
+	return ids
 }
 
 // deleteOutbox removes the published rows.

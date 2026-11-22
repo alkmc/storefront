@@ -12,37 +12,42 @@ func TestOutcomeErr(t *testing.T) {
 	tests := []struct {
 		name       string
 		outcome    rabbitmqamqp.DeliveryState
+		wantErr    bool
 		wantPoison bool
 	}{
 		{
 			name:       "accepted is success",
 			outcome:    &rabbitmqamqp.StateAccepted{},
+			wantErr:    false,
 			wantPoison: false,
 		},
 		{
 			name:       "released (no queue bound) is success",
 			outcome:    &rabbitmqamqp.StateReleased{},
+			wantErr:    false,
 			wantPoison: false,
 		},
 		{
-			name:       "rejected is poison",
+			name:       "rejected is retried",
 			outcome:    &rabbitmqamqp.StateRejected{},
-			wantPoison: true,
+			wantErr:    true,
+			wantPoison: false,
 		},
 		{
 			name:       "unknown outcome is poison",
 			outcome:    &rabbitmqamqp.StateModified{},
+			wantErr:    true,
 			wantPoison: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := outcomeErr(tt.outcome)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("err = %v, want error %t", err, tt.wantErr)
+			}
 			if got := errors.Is(err, event.ErrUndeliverable); got != tt.wantPoison {
 				t.Fatalf("err = %v, want poison %t", err, tt.wantPoison)
-			}
-			if !tt.wantPoison && err != nil {
-				t.Fatalf("err = %v, want nil", err)
 			}
 		})
 	}

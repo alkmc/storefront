@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ const testIdempotencyTTL = time.Hour
 
 func setupTestContainerDB(t *testing.T) *Postgres {
 	t.Helper()
-	return NewPostgres(pgtest.MigratedPool(t), testIdempotencyTTL)
+	return NewPostgres(pgtest.MigratedPool(t), testIdempotencyTTL, slog.New(slog.DiscardHandler))
 }
 
 func TestMapDBError(t *testing.T) {

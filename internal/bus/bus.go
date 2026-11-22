@@ -62,11 +62,13 @@ func (p *Publisher) Close(ctx context.Context) error {
 	return nil
 }
 
-// outcomeErr treats a release (no queue bound yet) as pub/sub success.
+// outcomeErr accepts a release (no queue bound yet) and retries a rejection, which comes from broker state.
 func outcomeErr(outcome rabbitmqamqp.DeliveryState) error {
-	switch outcome.(type) {
+	switch o := outcome.(type) {
 	case *rabbitmqamqp.StateAccepted, *rabbitmqamqp.StateReleased:
 		return nil
+	case *rabbitmqamqp.StateRejected:
+		return fmt.Errorf("bus publish: rejected: %w", o.Error)
 	default:
 		return fmt.Errorf("%w: bus publish not accepted (%T)", event.ErrUndeliverable, outcome)
 	}

@@ -151,7 +151,8 @@ func TestPublisher_PublishesToBoundQueue(t *testing.T) {
 	}
 }
 
-func TestPublisher_RejectedIsUndeliverable(t *testing.T) {
+// TestPublisher_RejectedIsRetryable keeps the row on a missing exchange, which an operator can fix.
+func TestPublisher_RejectedIsRetryable(t *testing.T) {
 	t.Parallel()
 	conn := setupTestContainerRabbit(t)
 	ctx := t.Context()
@@ -161,14 +162,13 @@ func TestPublisher_RejectedIsUndeliverable(t *testing.T) {
 		t.Fatalf("new publisher: %v", err)
 	}
 
-	// dropping the exchange is the only way to make the broker reject, which is what poison means here
 	if err := conn.Management().DeleteExchange(ctx, Exchange); err != nil {
 		t.Fatalf("delete exchange: %v", err)
 	}
 
 	err = pub.Publish(ctx, testRecord(event.TypeCreated))
-	if !errors.Is(err, event.ErrUndeliverable) {
-		t.Fatalf("publish to a missing exchange = %v, want %v", err, event.ErrUndeliverable)
+	if err == nil || errors.Is(err, event.ErrUndeliverable) {
+		t.Fatalf("publish to a missing exchange = %v, want a retryable error", err)
 	}
 }
 
