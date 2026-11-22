@@ -34,7 +34,7 @@ type (
 		Product domain.Product
 		Hit     bool
 		Found   bool
-		// exists separates a missing key from a stored empty value, which may read back as a nil token
+		// exists tells a missing key from an empty value, whose token may be nil
 		exists bool
 		token  []byte
 	}
@@ -82,10 +82,6 @@ func (v *Valkey) Invalidate(ctx context.Context, key string) error {
 		return fmt.Errorf("invalidate cache key %q: %w", key, err)
 	}
 	return nil
-}
-
-func (v *Valkey) Ping(ctx context.Context) error {
-	return v.client.Do(ctx, v.client.B().Ping().Build()).Error()
 }
 
 func (v *Valkey) guardedSet(

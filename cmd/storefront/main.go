@@ -63,11 +63,10 @@ func run() error {
 		logger.Info("connection to db closed")
 	}()
 
-	client, err := openValkey(ctx, cfg.Valkey)
+	client, err := openValkey(cfg.Valkey, logger)
 	if err != nil {
 		return err
 	}
-	logger.Info("successfully connected to valkey")
 	defer func() {
 		client.Close()
 		logger.Info("connection to valkey closed")
@@ -81,7 +80,7 @@ func run() error {
 	vCache := cache.New(client, cfg.Valkey.TTL, cfg.Valkey.NegTTL)
 	svc := service.NewService(repo, vCache, cfg.Service.LoadTimeout, logger)
 
-	ih := httpapi.NewInternalHandler(repo, vCache)
+	ih := httpapi.NewInternalHandler(repo)
 
 	listener := pg.NewListener(pool, store.OutboxChannel)
 	relay := outbox.New(repo, listener, pub, outbox.Config{
@@ -196,20 +195,23 @@ func openPostgres(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, erro
 	return pool, nil
 }
 
-// openValkey creates a valkey-go client and verifies it with a ping.
-func openValkey(ctx context.Context, cfg config.Valkey) (valkey.Client, error) {
+// openValkey keeps Valkey optional for startup and reads.
+func openValkey(cfg config.Valkey, l *slog.Logger) (valkey.Client, error) {
 	client, err := valkey.NewClient(valkey.ClientOption{
-		InitAddress: []string{cfg.Address()},
-		Password:    cfg.Password.Reveal(),
-		SelectDB:    cfg.DB,
+		InitAddress:       []string{cfg.Address()},
+		Password:          cfg.Password.Reveal(),
+		SelectDB:          cfg.DB,
+		ForceSingleClient: true,
+		DisableRetry:      true,
 	})
-	if err != nil {
+	if client == nil {
 		return nil, fmt.Errorf("create valkey client: %w", err)
 	}
-	if err := client.Do(ctx, client.B().Ping().Build()).Error(); err != nil {
-		client.Close()
-		return nil, fmt.Errorf("ping valkey: %w", err)
+	if err != nil {
+		l.Warn("valkey unavailable, product reads go to the database", slog.Any("error", err))
+		return client, nil
 	}
+	l.Info("successfully connected to valkey")
 	return client, nil
 }
 

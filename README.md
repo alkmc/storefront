@@ -14,7 +14,7 @@
 
 Product catalog API exposed over REST and gRPC.  
 PostgreSQL is the source of truth, with goose migrations embedded in the binary.  
-Product reads use cache-aside Valkey.  
+Product reads use cache-aside Valkey as a soft dependency, falling back to PostgreSQL while it is down.  
 Concurrent misses are coalesced with singleflight.  
 Only readers populate the cache, and only under a compare-and-set guard, so a reader
 that raced a writer loses instead of restoring stale data.  

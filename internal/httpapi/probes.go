@@ -11,13 +11,12 @@ type (
 		Ping(context.Context) error
 	}
 	InternalHandler struct {
-		db    pinger
-		cache pinger
+		db pinger
 	}
 )
 
-func NewInternalHandler(db, cache pinger) *InternalHandler {
-	return new(InternalHandler{db: db, cache: cache})
+func NewInternalHandler(db pinger) *InternalHandler {
+	return new(InternalHandler{db: db})
 }
 
 func (h *InternalHandler) Healthz(w http.ResponseWriter, _ *http.Request) {
@@ -30,10 +29,6 @@ func (h *InternalHandler) Readyz(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.db.Ping(ctx); err != nil {
 		http.Error(w, "db unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	if err := h.cache.Ping(ctx); err != nil {
-		http.Error(w, "cache unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
