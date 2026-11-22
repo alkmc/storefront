@@ -3,7 +3,10 @@ package bus
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
+	"time"
 
 	"github.com/alkmc/storefront/internal/event"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
@@ -14,30 +17,48 @@ const Exchange = "storefront.product"
 
 // Publisher emits outbox records to a RabbitMQ topic exchange.
 type Publisher struct {
-	pub *rabbitmqamqp.Publisher
+	env  *rabbitmqamqp.Environment
+	conn *rabbitmqamqp.AmqpConnection
+	pub  *rabbitmqamqp.Publisher
 }
 
-// NewPublisher declares the topic exchange and returns a Publisher.
-func NewPublisher(ctx context.Context, conn *rabbitmqamqp.AmqpConnection,
-) (*Publisher, error) {
-	if _, err := conn.Management().DeclareExchange(
-		ctx, &rabbitmqamqp.TopicExchangeSpecification{Name: Exchange},
-	); err != nil {
-		return nil, fmt.Errorf("bus declare exchange: %w", err)
+// NewPublisher returns a Publisher that dials on Connect, so startup does not wait for the broker.
+func NewPublisher(url string) *Publisher {
+	env := rabbitmqamqp.NewEnvironment(url, &rabbitmqamqp.AmqpConnOptions{
+		RecoveryConfiguration: &rabbitmqamqp.RecoveryConfiguration{
+			ActiveRecovery:           true,
+			BackOffReconnectInterval: 5 * time.Second,
+			MaxReconnectAttempts:     math.MaxInt,
+		},
+		TopologyRecoveryOptions: rabbitmqamqp.TopologyRecoveryAllEnabled,
+	})
+	return new(Publisher{env: env})
+}
+
+// Connect redials and redeclares the exchange unless the connection is alive, releasing a dead one first.
+func (p *Publisher) Connect(ctx context.Context) error {
+	if p.alive() {
+		return nil
 	}
-	var (
-		perMessageTarget rabbitmqamqp.ITargetAddress
-		defaultOptions   rabbitmqamqp.IPublisherOptions
-	)
-	pub, err := conn.NewPublisher(ctx, perMessageTarget, defaultOptions)
+	_ = p.Close(ctx)
+	conn, err := p.env.NewConnection(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("bus new publisher: %w", err)
+		return fmt.Errorf("bus connect: %w", err)
 	}
-	return new(Publisher{pub: pub}), nil
+	pub, err := openPublisher(ctx, conn)
+	if err != nil {
+		_ = conn.Close(ctx)
+		return err
+	}
+	p.conn, p.pub = conn, pub
+	return nil
 }
 
 // Publish emits the record's payload and blocks until the broker settles it.
 func (p *Publisher) Publish(ctx context.Context, r event.Record) error {
+	if p.pub == nil {
+		return errors.New("bus publish: not connected")
+	}
 	msg, err := rabbitmqamqp.NewMessageWithAddress(
 		r.Payload,
 		&rabbitmqamqp.ExchangeAddress{Exchange: Exchange, Key: r.Type},
@@ -54,12 +75,43 @@ func (p *Publisher) Publish(ctx context.Context, r event.Record) error {
 	return outcomeErr(res.Outcome)
 }
 
-// Close releases the publisher but not the connection, which the caller owns.
+// Close closes the connection, which also closes its publisher.
 func (p *Publisher) Close(ctx context.Context) error {
-	if err := p.pub.Close(ctx); err != nil {
+	if p.conn == nil {
+		return nil
+	}
+	if err := p.conn.Close(ctx); err != nil {
 		return fmt.Errorf("bus close: %w", err)
 	}
 	return nil
+}
+
+// alive reports whether the connection is open or still recovering on its own.
+func (p *Publisher) alive() bool {
+	if p.conn == nil {
+		return false
+	}
+	_, closed := p.conn.State().(*rabbitmqamqp.StateClosed)
+	return !closed
+}
+
+// openPublisher declares the topic exchange and opens a publisher on conn.
+func openPublisher(ctx context.Context, conn *rabbitmqamqp.AmqpConnection,
+) (*rabbitmqamqp.Publisher, error) {
+	if _, err := conn.Management().DeclareExchange(
+		ctx, &rabbitmqamqp.TopicExchangeSpecification{Name: Exchange},
+	); err != nil {
+		return nil, fmt.Errorf("bus declare exchange: %w", err)
+	}
+	var (
+		perMessageTarget rabbitmqamqp.ITargetAddress
+		defaultOptions   rabbitmqamqp.IPublisherOptions
+	)
+	pub, err := conn.NewPublisher(ctx, perMessageTarget, defaultOptions)
+	if err != nil {
+		return nil, fmt.Errorf("bus new publisher: %w", err)
+	}
+	return pub, nil
 }
 
 // outcomeErr accepts a release (no queue bound yet) and retries a rejection, which comes from broker state.

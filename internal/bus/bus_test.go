@@ -52,3 +52,11 @@ func TestOutcomeErr(t *testing.T) {
 		})
 	}
 }
+
+// TestPublishBeforeConnectIsTransient keeps rows pending while the broker has never been reached.
+func TestPublishBeforeConnectIsTransient(t *testing.T) {
+	err := NewPublisher("amqp://127.0.0.1:5672/").Publish(t.Context(), event.Record{})
+	if err == nil || errors.Is(err, event.ErrUndeliverable) {
+		t.Fatalf("err = %v, want a transient error so the relay retries", err)
+	}
+}

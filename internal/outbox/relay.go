@@ -24,8 +24,9 @@ type (
 		Await(ctx context.Context, timeout time.Duration) error
 		Close()
 	}
-	// publisher emits a single outbox record to the broker.
+	// publisher connects to the broker and emits single outbox records to it.
 	publisher interface {
+		Connect(context.Context) error
 		Publish(context.Context, event.Record) error
 	}
 
@@ -61,9 +62,7 @@ func (r *Relay) Run(ctx context.Context) error {
 
 	backoff := r.cfg.PollInterval
 	for {
-		published, full, err := r.store.DrainBatch(
-			ctx, r.cfg.BatchSize, r.cfg.MaxAttempts, r.publishWithTimeout,
-		)
+		published, full, err := r.drain(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -97,6 +96,21 @@ func (r *Relay) wait(ctx context.Context) error {
 	}
 	r.log.Error("outbox wakeup failed", slog.Any("error", err))
 	return pause(ctx, r.cfg.PollInterval)
+}
+
+// drain connects first, so no claim tx waits on a dial.
+func (r *Relay) drain(ctx context.Context) (published int, morePending bool, err error) {
+	if err := r.connectWithTimeout(ctx); err != nil {
+		return 0, false, err
+	}
+	return r.store.DrainBatch(ctx, r.cfg.BatchSize, r.cfg.MaxAttempts, r.publishWithTimeout)
+}
+
+// connectWithTimeout bounds a dial by PublishTimeout, so an unresponsive broker cannot hang the relay.
+func (r *Relay) connectWithTimeout(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, r.cfg.PublishTimeout)
+	defer cancel()
+	return r.pub.Connect(ctx)
 }
 
 // publishWithTimeout keeps a hung broker from pinning the relay's claim tx.

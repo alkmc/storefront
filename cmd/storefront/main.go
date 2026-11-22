@@ -21,7 +21,6 @@ import (
 	"github.com/alkmc/storefront/internal/store"
 	"github.com/alkmc/storefront/migrations"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 	"github.com/valkey-io/valkey-go"
 	"golang.org/x/sync/errgroup"
 )
@@ -74,18 +73,8 @@ func run() error {
 		logger.Info("connection to valkey closed")
 	}()
 
-	amqp, err := openRabbitMQ(ctx, cfg.RabbitMQ.URL())
-	if err != nil {
-		return err
-	}
-	logger.Info("successfully connected to rabbitmq")
-	defer closeWithTimeout(ctx, brokerCloseTimeout, "rabbitmq connection", amqp.Close, logger)
-
-	pub, err := bus.NewPublisher(ctx, amqp)
-	if err != nil {
-		return err
-	}
-	defer closeWithTimeout(ctx, brokerCloseTimeout, "event publisher", pub.Close, logger)
+	pub := bus.NewPublisher(cfg.RabbitMQ.URL())
+	defer closeWithTimeout(ctx, brokerCloseTimeout, "rabbitmq", pub.Close, logger)
 
 	repo := store.NewPostgres(pool, cfg.Idempotency.TTL, logger)
 
@@ -205,17 +194,6 @@ func openPostgres(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, erro
 		return nil, fmt.Errorf("ping pg database: %w", err)
 	}
 	return pool, nil
-}
-
-// openRabbitMQ connects to the broker through the client's auto-recovering environment.
-func openRabbitMQ(ctx context.Context, url string) (*rabbitmqamqp.AmqpConnection, error) {
-	var defaultConnOptions *rabbitmqamqp.AmqpConnOptions
-	env := rabbitmqamqp.NewEnvironment(url, defaultConnOptions)
-	conn, err := env.NewConnection(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("connect rabbitmq: %w", err)
-	}
-	return conn, nil
 }
 
 // openValkey creates a valkey-go client and verifies it with a ping.

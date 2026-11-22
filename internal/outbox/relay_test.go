@@ -154,6 +154,28 @@ func TestRelay(t *testing.T) {
 		})
 	})
 
+	t.Run("ConnectBackoff", func(t *testing.T) {
+		fd := &fakeDrainer{}
+		pub := &fakePublisher{connectFailures: 2}
+		cfg := testConfig()
+		runRelay(t, fd, &fakeListener{}, pub, cfg, func(t *testing.T) {
+			synctest.Wait()
+			assertConnectCalls(t, pub, 1)
+			assertDrainCalls(t, fd, 0)
+
+			synctest.Sleep(cfg.PollInterval*2 - epsilon)
+			assertConnectCalls(t, pub, 1)
+			synctest.Sleep(epsilon)
+			assertConnectCalls(t, pub, 2)
+
+			synctest.Sleep(cfg.PollInterval*4 - epsilon)
+			assertConnectCalls(t, pub, 2)
+			synctest.Sleep(epsilon)
+			assertConnectCalls(t, pub, 3)
+			assertDrainCalls(t, fd, 1)
+		})
+	})
+
 	t.Run("PublishTimeout", func(t *testing.T) {
 		fd := &fakeDrainer{batchSizes: []int{1, 0}}
 		pub := &fakePublisher{shouldHang: true}
@@ -244,6 +266,13 @@ func assertDrainCalls(t *testing.T, fd *fakeDrainer, want int64) {
 	t.Helper()
 	if got := fd.callCount(); got != want {
 		t.Errorf("DrainBatch calls = %d, want %d", got, want)
+	}
+}
+
+func assertConnectCalls(t *testing.T, pub *fakePublisher, want int64) {
+	t.Helper()
+	if got := pub.connects.callCount(); got != want {
+		t.Errorf("connect calls = %d, want %d", got, want)
 	}
 }
 

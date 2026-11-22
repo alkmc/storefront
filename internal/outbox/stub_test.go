@@ -26,9 +26,11 @@ type (
 	}
 	fakePublisher struct {
 		counter
-		failAfter  int64
-		poisonCall int64
-		shouldHang bool
+		connects        counter
+		connectFailures int64
+		failAfter       int64
+		poisonCall      int64
+		shouldHang      bool
 	}
 )
 
@@ -87,6 +89,13 @@ func (f *fakeListener) Await(ctx context.Context, timeout time.Duration) error {
 	case <-time.After(timeout):
 		return nil
 	}
+}
+
+func (p *fakePublisher) Connect(context.Context) error {
+	if p.connects.inc() <= p.connectFailures {
+		return errors.New("connect error")
+	}
+	return nil
 }
 
 func (p *fakePublisher) Publish(ctx context.Context, _ event.Record) error {

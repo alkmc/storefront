@@ -5,6 +5,7 @@ package bus
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 	"time"
 	"uuid"
@@ -21,9 +22,22 @@ const (
 
 	// a routing regression must fail the test instead of blocking until the binary times out
 	receiveTimeout = 5 * time.Second
+	// recoveryTimeout outlasts the library's first 5s reconnect delay plus jitter and dial.
+	recoveryTimeout = 30 * time.Second
+	// recoveryAttemptTimeout bounds one connect and publish like OUTBOX_PUBLISH_TIMEOUT does.
+	recoveryAttemptTimeout = 2 * time.Second
+	// recoveryPollInterval paces retries while the connection recovers.
+	recoveryPollInterval = 100 * time.Millisecond
 )
 
-func setupTestContainerRabbit(t *testing.T) *rabbitmqamqp.AmqpConnection {
+// testBroker is a fresh broker with an admin connection that plays the consumer's side.
+type testBroker struct {
+	container *rabbitmq.RabbitMQContainer
+	url       string
+	conn      *rabbitmqamqp.AmqpConnection
+}
+
+func setupTestContainerRabbit(t *testing.T) testBroker {
 	t.Helper()
 	ctx := t.Context()
 
@@ -53,7 +67,62 @@ func setupTestContainerRabbit(t *testing.T) *rabbitmqamqp.AmqpConnection {
 		}
 	})
 
-	return conn
+	return testBroker{container: container, url: url, conn: conn}
+}
+
+// connectPublisher returns a Publisher connected to url and closed on cleanup.
+func connectPublisher(t *testing.T, url string) *Publisher {
+	t.Helper()
+	pub := NewPublisher(url)
+	closeCtx := context.WithoutCancel(t.Context())
+	t.Cleanup(func() {
+		if err := pub.Close(closeCtx); err != nil {
+			t.Logf("close publisher: %v", err)
+		}
+	})
+	if err := pub.Connect(t.Context()); err != nil {
+		t.Fatalf("connect publisher: %v", err)
+	}
+	return pub
+}
+
+// closeBrokerConnections drops every client connection the way a broker restart does.
+func closeBrokerConnections(t *testing.T, b testBroker) {
+	t.Helper()
+	code, out, err := b.container.Exec(t.Context(),
+		[]string{"rabbitmqctl", "close_all_connections", "integration test"})
+	if err != nil {
+		t.Fatalf("exec rabbitmqctl: %v", err)
+	}
+	if code != 0 {
+		msg, _ := io.ReadAll(out)
+		t.Fatalf("rabbitmqctl exited %d: %s", code, msg)
+	}
+}
+
+// waitPublishSucceeds runs the relay's connect and publish until the broker accepts rec.
+func waitPublishSucceeds(t *testing.T, pub *Publisher, rec event.Record) {
+	t.Helper()
+	deadline := time.Now().Add(recoveryTimeout)
+	for {
+		err := connectAndPublish(t.Context(), pub, rec)
+		if err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("publish still failing after %v: %v", recoveryTimeout, err)
+		}
+		time.Sleep(recoveryPollInterval)
+	}
+}
+
+func connectAndPublish(ctx context.Context, pub *Publisher, rec event.Record) error {
+	ctx, cancel := context.WithTimeout(ctx, recoveryAttemptTimeout)
+	defer cancel()
+	if err := pub.Connect(ctx); err != nil {
+		return err
+	}
+	return pub.Publish(ctx, rec)
 }
 
 func bindQueue(t *testing.T, conn *rabbitmqamqp.AmqpConnection, queue, bindingKey string) {
@@ -84,13 +153,10 @@ func testRecord(eventType string) event.Record {
 
 func TestPublisher_UnroutedPublishSucceeds(t *testing.T) {
 	t.Parallel()
-	conn := setupTestContainerRabbit(t)
+	b := setupTestContainerRabbit(t)
 	ctx := t.Context()
 
-	pub, err := NewPublisher(ctx, conn)
-	if err != nil {
-		t.Fatalf("new publisher: %v", err)
-	}
+	pub := connectPublisher(t, b.url)
 
 	// with nothing bound the broker releases the message, the relay must not retire it as poison
 	if err := pub.Publish(ctx, testRecord(event.TypeCreated)); err != nil {
@@ -100,13 +166,11 @@ func TestPublisher_UnroutedPublishSucceeds(t *testing.T) {
 
 func TestPublisher_PublishesToBoundQueue(t *testing.T) {
 	t.Parallel()
-	conn := setupTestContainerRabbit(t)
+	b := setupTestContainerRabbit(t)
+	conn := b.conn
 	ctx := t.Context()
 
-	pub, err := NewPublisher(ctx, conn)
-	if err != nil {
-		t.Fatalf("new publisher: %v", err)
-	}
+	pub := connectPublisher(t, b.url)
 
 	const (
 		wildcard = "storefront.test.wildcard"
@@ -154,40 +218,55 @@ func TestPublisher_PublishesToBoundQueue(t *testing.T) {
 // TestPublisher_RejectedIsRetryable keeps the row on a missing exchange, which an operator can fix.
 func TestPublisher_RejectedIsRetryable(t *testing.T) {
 	t.Parallel()
-	conn := setupTestContainerRabbit(t)
+	b := setupTestContainerRabbit(t)
+	conn := b.conn
 	ctx := t.Context()
 
-	pub, err := NewPublisher(ctx, conn)
-	if err != nil {
-		t.Fatalf("new publisher: %v", err)
-	}
+	pub := connectPublisher(t, b.url)
 
 	if err := conn.Management().DeleteExchange(ctx, Exchange); err != nil {
 		t.Fatalf("delete exchange: %v", err)
 	}
 
-	err = pub.Publish(ctx, testRecord(event.TypeCreated))
+	err := pub.Publish(ctx, testRecord(event.TypeCreated))
 	if err == nil || errors.Is(err, event.ErrUndeliverable) {
 		t.Fatalf("publish to a missing exchange = %v, want a retryable error", err)
 	}
 }
 
-func TestPublisher_ClosedLinkStopsPublishing(t *testing.T) {
+// TestPublisher_ReconnectsAfterClose pins that Connect replaces a connection that is closed for good.
+func TestPublisher_ReconnectsAfterClose(t *testing.T) {
 	t.Parallel()
-	conn := setupTestContainerRabbit(t)
+	b := setupTestContainerRabbit(t)
 	ctx := t.Context()
 
-	pub, err := NewPublisher(ctx, conn)
-	if err != nil {
-		t.Fatalf("new publisher: %v", err)
-	}
+	pub := connectPublisher(t, b.url)
 	if err := pub.Close(ctx); err != nil {
 		t.Fatalf("close publisher: %v", err)
 	}
 
-	// a dead link is a transport failure, retiring the outbox row on it would drop the event
 	if err := pub.Publish(ctx, testRecord(event.TypePurchased)); err == nil ||
 		errors.Is(err, event.ErrUndeliverable) {
-		t.Errorf("publish over a closed link = %v, want a retryable error", err)
+		t.Fatalf("publish over a closed connection = %v, want a retryable error", err)
 	}
+	waitPublishSucceeds(t, pub, testRecord(event.TypePurchased))
+}
+
+// TestPublisher_RedeclaresLostExchangeOnReconnect pins that recovery restores an exchange the broker lost.
+func TestPublisher_RedeclaresLostExchangeOnReconnect(t *testing.T) {
+	t.Parallel()
+	b := setupTestContainerRabbit(t)
+	ctx := t.Context()
+
+	pub := connectPublisher(t, b.url)
+	if err := b.conn.Management().DeleteExchange(ctx, Exchange); err != nil {
+		t.Fatalf("delete exchange: %v", err)
+	}
+	if err := pub.Publish(ctx, testRecord(event.TypeCreated)); err == nil ||
+		errors.Is(err, event.ErrUndeliverable) {
+		t.Fatalf("publish to a missing exchange = %v, want a retryable error", err)
+	}
+
+	closeBrokerConnections(t, b)
+	waitPublishSucceeds(t, pub, testRecord(event.TypeCreated))
 }
