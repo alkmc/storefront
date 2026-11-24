@@ -89,14 +89,47 @@ func connectPublisher(t *testing.T, url string) *Publisher {
 // closeBrokerConnections drops every client connection the way a broker restart does.
 func closeBrokerConnections(t *testing.T, b testBroker) {
 	t.Helper()
-	code, out, err := b.container.Exec(t.Context(),
-		[]string{"rabbitmqctl", "close_all_connections", "integration test"})
+	rabbitmqctl(t, b, "close_all_connections", "integration test")
+}
+
+// setConfigurePermission sets the regexp of resources the test user may declare.
+func setConfigurePermission(t *testing.T, b testBroker, configure string) {
+	t.Helper()
+	rabbitmqctl(t, b, "set_permissions", b.container.AdminUsername, configure, ".*", ".*")
+}
+
+func rabbitmqctl(t *testing.T, b testBroker, args ...string) {
+	t.Helper()
+	code, out, err := b.container.Exec(t.Context(), append([]string{"rabbitmqctl"}, args...))
 	if err != nil {
 		t.Fatalf("exec rabbitmqctl: %v", err)
 	}
 	if code != 0 {
 		msg, _ := io.ReadAll(out)
 		t.Fatalf("rabbitmqctl exited %d: %s", code, msg)
+	}
+}
+
+// watchStates subscribes to connection states, buffered because the library blocks on a full channel.
+func watchStates(pub *Publisher) <-chan *rabbitmqamqp.StateChanged {
+	states := make(chan *rabbitmqamqp.StateChanged, 16)
+	pub.conn.NotifyStatusChange(states)
+	return states
+}
+
+// waitReopened blocks until the library reports the connection open again, after topology recovery.
+func waitReopened(t *testing.T, states <-chan *rabbitmqamqp.StateChanged) {
+	t.Helper()
+	timeout := time.After(recoveryTimeout)
+	for {
+		select {
+		case s := <-states:
+			if _, open := s.To.(*rabbitmqamqp.StateOpen); open {
+				return
+			}
+		case <-timeout:
+			t.Fatalf("connection not reopened after %v", recoveryTimeout)
+		}
 	}
 }
 
@@ -215,7 +248,7 @@ func TestPublisher_PublishesToBoundQueue(t *testing.T) {
 	}
 }
 
-// TestPublisher_RejectedIsRetryable keeps the row on a missing exchange, which an operator can fix.
+// TestPublisher_RejectedIsRetryable keeps the row on a missing exchange and redeclares it on Connect.
 func TestPublisher_RejectedIsRetryable(t *testing.T) {
 	t.Parallel()
 	b := setupTestContainerRabbit(t)
@@ -232,6 +265,7 @@ func TestPublisher_RejectedIsRetryable(t *testing.T) {
 	if err == nil || errors.Is(err, event.ErrUndeliverable) {
 		t.Fatalf("publish to a missing exchange = %v, want a retryable error", err)
 	}
+	waitPublishSucceeds(t, pub, testRecord(event.TypeCreated))
 }
 
 // TestPublisher_ReconnectsAfterClose pins that Connect replaces a connection that is closed for good.
@@ -259,14 +293,37 @@ func TestPublisher_RedeclaresLostExchangeOnReconnect(t *testing.T) {
 	ctx := t.Context()
 
 	pub := connectPublisher(t, b.url)
+	states := watchStates(pub)
 	if err := b.conn.Management().DeleteExchange(ctx, Exchange); err != nil {
 		t.Fatalf("delete exchange: %v", err)
 	}
-	if err := pub.Publish(ctx, testRecord(event.TypeCreated)); err == nil ||
-		errors.Is(err, event.ErrUndeliverable) {
-		t.Fatalf("publish to a missing exchange = %v, want a retryable error", err)
-	}
 
 	closeBrokerConnections(t, b)
+	waitReopened(t, states)
+	if err := pub.Publish(ctx, testRecord(event.TypeCreated)); err != nil {
+		t.Fatalf("first publish after recovery = %v, want the exchange redeclared", err)
+	}
+}
+
+// TestPublisher_RedialsWhenRecoveryLosesExchange pins that a recovery without the exchange heals.
+func TestPublisher_RedialsWhenRecoveryLosesExchange(t *testing.T) {
+	t.Parallel()
+	b := setupTestContainerRabbit(t)
+	ctx := t.Context()
+
+	pub := connectPublisher(t, b.url)
+	states := watchStates(pub)
+	if err := b.conn.Management().DeleteExchange(ctx, Exchange); err != nil {
+		t.Fatalf("delete exchange: %v", err)
+	}
+	setConfigurePermission(t, b, "^$")
+	closeBrokerConnections(t, b)
+	waitReopened(t, states)
+	setConfigurePermission(t, b, ".*")
+
+	if err := pub.Publish(ctx, testRecord(event.TypeCreated)); err == nil ||
+		errors.Is(err, event.ErrUndeliverable) {
+		t.Fatalf("publish after a failed recovery = %v, want a retryable error", err)
+	}
 	waitPublishSucceeds(t, pub, testRecord(event.TypeCreated))
 }

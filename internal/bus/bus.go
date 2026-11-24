@@ -8,6 +8,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/Azure/go-amqp"
 	"github.com/alkmc/storefront/internal/event"
 	"github.com/rabbitmq/rabbitmq-amqp-go-client/pkg/rabbitmqamqp"
 )
@@ -24,15 +25,14 @@ type Publisher struct {
 
 // NewPublisher returns a Publisher that dials on Connect, so startup does not wait for the broker.
 func NewPublisher(url string) *Publisher {
-	env := rabbitmqamqp.NewEnvironment(url, &rabbitmqamqp.AmqpConnOptions{
+	return new(Publisher{env: rabbitmqamqp.NewEnvironment(url, &rabbitmqamqp.AmqpConnOptions{
 		RecoveryConfiguration: &rabbitmqamqp.RecoveryConfiguration{
 			ActiveRecovery:           true,
 			BackOffReconnectInterval: 5 * time.Second,
 			MaxReconnectAttempts:     math.MaxInt,
 		},
 		TopologyRecoveryOptions: rabbitmqamqp.TopologyRecoveryAllEnabled,
-	})
-	return new(Publisher{env: env})
+	})})
 }
 
 // Connect redials and redeclares the exchange unless the connection is alive, releasing a dead one first.
@@ -51,6 +51,7 @@ func (p *Publisher) Connect(ctx context.Context) error {
 		return err
 	}
 	p.conn, p.pub = conn, pub
+
 	return nil
 }
 
@@ -72,17 +73,24 @@ func (p *Publisher) Publish(ctx context.Context, r event.Record) error {
 	if err != nil {
 		return fmt.Errorf("bus publish: %w", err)
 	}
+	if exchangeMissing(res.Outcome) {
+		_ = p.Close(ctx)
+	}
+
 	return outcomeErr(res.Outcome)
 }
 
-// Close closes the connection, which also closes its publisher.
+// Close closes and drops the connection and its publisher, so the next Connect redials.
 func (p *Publisher) Close(ctx context.Context) error {
 	if p.conn == nil {
 		return nil
 	}
-	if err := p.conn.Close(ctx); err != nil {
+	err := p.conn.Close(ctx)
+	p.conn, p.pub = nil, nil
+	if err != nil {
 		return fmt.Errorf("bus close: %w", err)
 	}
+
 	return nil
 }
 
@@ -92,7 +100,14 @@ func (p *Publisher) alive() bool {
 		return false
 	}
 	_, closed := p.conn.State().(*rabbitmqamqp.StateClosed)
+
 	return !closed
+}
+
+// exchangeMissing reports a missing exchange, which needs a fresh connection to redeclare.
+func exchangeMissing(outcome rabbitmqamqp.DeliveryState) bool {
+	rejected, ok := outcome.(*rabbitmqamqp.StateRejected)
+	return ok && rejected.Error != nil && rejected.Error.Condition == amqp.ErrCondNotFound
 }
 
 // openPublisher declares the topic exchange and opens a publisher on conn.
@@ -104,13 +119,14 @@ func openPublisher(ctx context.Context, conn *rabbitmqamqp.AmqpConnection,
 		return nil, fmt.Errorf("bus declare exchange: %w", err)
 	}
 	var (
-		perMessageTarget rabbitmqamqp.ITargetAddress
-		defaultOptions   rabbitmqamqp.IPublisherOptions
+		anonymousTarget rabbitmqamqp.ITargetAddress
+		defaultOptions  rabbitmqamqp.IPublisherOptions
 	)
-	pub, err := conn.NewPublisher(ctx, perMessageTarget, defaultOptions)
+	pub, err := conn.NewPublisher(ctx, anonymousTarget, defaultOptions)
 	if err != nil {
 		return nil, fmt.Errorf("bus new publisher: %w", err)
 	}
+
 	return pub, nil
 }
 
