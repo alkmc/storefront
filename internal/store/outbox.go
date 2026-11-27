@@ -12,6 +12,9 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// finalizeTimeout lets a stopping relay still record what it published.
+const finalizeTimeout = 5 * time.Second
+
 type (
 	// outboxRow is a pending event awaiting publication.
 	outboxRow struct {
@@ -39,7 +42,7 @@ func (pg *Postgres) DrainBatch(
 		return 0, false, fmt.Errorf("outbox begin: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback(ctx)
+		_ = tx.Rollback(context.WithoutCancel(ctx))
 	}()
 
 	batch, err := claimOutbox(ctx, tx, batchSize)
@@ -50,16 +53,19 @@ func (pg *Postgres) DrainBatch(
 	sent, failed := publishBatch(ctx, batch, publish)
 	retry, dead, transientErr := classifyFailures(failed, maxAttempts)
 
-	if err := deleteOutbox(ctx, tx, sent); err != nil {
+	finalizeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), finalizeTimeout)
+	defer cancel()
+
+	if err := deleteOutbox(finalizeCtx, tx, sent); err != nil {
 		return 0, false, err
 	}
-	if err := bumpAttempts(ctx, tx, rowIDs(retry)); err != nil {
+	if err := bumpAttempts(finalizeCtx, tx, rowIDs(retry)); err != nil {
 		return 0, false, err
 	}
-	if err := deadLetter(ctx, tx, dead); err != nil {
+	if err := deadLetter(finalizeCtx, tx, dead); err != nil {
 		return 0, false, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := tx.Commit(finalizeCtx); err != nil {
 		return 0, false, fmt.Errorf("outbox commit: %w", err)
 	}
 

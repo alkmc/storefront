@@ -178,6 +178,35 @@ func TestOutbox_TransientFailureKeepsRowDue(t *testing.T) {
 	}
 }
 
+// TestOutbox_DrainBatchFinalizesAfterCancel stops the relay after the first publish, like a shutdown.
+func TestOutbox_DrainBatchFinalizesAfterCancel(t *testing.T) {
+	repo := setupTestContainerDB(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	seedProducts(t, repo, 3)
+
+	var calls int
+	n, _, err := repo.DrainBatch(ctx, 10, 3, func(ctx context.Context, _ event.Record) error {
+		calls++
+		if calls == 1 {
+			cancel()
+			return nil
+		}
+		return ctx.Err()
+	})
+	if err == nil {
+		t.Fatal("expected the canceled publish to surface as an error")
+	}
+	if n != 1 {
+		t.Fatalf("got n=%d, want 1", n)
+	}
+
+	if rows := outboxState(t, repo); len(rows) != 2 {
+		t.Fatalf("got %d outbox rows, want 2", len(rows))
+	}
+}
+
 func TestOutbox_PoisonDeadLettersAfterMaxAttempts(t *testing.T) {
 	repo := setupTestContainerDB(t)
 	ctx := t.Context()
