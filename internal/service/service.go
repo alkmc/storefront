@@ -69,6 +69,9 @@ func (s *Service) FindByID(ctx context.Context, id domain.ProductID) (domain.Pro
 	entry, err := s.cache.Get(ctx, key)
 	if err != nil {
 		s.logger.Warn("cache get failed", slog.Any("error", err), slog.String("key", key))
+		return s.loads.Do(ctx, key, func(ctx context.Context) (domain.Product, error) {
+			return s.store.FindByID(ctx, id)
+		})
 	}
 	if entry.Hit {
 		return productFrom(entry)

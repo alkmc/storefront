@@ -391,6 +391,7 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 		name           string
 		getFn          func(context.Context, string) (cache.Entry, error)
 		findErr        error
+		wantGets       int
 		wantStoreCalls int32
 		wantSets       int
 		wantMissings   int
@@ -401,17 +402,20 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			getFn: func(context.Context, string) (cache.Entry, error) {
 				return cache.Entry{Product: found, Hit: true, Found: true}, nil
 			},
+			wantGets: 1,
 		},
 		{
 			name: "known absent, store untouched",
 			getFn: func(context.Context, string) (cache.Entry, error) {
 				return cache.Entry{Hit: true}, nil
 			},
-			wantErr: domain.ErrNotFound,
+			wantGets: 1,
+			wantErr:  domain.ErrNotFound,
 		},
 		{
 			name:           "miss populates",
 			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
+			wantGets:       2,
 			wantStoreCalls: 1,
 			wantSets:       1,
 		},
@@ -419,6 +423,7 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			name:           "store says missing, the absence is cached",
 			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
 			findErr:        domain.ErrNotFound,
+			wantGets:       2,
 			wantStoreCalls: 1,
 			wantMissings:   1,
 			wantErr:        domain.ErrNotFound,
@@ -428,12 +433,14 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			getFn: func(context.Context, string) (cache.Entry, error) {
 				return cache.Entry{}, errors.New("valkey down")
 			},
+			wantGets:       1,
 			wantStoreCalls: 1,
 		},
 		{
 			name:           "store fails, nothing populated",
 			getFn:          func(context.Context, string) (cache.Entry, error) { return cache.Entry{}, nil },
 			findErr:        domain.ErrUnavailable,
+			wantGets:       2,
 			wantStoreCalls: 1,
 			wantErr:        domain.ErrUnavailable,
 		},
@@ -460,6 +467,9 @@ func TestService_FindByID_CachePaths(t *testing.T) {
 			}
 			if got := storeCalls.Load(); got != tt.wantStoreCalls {
 				t.Errorf("store calls = %d, want %d", got, tt.wantStoreCalls)
+			}
+			if spyCache.Gets != tt.wantGets {
+				t.Errorf("Gets = %d, want %d", spyCache.Gets, tt.wantGets)
 			}
 			if spyCache.Sets != tt.wantSets {
 				t.Errorf("Sets = %d, want %d", spyCache.Sets, tt.wantSets)

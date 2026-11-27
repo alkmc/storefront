@@ -27,6 +27,7 @@ func (stubCache) Invalidate(_ context.Context, _ string) error {
 
 type SpyCache struct {
 	GetFn            func(context.Context, string) (cache.Entry, error)
+	Gets             int
 	Sets             int
 	SetMissings      int
 	InvalidateCtxErr error
@@ -45,6 +46,7 @@ func (c *SpyCache) SetMissing(_ context.Context, _ string, _ cache.Entry) error 
 }
 
 func (c *SpyCache) Get(ctx context.Context, key string) (cache.Entry, error) {
+	c.Gets++
 	if c.GetFn != nil {
 		return c.GetFn(ctx, key)
 	}
