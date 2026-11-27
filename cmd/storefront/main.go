@@ -25,8 +25,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// brokerCloseTimeout keeps closing the RabbitMQ connection within the stop grace period.
-const brokerCloseTimeout = 5 * time.Second
+const (
+	// brokerCloseTimeout keeps closing the RabbitMQ connection within the stop grace period.
+	brokerCloseTimeout = 5 * time.Second
+	// httpIdleTimeout closes idle keep-alive connections so they don't hold server resources.
+	httpIdleTimeout = 60 * time.Second
+)
 
 func main() {
 	if err := run(); err != nil {
@@ -123,7 +127,7 @@ func serve(
 		httpapi.NewInternalMux(ih),
 		httpapi.ServerCfg{
 			Addr:            cfg.HTTP.InternalAddress(),
-			ReadTimeout:     cfg.HTTP.ReadTimeout,
+			ReadTimeout:     cfg.RequestTimeout,
 			ShutdownTimeout: cfg.ShutdownTimeout,
 		},
 		logger,
@@ -132,7 +136,7 @@ func serve(
 	grpcSrv := grpcapi.NewServer(
 		grpcapi.ServerCfg{
 			Addr:            cfg.GRPC.Address(),
-			RequestTimeout:  cfg.GRPC.RequestTimeout,
+			RequestTimeout:  cfg.RequestTimeout,
 			MaxRequestBytes: int(cfg.GRPC.MaxRequestBytes),
 			ShutdownTimeout: cfg.ShutdownTimeout,
 			Reflection:      cfg.GRPC.Reflection,
@@ -164,14 +168,14 @@ func newAPIServer(
 		return nil, fmt.Errorf("create http middleware: %w", err)
 	}
 
-	h := httpapi.NewHandler(svc, cfg.HTTP.RequestTimeout, l)
+	h := httpapi.NewHandler(svc, cfg.RequestTimeout, l)
 	return httpapi.NewPublicServer(
 		mw(httpapi.NewMux(h, httpapi.Auth(v))),
 		httpapi.ServerCfg{
 			Addr:            cfg.HTTP.Address(),
-			ReadTimeout:     cfg.HTTP.ReadTimeout,
-			WriteTimeout:    cfg.HTTP.WriteTimeout,
-			IdleTimeout:     cfg.HTTP.IdleTimeout,
+			ReadTimeout:     cfg.RequestTimeout,
+			WriteTimeout:    cfg.RequestTimeout + config.ResponseMargin,
+			IdleTimeout:     httpIdleTimeout,
 			ShutdownTimeout: cfg.ShutdownTimeout,
 		},
 		l,

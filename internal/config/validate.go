@@ -25,10 +25,22 @@ func (c Config) validate() error {
 		c.validateCacheTimeout(),
 		c.Idempotency.validate(),
 		c.Auth.validate(),
-		// an expired context leaves in-flight connections undrained on the way out
-		positive("SHUTDOWN_TIMEOUT", c.ShutdownTimeout),
+		// zero hands the handler a context that has already expired
+		positive("REQUEST_TIMEOUT", c.RequestTimeout),
+		c.validateShutdownTimeout(),
 		c.validateListenAddresses(),
 	)
+}
+
+// validateShutdownTimeout lets in-flight requests finish before shutdown cuts their connections.
+func (c Config) validateShutdownTimeout() error {
+	if minimum := c.RequestTimeout + ResponseMargin; c.ShutdownTimeout < minimum {
+		return fmt.Errorf(
+			"SHUTDOWN_TIMEOUT (%v) must be at least REQUEST_TIMEOUT + %v (%v)",
+			c.ShutdownTimeout, ResponseMargin, minimum,
+		)
+	}
+	return nil
 }
 
 // validateCacheTimeout leaves room for the database read within the load budget.
@@ -61,38 +73,19 @@ func (h HTTP) validate() error {
 	return errors.Join(
 		listenPort("HTTP_PORT", h.Port),
 		listenPort("HTTP_INTERNAL_PORT", h.InternalPort),
-		// net/http reads zero as no timeout, so the limit would vanish without a word
-		positive("HTTP_READ_TIMEOUT", h.ReadTimeout),
-		positive("HTTP_WRITE_TIMEOUT", h.WriteTimeout),
-		positive("HTTP_IDLE_TIMEOUT", h.IdleTimeout),
-		// zero hands the handler a context that has already expired
-		positive("HTTP_REQUEST_TIMEOUT", h.RequestTimeout),
 		// zero rejects every request that carries a body
 		positive("HTTP_MAX_BODY_BYTES", h.MaxBodyBytes),
 		// zero compresses everything, which is fine, but a negative floor is not
 		notNegative("HTTP_COMPRESS_MIN_BYTES", h.CompressMinBytes),
 		// zero is the canonical way to clear HSTS, a negative age builds an invalid header
 		notNegative("HSTS_MAX_AGE", h.HSTSMaxAge),
-		h.validateResponseDeadline(),
 		exactOrigins("CORS_ALLOWED_ORIGINS", h.CORSAllowedOrigins),
 	)
-}
-
-// validateResponseDeadline keeps the write deadline past the handler budget, or a response gets cut.
-func (h HTTP) validateResponseDeadline() error {
-	if h.WriteTimeout <= h.RequestTimeout {
-		return fmt.Errorf(
-			"HTTP_WRITE_TIMEOUT (%v) must exceed HTTP_REQUEST_TIMEOUT (%v)",
-			h.WriteTimeout, h.RequestTimeout,
-		)
-	}
-	return nil
 }
 
 func (g GRPC) validate() error {
 	return errors.Join(
 		listenPort("GRPC_PORT", g.Port),
-		positive("GRPC_REQUEST_TIMEOUT", g.RequestTimeout),
 		// zero makes the server reject every message that carries a payload
 		positive("GRPC_MAX_REQUEST_BYTES", g.MaxRequestBytes),
 	)

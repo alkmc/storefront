@@ -247,34 +247,31 @@ func TestValidateListenAddresses(t *testing.T) {
 	}
 }
 
-func TestValidateResponseDeadline(t *testing.T) {
+func TestValidateShutdownTimeout(t *testing.T) {
+	const request = 2 * time.Second
 	tests := []struct {
-		name           string
-		write, request time.Duration
-		wantErr        bool
+		name     string
+		shutdown time.Duration
+		wantErr  bool
 	}{
 		{
-			name:    "write beyond the budget",
-			write:   10 * time.Second,
-			request: 2 * time.Second,
+			name:     "beyond a full request",
+			shutdown: 10 * time.Second,
 		},
 		{
-			name:    "write equal to the budget",
-			write:   2 * time.Second,
-			request: 2 * time.Second,
-			wantErr: true,
+			name:     "exactly a full request",
+			shutdown: request + ResponseMargin,
 		},
 		{
-			name:    "write below the budget",
-			write:   time.Second,
-			request: 2 * time.Second,
-			wantErr: true,
+			name:     "short of a full request",
+			shutdown: request + ResponseMargin - time.Millisecond,
+			wantErr:  true,
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			h := HTTP{WriteTimeout: tc.write, RequestTimeout: tc.request}
-			assertRule(t, h.validateResponseDeadline(), tc.wantErr, "HTTP_WRITE_TIMEOUT", "HTTP_REQUEST_TIMEOUT")
+			c := Config{RequestTimeout: request, ShutdownTimeout: tc.shutdown}
+			assertRule(t, c.validateShutdownTimeout(), tc.wantErr, "SHUTDOWN_TIMEOUT", "REQUEST_TIMEOUT")
 		})
 	}
 }
@@ -319,13 +316,13 @@ func TestConfigValidateReachesEverySection(t *testing.T) {
 	}{
 		{
 			name:    "HTTP",
-			mutate:  func(c *Config) { c.HTTP.RequestTimeout = 0 },
-			setting: "HTTP_REQUEST_TIMEOUT",
+			mutate:  func(c *Config) { c.HTTP.MaxBodyBytes = 0 },
+			setting: "HTTP_MAX_BODY_BYTES",
 		},
 		{
 			name:    "GRPC",
-			mutate:  func(c *Config) { c.GRPC.RequestTimeout = 0 },
-			setting: "GRPC_REQUEST_TIMEOUT",
+			mutate:  func(c *Config) { c.GRPC.MaxRequestBytes = 0 },
+			setting: "GRPC_MAX_REQUEST_BYTES",
 		},
 		{
 			name:    "Postgres",
@@ -358,14 +355,14 @@ func TestConfigValidateReachesEverySection(t *testing.T) {
 			setting: "AUTH_JWT_SECRET",
 		},
 		{
-			name:    "shutdown timeout",
-			mutate:  func(c *Config) { c.ShutdownTimeout = 0 },
-			setting: "SHUTDOWN_TIMEOUT",
+			name:    "request timeout",
+			mutate:  func(c *Config) { c.RequestTimeout = 0 },
+			setting: "REQUEST_TIMEOUT",
 		},
 		{
-			name:    "response deadline",
-			mutate:  func(c *Config) { c.HTTP.WriteTimeout = c.HTTP.RequestTimeout },
-			setting: "HTTP_WRITE_TIMEOUT",
+			name:    "shutdown timeout",
+			mutate:  func(c *Config) { c.ShutdownTimeout = c.RequestTimeout },
+			setting: "SHUTDOWN_TIMEOUT",
 		},
 		{
 			name:    "connection limits",
@@ -412,13 +409,13 @@ func TestDefaultsAreValid(t *testing.T) {
 // TestConfigValidateAggregates proves errors.Join reports every violation in one run.
 func TestConfigValidateAggregates(t *testing.T) {
 	cfg := defaultConfig(t)
-	cfg.HTTP.RequestTimeout = 0
+	cfg.RequestTimeout = 0
 	cfg.Outbox.BatchSize = 0
 	cfg.Idempotency.TTL = 0
 
 	assertRule(
 		t, cfg.validate(), true,
-		"HTTP_REQUEST_TIMEOUT", "OUTBOX_BATCH_SIZE", "IDEMPOTENCY_TTL",
+		"REQUEST_TIMEOUT", "OUTBOX_BATCH_SIZE", "IDEMPOTENCY_TTL",
 	)
 }
 

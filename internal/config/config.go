@@ -10,6 +10,9 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// ResponseMargin covers cache invalidation and writing the response after REQUEST_TIMEOUT.
+const ResponseMargin = 3 * time.Second
+
 type (
 	Config struct {
 		HTTP            HTTP
@@ -22,14 +25,14 @@ type (
 		Idempotency     Idempotency
 		Log             Log
 		Auth            Auth
+		RequestTimeout  time.Duration `env:"REQUEST_TIMEOUT" envDefault:"2s"`
 		ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"10s"`
 	}
 	GRPC struct {
-		Host            string        `env:"GRPC_HOST"`
-		Port            int           `env:"GRPC_PORT" envDefault:"9090"`
-		RequestTimeout  time.Duration `env:"GRPC_REQUEST_TIMEOUT" envDefault:"2s"`
-		MaxRequestBytes int64         `env:"GRPC_MAX_REQUEST_BYTES" envDefault:"1048576"` // 1 MiB
-		Reflection      bool          `env:"GRPC_REFLECTION" envDefault:"false"`
+		Host            string `env:"GRPC_HOST"`
+		Port            int    `env:"GRPC_PORT" envDefault:"9090"`
+		MaxRequestBytes int64  `env:"GRPC_MAX_REQUEST_BYTES" envDefault:"1048576"` // 1 MiB
+		Reflection      bool   `env:"GRPC_REFLECTION" envDefault:"false"`
 	}
 	Service struct {
 		LoadTimeout time.Duration `env:"SERVICE_LOAD_TIMEOUT" envDefault:"1s"`
@@ -39,13 +42,9 @@ type (
 		PurgeInterval time.Duration `env:"IDEMPOTENCY_PURGE_INTERVAL" envDefault:"1h"`
 	}
 	HTTP struct {
-		Host           string        `env:"HTTP_HOST"`
-		Port           int           `env:"HTTP_PORT" envDefault:"8080"`
-		InternalPort   int           `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
-		ReadTimeout    time.Duration `env:"HTTP_READ_TIMEOUT" envDefault:"5s"`
-		WriteTimeout   time.Duration `env:"HTTP_WRITE_TIMEOUT" envDefault:"10s"`
-		IdleTimeout    time.Duration `env:"HTTP_IDLE_TIMEOUT" envDefault:"120s"`
-		RequestTimeout time.Duration `env:"HTTP_REQUEST_TIMEOUT" envDefault:"2s"`
+		Host         string `env:"HTTP_HOST"`
+		Port         int    `env:"HTTP_PORT" envDefault:"8080"`
+		InternalPort int    `env:"HTTP_INTERNAL_PORT" envDefault:"8081"`
 
 		MaxBodyBytes     int64 `env:"HTTP_MAX_BODY_BYTES" envDefault:"1048576"` // 1 MiB
 		CompressMinBytes int   `env:"HTTP_COMPRESS_MIN_BYTES" envDefault:"1024"`
