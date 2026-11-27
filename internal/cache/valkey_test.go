@@ -15,7 +15,7 @@ import (
 
 const (
 	// keep in sync with compose.yaml, IFEQ needs Valkey 8.1 or later
-	valkeyImage = "valkey/valkey:9.1"
+	valkeyImage = "valkey/valkey:9.2"
 
 	testTTL     = time.Minute
 	testNegTTL  = 10 * time.Second
